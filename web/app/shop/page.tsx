@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
+import { ALL_TIMEZONES, detectUserTimezone, filterTimezones } from "../lib/timezones";
 import {
   Search, ShoppingCart, Package, X, Minus, Plus, Loader2, User, MapPin,
   CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Gamepad2, ArrowLeft
@@ -21,19 +22,6 @@ function maskName(name: string): string {
   return name[0] + "*".repeat(Math.min(name.length - 1, 4));
 }
 
-const CUSTOMER_TZS = [
-  { value: "America/New_York", label: "US Eastern" },
-  { value: "America/Chicago", label: "US Central" },
-  { value: "America/Denver", label: "US Mountain" },
-  { value: "America/Los_Angeles", label: "US Pacific" },
-  { value: "Europe/London", label: "UK" },
-  { value: "Europe/Paris", label: "France" },
-  { value: "Europe/Berlin", label: "Germany" },
-  { value: "Asia/Ho_Chi_Minh", label: "Vietnam" },
-  { value: "Asia/Tokyo", label: "Japan" },
-  { value: "Asia/Shanghai", label: "China" },
-  { value: "Australia/Sydney", label: "Australia" },
-];
 
 interface Product { _id: string; name: string; category: string; price: number; bulkPrice?: number; image?: string; desc?: string; gameId?: string }
 interface CartItem extends Product { quantity: number }
@@ -168,7 +156,8 @@ export default function ShopPage() {
   const [error, setError] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [robloxUsernameInput, setRobloxUsernameInput] = useState("");
-  const [customerTz, setCustomerTz] = useState("America/New_York");
+  const [customerTz, setCustomerTz] = useState(detectUserTimezone());
+  const [tzSearch, setTzSearch] = useState("");
   const [slots, setSlots] = useState<Slot[]>([]);
   const [pickedSlot, setPickedSlot] = useState<string | null>(null);
   const [ticketResult, setTicketResult] = useState<TicketResult | null>(null);
@@ -236,6 +225,18 @@ export default function ShopPage() {
     }
     return bs;
   }, [products, bestSellerIds]);
+
+  const timezoneOptions = useMemo(() => {
+    const detected = customerTz && !ALL_TIMEZONES.some((tz) => tz.value === customerTz)
+      ? [{ value: customerTz, label: "Detected timezone", country: "Your device" }]
+      : [];
+    return [...detected, ...filterTimezones(tzSearch)].slice(0, 12);
+  }, [customerTz, tzSearch]);
+
+  const selectedTimezoneLabel = useMemo(() => {
+    const found = ALL_TIMEZONES.find((tz) => tz.value === customerTz);
+    return found ? `${found.country} - ${found.label}` : `Detected - ${customerTz}`;
+  }, [customerTz]);
 
   const cartTotal = useMemo(() => cart.reduce((s, i) => s + i.price * i.quantity, 0), [cart]);
   const cartCount = useMemo(() => cart.reduce((s, i) => s + i.quantity, 0), [cart]);
@@ -549,9 +550,66 @@ export default function ShopPage() {
                           onClick={() => void linkRobloxUsername()}
                           disabled={submitting}
                           className="rounded-lg bg-emerald-600 py-3 font-medium transition-colors hover:bg-emerald-500 disabled:opacity-50"
-                        >
-                          {submitting ? "Linking..." : "Confirm & Proceed"}
-                        </button>
+                  {/* Searchable Timezone Picker */}
+                  <div className="relative space-y-2">
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="text"
+                          value={tzSearch}
+                          onChange={(e) => setTzSearch(e.target.value)}
+                          placeholder="Search country or timezone..."
+                          className="w-full rounded-lg border border-slate-700 bg-slate-950 py-2.5 pl-9 pr-4 text-sm outline-none focus:border-blue-500"
+                        />
+                      </div>
+                      <button
+                        onClick={() => {
+                          const auto = detectUserTimezone();
+                          setCustomerTz(auto);
+                          setTzSearch("");
+                        }}
+                        className="rounded-lg bg-slate-800 px-3 py-2 text-xs font-medium hover:bg-slate-700 transition-colors"
+                      >
+                        Auto Detect
+                      </button>
+                    </div>
+
+                    <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-800 bg-slate-950 p-1 divide-y divide-slate-900">
+                      {filterTimezones(tzSearch).length === 0 ? (
+                        <div className="p-3 text-center text-xs text-slate-500">No timezones found.</div>
+                      ) : (
+                        filterTimezones(tzSearch).map((tz) => (
+                          <button
+                            key={tz.value}
+                            onClick={() => {
+                              setCustomerTz(tz.value);
+                              setTzSearch("");
+                              // Fetch slots for this new timezone
+                              void (async () => {
+                                try {
+                                  const sRes = await fetch(`/api/shop/delivery-slots?timezone=${encodeURIComponent(tz.value)}`, { cache: "no-store" });
+                                  const sData = await sRes.json();
+                                  setSlots(Array.isArray(sData?.slots) ? sData.slots : []);
+                                } catch (_) {}
+                              })();
+                            }}
+                            className={`w-full flex items-center justify-between px-3 py-2 text-left text-xs transition-colors rounded ${
+                              customerTz === tz.value
+                                ? "bg-blue-600/20 text-blue-300 font-medium"
+                                : "text-slate-300 hover:bg-slate-900"
+                            }`}
+                          >
+                            <span>{tz.label} ({tz.value})</span>
+                            <span className="text-[10px] bg-slate-900 px-1.5 py-0.5 rounded text-slate-400 font-normal">{tz.country}</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                    <div className="text-[11px] text-slate-400">
+                      Selected timezone: <span className="font-semibold text-blue-400">{customerTz}</span>
+                    </div>
+                  </div>
                       </div>
                     </div>
                   )}
@@ -560,9 +618,64 @@ export default function ShopPage() {
               {step === "delivery" && (
                 <div className="space-y-4">
                   <h3 className="flex items-center gap-2 text-lg font-semibold"><MapPin className="h-5 w-5" />Delivery Time</h3>
-                  <select value={customerTz} onChange={(e) => setCustomerTz(e.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none">
-                    {CUSTOMER_TZS.map((t) => <option key={t.value} value={t.value}>{t.label} ({t.value})</option>)}
-                  </select>
+                  <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-950 p-4">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-slate-500">Your timezone</p>
+                        <p className="text-sm font-medium text-slate-200">{selectedTimezoneLabel}</p>
+                        <p className="text-xs text-slate-500">{customerTz}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const detected = detectUserTimezone();
+                          setCustomerTz(detected);
+                          setTzSearch("");
+                          setPickedSlot(null);
+                          void fetch(`/api/shop/delivery-slots?timezone=${encodeURIComponent(detected)}`, { cache: "no-store" })
+                            .then((res) => res.json())
+                            .then((data) => setSlots(Array.isArray(data?.slots) ? data.slots : []))
+                            .catch(() => {});
+                        }}
+                        className="rounded-lg bg-slate-800 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-700"
+                      >
+                        Auto detect
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                      <input
+                        value={tzSearch}
+                        onChange={(e) => setTzSearch(e.target.value)}
+                        placeholder="Search country or timezone..."
+                        className="w-full rounded-lg border border-slate-800 bg-slate-900 py-3 pl-9 pr-3 text-sm outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                      {timezoneOptions.map((tz) => (
+                        <button
+                          key={tz.value}
+                          type="button"
+                          onClick={() => {
+                            setCustomerTz(tz.value);
+                            setTzSearch("");
+                            setPickedSlot(null);
+                            void fetch(`/api/shop/delivery-slots?timezone=${encodeURIComponent(tz.value)}`, { cache: "no-store" })
+                              .then((res) => res.json())
+                              .then((data) => setSlots(Array.isArray(data?.slots) ? data.slots : []))
+                              .catch(() => {});
+                          }}
+                          className={"w-full rounded-lg border p-3 text-left transition-all " + (customerTz === tz.value ? "border-blue-500 bg-blue-500/10" : "border-slate-800 bg-slate-900 hover:border-slate-700")}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-sm font-medium text-slate-100">{tz.country}</span>
+                            <span className="text-xs text-slate-500">{tz.value}</span>
+                          </div>
+                          <p className="mt-1 text-xs text-slate-400">{tz.label}</p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <div className="space-y-2">{slots.length === 0 && <p className="text-sm text-slate-400">No available slots.</p>}
                     {slots.map((s) => (
                       <button key={s.id} onClick={() => setPickedSlot(s.id)} className={"w-full rounded-xl border p-4 text-left transition-all " + (pickedSlot === s.id ? "border-blue-500 bg-blue-500/10" : "border-slate-800 bg-slate-950 hover:border-slate-700")}>

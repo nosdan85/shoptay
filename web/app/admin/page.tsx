@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
 import {
-  AlertCircle, Loader2, Plus, Edit2, Trash2, X, Upload, Image as ImageIcon,
+  AlertCircle, Loader2, Plus, Edit2, Trash2, X, Image as ImageIcon,
   CalendarDays, Package, RefreshCcw, Gamepad2, Layers, Sliders
 } from "lucide-react";
 
@@ -313,15 +313,9 @@ export default function AdminPage() {
                 </div>
                 <textarea value={productForm.desc} onChange={(e) => setProductForm((p) => ({ ...p, desc: e.target.value }))} placeholder="Description details..." rows={3} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none" />
                 <div className="space-y-2">
-                  <label className="text-xs text-slate-400">Product Image</label>
-                  <div className="flex flex-wrap gap-2">
-                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm">
-                      <Upload className="h-4 w-4" /> {uploading ? "Uploading..." : "Upload local"}
-                      <input type="file" accept="image/*" onChange={handleProductImage} className="hidden" />
-                    </label>
-                    <input value={productForm.image} onChange={(e) => setProductForm((p) => ({ ...p, image: e.target.value }))} placeholder="Or paste image URL" className="flex-1 rounded-lg border border-slate-700 bg-slate-950 px-4 py-2 outline-none" />
-                  </div>
-                  {productForm.image && <img src={imgUrl(productForm.image)} alt="preview" className="h-20 w-20 rounded border border-slate-800 object-cover mt-2" />}
+                  <label className="text-xs text-slate-400">Product Image URL</label>
+                  <input value={productForm.image} onChange={(e) => setProductForm((p) => ({ ...p, image: e.target.value }))} placeholder="Paste image URL" className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-2 outline-none" />
+                  {productForm.image && <img src={imgUrl(productForm.image)} alt="preview" className="mt-2 h-20 w-20 rounded border border-slate-800 object-cover" />}
                 </div>
                 <div className="flex gap-2">
                   <button type="submit" disabled={submitting} className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium disabled:opacity-50">Save Item</button>
@@ -440,10 +434,15 @@ export default function AdminPage() {
         {/* ─── TAB: CONFIG (BANNERS) ─── */}
         {tab === "config" && (
           <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-6">
-            <div><h2 className="font-semibold text-lg">Shop Banner</h2><p className="text-xs text-slate-400">Only one banner is active. Uploading a new banner replaces the current one.</p></div>
+            <div><h2 className="font-semibold text-lg">Shop Banner</h2><p className="text-xs text-slate-400">Only one banner is active. Paste a Cloudinary image URL to replace the current banner.</p></div>
             <div className="flex items-center gap-3 flex-wrap">
-              <input type="file" accept="image/*" onChange={(e) => setNewBannerFile(e.target.files?.[0] || null)} className="text-sm border border-slate-700 rounded p-2 bg-slate-950" />
-              <button onClick={() => void handleBannerUpload()} disabled={submitting || !newBannerFile} className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold disabled:opacity-50">Upload / Replace Banner</button>
+              <input
+                value={newBannerUrl}
+                onChange={(e) => setNewBannerUrl(e.target.value)}
+                placeholder="Paste banner image URL"
+                className="min-w-[280px] flex-1 rounded border border-slate-700 bg-slate-950 p-2 text-sm outline-none"
+              />
+              <button onClick={() => void handleBannerSave()} disabled={submitting || !newBannerUrl.trim()} className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold disabled:opacity-50">Save / Replace Banner</button>
             </div>
             {banners[0] ? (
               <div className="relative group overflow-hidden rounded-lg border border-slate-800">

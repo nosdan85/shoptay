@@ -1,4 +1,4 @@
-const {
+﻿const {
     Client,
     GatewayIntentBits,
     EmbedBuilder,
@@ -566,17 +566,17 @@ const formatPurchasedItemsForDm = (items) => {
 const buildPurchaseThankYouDm = (order) => {
     const purchasedItems = formatPurchasedItemsForDm(order?.items);
     return [
-        '**✨ Thank You for Your Purchase ✨**',
+        '**âœ¨ Thank You for Your Purchase âœ¨**',
         '',
         'We sincerely appreciate your order and the trust you have placed in our service. It was a pleasure serving you, and we hope that you are completely satisfied with your purchase.',
         '',
-        `**📦 Purchased Item:** [${purchasedItems}]`,
+        `**ðŸ“¦ Purchased Item:** [${purchasedItems}]`,
         '',
         'If you require any additional items in the future, please feel free to contact us at any time. We would be delighted to assist you again and continue providing you with reliable service.',
         '',
-        '**💎 Thank you once again for your support and trust.**',
+        '**ðŸ’Ž Thank you once again for your support and trust.**',
         '',
-        '**— Nos Team**'
+        '**â€” Nos Team**'
     ].join('\n');
 };
 
@@ -1370,12 +1370,12 @@ const buildPaymentTicketFields = ({ order, paymentLine, note, orderTotalAmount =
 
 const buildDeliveryTicketFields = (order) => [
     { name: 'Roblox Account', value: `${order.robloxUsername || '-'}${order.robloxUserId ? ` (${order.robloxUserId})` : ''}`, inline: true },
-    { name: 'Discord Account', value: order.discordId ? `<@${order.discordId}>` : (order.discordUsername || '-'), inline: true },
+    { name: 'Discord Account', value: order.discordId ? `<@${order.discordId}>` : (order.discordUsername || '-Normalized'), inline: true },
     { name: 'Order Total', value: formatUsdAmount(order.totalAmount || order.total || 0), inline: true },
     { name: 'Items (Qty + Price)', value: formatOrderItemsWithPrice(order.items), inline: false },
     {
-        name: 'Owner Delivery Time',
-        value: `${formatDateInTimezone(order.deliveryOwnerStartAt, order.deliveryOwnerTimezone)} - ${formatDateInTimezone(order.deliveryOwnerEndAt, order.deliveryOwnerTimezone)} (${order.deliveryOwnerTimezone || 'UTC'})`,
+        name: 'Owner Delivery Time (Vietnam Time)',
+        value: `${formatDateInTimezone(order.deliveryOwnerStartAt, 'Asia/Ho_Chi_Minh')} - ${formatDateInTimezone(order.deliveryOwnerEndAt, 'Asia/Ho_Chi_Minh')} (Vietnam Time)`,
         inline: false
     },
     {
@@ -1968,4 +1968,5 @@ module.exports = {
     checkUserHasOwnerRole,
     getOwnerId
 };
+
 

@@ -10,7 +10,6 @@ import {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
-/* ─── helpers ─── */
 function imgUrl(src: string | undefined | null): string {
   if (!src) return "";
   if (src.startsWith("http")) return src;
@@ -22,7 +21,6 @@ function maskName(name: string): string {
   return name[0] + "*".repeat(Math.min(name.length - 1, 4));
 }
 
-const VIETNAM_TZ = "Asia/Ho_Chi_Minh";
 const CUSTOMER_TZS = [
   { value: "America/New_York", label: "US Eastern" },
   { value: "America/Chicago", label: "US Central" },
@@ -37,28 +35,23 @@ const CUSTOMER_TZS = [
   { value: "Australia/Sydney", label: "Australia" },
 ];
 
-/* ─── types ─── */
 interface Product { _id: string; name: string; category: string; price: number; bulkPrice?: number; image?: string; desc?: string; gameId?: string }
 interface CartItem extends Product { quantity: number }
 interface Game { _id: string; name: string; slug: string; image?: string }
 interface Slot { id: string; ownerStartText: string; ownerEndText: string; customerStartText: string; customerEndText: string; startAt: string; endAt: string; note?: string }
 interface RobloxRes { robloxUserId: string; robloxUsername: string; robloxDisplayName: string }
-interface Purchase { username: string; productName: string }
+interface Purchase { username: string; productName: string; quantity?: number; price?: number }
 
 type Step = "shop" | "roblox" | "delivery" | "ticket";
 
-/* ─── Dog loading ─── */
 function DogLoader() {
   return (
     <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-slate-950/95">
       <div className="relative h-12 w-48 overflow-hidden rounded-full bg-slate-800">
         <div className="absolute inset-y-0 left-0 bg-blue-500 animate-[load_2s_ease-in-out_infinite] rounded-full" style={{ width: "0%", animationName: "dogbar" }} />
       </div>
-      <style>{`
-        @keyframes dogbar { 0%{width:0%} 50%{width:70%} 100%{width:100%} }
-        @keyframes dogrun { 0%{transform:translateX(0)} 100%{transform:translateX(160px)} }
-      `}</style>
-      <div className="mt-4 text-3xl" style={{ animation: "dogrun 0.6s ease-in-out infinite alternate" }}>
+      <style>{`@keyframes dogbar { 0%{width:0%} 50%{width:70%} 100%{width:100%} }`}</style>
+      <div className="mt-4 text-3xl">
         <svg viewBox="0 0 64 64" width="48" height="48">
           <circle cx="32" cy="20" r="14" fill="#D2691E"/>
           <circle cx="26" cy="16" r="3" fill="#333"/>
@@ -77,7 +70,6 @@ function DogLoader() {
   );
 }
 
-/* ─── MAIN ─── */
 export default function ShopPage() {
   const { user, token } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -103,7 +95,9 @@ export default function ShopPage() {
   const [pickedSlot, setPickedSlot] = useState<string | null>(null);
   const [ticketResult, setTicketResult] = useState<{ channelId: string } | null>(null);
   const [showAll, setShowAll] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [modalQty, setModalQty] = useState(1);
+  const [modalOpen, setModalOpen] = useState(false);
 
   useEffect(() => { void load(); }, []);
 
@@ -149,17 +143,26 @@ export default function ShopPage() {
   const cartTotal = useMemo(() => cart.reduce((s, i) => s + i.price * i.quantity, 0), [cart]);
   const cartCount = useMemo(() => cart.reduce((s, i) => s + i.quantity, 0), [cart]);
 
-  const addToCart = (p: Product) => {
-    setCart((prev) => {
-      const ex = prev.find((i) => i._id === p._id);
-      if (ex) return prev.map((i) => (i._id === p._id ? { ...i, quantity: i.quantity + 1 } : i));
-      return [...prev, { ...p, quantity: 1 }];
-    });
+  const openProductModal = (p: Product) => {
+    setSelectedProduct(p);
+    setModalQty(1);
+    setModalOpen(true);
   };
+
+  const addToCartFromModal = () => {
+    if (!selectedProduct) return;
+    setCart((prev) => {
+      const ex = prev.find((i) => i._id === selectedProduct._id);
+      if (ex) return prev.map((i) => (i._id === selectedProduct._id ? { ...i, quantity: i.quantity + modalQty } : i));
+      return [...prev, { ...selectedProduct, quantity: modalQty }];
+    });
+    setModalOpen(false);
+    setSelectedProduct(null);
+  };
+
   const updateQty = (id: string, d: number) => setCart((p) => p.map((i) => (i._id === id ? { ...i, quantity: Math.max(1, i.quantity + d) } : i)));
   const removeItem = (id: string) => setCart((p) => p.filter((i) => i._id !== id));
 
-  /* checkout */
   const doCheckout = async () => {
     if (!user || !token) { setError("Login first"); return; }
     if (cart.length === 0) return;
@@ -245,14 +248,12 @@ export default function ShopPage() {
     <div className="min-h-screen bg-slate-950 text-white">
       <Navbar />
 
-      {/* floating cart */}
       {step === "shop" && cartCount > 0 && (
         <button onClick={() => setCartOpen(true)} className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full bg-blue-600 px-5 py-3 font-medium shadow-2xl transition-transform hover:scale-105 active:scale-95">
           <ShoppingCart className="h-5 w-5" /> Cart ({cartCount})
         </button>
       )}
 
-      {/* ─── CART SIDEBAR ─── */}
       {cartOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={() => setCartOpen(false)}>
           <div className="absolute right-0 top-0 h-full w-full max-w-md bg-slate-900 border-l border-slate-800 flex flex-col" onClick={(e) => e.stopPropagation()}>
@@ -291,10 +292,44 @@ export default function ShopPage() {
         </div>
       )}
 
+      {modalOpen && selectedProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="relative w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+            <button onClick={() => setModalOpen(false)} className="absolute right-4 top-4 rounded-lg bg-slate-800 p-2 hover:bg-slate-700"><X className="h-5 w-5" /></button>
+            <div className="flex gap-4 mb-4">
+              <div className="h-32 w-32 flex-shrink-0 overflow-hidden rounded-xl bg-slate-950">
+                {selectedProduct.image ? <img src={imgUrl(selectedProduct.image)} alt="" className="h-full w-full object-cover" /> : <Package className="h-full w-full p-6 text-slate-700" />}
+              </div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold">{selectedProduct.name}</h3>
+                <p className="text-sm text-slate-400">{selectedProduct.category}</p>
+                <p className="mt-2 text-2xl font-bold text-emerald-300">${selectedProduct.price.toFixed(2)}</p>
+                {selectedProduct.bulkPrice && (
+                  <p className="text-xs text-amber-400">Bulk price: ${selectedProduct.bulkPrice.toFixed(2)} (when applicable)</p>
+                )}
+              </div>
+            </div>
+            {selectedProduct.desc && (
+              <div className="mb-4 rounded-lg bg-slate-950 p-3">
+                <p className="text-sm text-slate-300 whitespace-pre-wrap">{selectedProduct.desc}</p>
+              </div>
+            )}
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-2">Quantity</label>
+              <div className="flex items-center gap-3">
+                <button onClick={() => setModalQty(Math.max(1, modalQty - 1))} className="rounded-lg bg-slate-800 p-2 hover:bg-slate-700"><Minus className="h-4 w-4" /></button>
+                <input type="number" min="1" value={modalQty} onChange={(e) => setModalQty(Math.max(1, parseInt(e.target.value) || 1))} className="w-20 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-center text-lg font-semibold" />
+                <button onClick={() => setModalQty(modalQty + 1)} className="rounded-lg bg-slate-800 p-2 hover:bg-slate-700"><Plus className="h-4 w-4" /></button>
+              </div>
+            </div>
+            <button onClick={addToCartFromModal} className="w-full rounded-lg bg-blue-600 py-3 font-medium hover:bg-blue-500 transition-colors">Add to Cart</button>
+          </div>
+        </div>
+      )}
+
       <main className="mx-auto max-w-7xl px-4 py-6">
         {error && <div className="mb-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div>}
 
-        {/* ─── CHECKOUT FLOW ─── */}
         {step !== "shop" && (
           <div className="mx-auto max-w-2xl space-y-6">
             <div className="flex gap-2">{(["roblox", "delivery", "ticket"] as const).map((s) => (
@@ -356,30 +391,27 @@ export default function ShopPage() {
           </div>
         )}
 
-        {/* ─── SHOP BROWSING ─── */}
         {step === "shop" && (
           <div className="space-y-8">
-            {/* Recent purchases banner */}
             <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/50 py-2">
               <div className="flex animate-[scroll_30s_linear_infinite] whitespace-nowrap">
                 {[...recentPurchases, ...recentPurchases].map((p, i) => (
                   <span key={i} className="mx-6 inline-flex items-center gap-2 text-sm text-slate-300">
                     <span className="text-blue-400 font-medium">{maskName(p.username)}</span>
                     <span className="text-slate-500">purchased</span>
-                    <span className="text-emerald-400">{p.productName}</span>
+                    <span className="text-emerald-400">{p.productName}{p.quantity ? ` x${p.quantity}` : ""}</span>
+                    {p.price && <span className="text-slate-400">@ ${p.price.toFixed(2)}</span>}
                   </span>
                 ))}
               </div>
               <style>{`@keyframes scroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}`}</style>
             </div>
 
-            {/* Search */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
               <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search items..." className="w-full rounded-xl border border-slate-800 bg-slate-900 py-3 pl-10 pr-4 outline-none transition-colors focus:border-blue-500" />
             </div>
 
-            {/* Game tabs */}
             <div className="flex flex-wrap gap-2">
               <button onClick={() => setSelectedGame(null)} className={"rounded-lg px-4 py-2 text-sm font-medium transition-all " + (!selectedGame ? "bg-blue-600 text-white" : "bg-slate-900 text-slate-300 hover:bg-slate-800")}>
                 All Games
@@ -392,45 +424,38 @@ export default function ShopPage() {
               ))}
             </div>
 
-            {/* Banners */}
             {banners.length > 0 && (
-              <div className="relative overflow-hidden rounded-2xl border border-slate-800">
-                <div className="flex animate-[scroll_40s_linear_infinite]">
-                  {[...banners, ...banners].map((b, i) => (
-                    <div key={i} className="flex-shrink-0 w-full md:w-1/2 lg:w-1/3 p-2">
-                      <img src={imgUrl(b)} alt="" className="h-48 w-full rounded-xl object-cover" />
+              <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                {banners.map((b, i) => (
+                  <div key={i} className="overflow-hidden rounded-2xl border border-slate-800">
+                    <img src={imgUrl(b)} alt="" className="h-48 w-full object-cover" />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {bestSellers.length > 0 && !showAll && !selectedGame && !searchQuery && (
+              <div>
+                <h2 className="mb-4 text-xl font-semibold">Best Sellers</h2>
+                <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                  {bestSellers.map((p) => (
+                    <div key={p._id} onClick={() => openProductModal(p)} className="group cursor-pointer overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 transition-all hover:border-blue-500/40 hover:-translate-y-1">
+                      <div className="h-32 bg-slate-950">
+                        {p.image ? <img src={imgUrl(p.image)} alt={p.name} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center"><Package className="h-8 w-8 text-slate-700" /></div>}
+                      </div>
+                      <div className="p-3">
+                        <p className="truncate text-sm font-medium">{p.name}</p>
+                        <div className="mt-2 flex items-center justify-between">
+                          <span className="text-sm font-semibold text-emerald-300">${p.price.toFixed(2)}</span>
+                          <span className="text-xs text-blue-400">View</span>
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Best Sellers carousel */}
-            {bestSellers.length > 0 && !showAll && !selectedGame && !searchQuery && (
-              <div>
-                <h2 className="mb-4 text-xl font-semibold">Best Sellers</h2>
-                <div className="relative">
-                  <div ref={scrollRef} className="flex gap-4 overflow-x-auto scroll-smooth pb-2 scrollbar-hide">
-                    {bestSellers.map((p) => (
-                      <div key={p._id} className="group flex-shrink-0 w-48 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 transition-all hover:border-blue-500/40">
-                        <div className="h-32 bg-slate-950">
-                          {p.image ? <img src={imgUrl(p.image)} alt={p.name} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center"><Package className="h-8 w-8 text-slate-700" /></div>}
-                        </div>
-                        <div className="p-3">
-                          <p className="truncate text-sm font-medium">{p.name}</p>
-                          <div className="mt-2 flex items-center justify-between">
-                            <span className="text-sm font-semibold text-emerald-300">${p.price.toFixed(2)}</span>
-                            <button onClick={() => addToCart(p)} className="rounded bg-blue-600 px-2 py-1 text-xs font-medium transition-transform hover:scale-105 active:scale-95">Add</button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* All items */}
             <div>
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-xl font-semibold">{selectedGame ? games.find((g) => g._id === selectedGame)?.name || "Items" : "All Items"}</h2>
@@ -440,7 +465,7 @@ export default function ShopPage() {
               </div>
               <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
                 {(showAll ? filtered : filtered.slice(0, 8)).map((p) => (
-                  <div key={p._id} className="group overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 transition-all duration-200 hover:border-blue-500/40 hover:-translate-y-1">
+                  <div key={p._id} onClick={() => openProductModal(p)} className="group cursor-pointer overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 transition-all duration-200 hover:border-blue-500/40 hover:-translate-y-1">
                     <div className="h-40 bg-slate-950">
                       {p.image ? <img src={imgUrl(p.image)} alt={p.name} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center"><Package className="h-10 w-10 text-slate-700" /></div>}
                     </div>
@@ -449,7 +474,7 @@ export default function ShopPage() {
                       <p className="text-xs text-slate-500">{p.category}</p>
                       <div className="flex items-center justify-between">
                         <span className="text-lg font-semibold text-emerald-300">${p.price.toFixed(2)}</span>
-                        <button onClick={() => addToCart(p)} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium transition-transform hover:scale-105 active:scale-95">Add</button>
+                        <span className="text-xs text-blue-400">View</span>
                       </div>
                     </div>
                   </div>

@@ -925,7 +925,8 @@ const getLinePricing = (product, quantity) => {
 const buildQuantityMapFromCartItems = (cartItems) => {
     const quantityByProductId = new Map();
     for (const item of cartItems) {
-        const productId = typeof item?._id === 'string' ? item._id.trim() : '';
+        const rawProductId = item?._id || item?.product || item?.productId || item?.id;
+        const productId = typeof rawProductId === 'string' ? rawProductId.trim() : '';
         const quantity = Number(item?.quantity);
         if (!OBJECT_ID_PATTERN.test(productId)) continue;
         if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_QUANTITY_PER_PRODUCT) continue;

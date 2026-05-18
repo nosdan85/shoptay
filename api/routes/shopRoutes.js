@@ -3397,9 +3397,9 @@ router.post('/owner/product-images/upload', authRequired, uploadProductImage.sin
 
         if (!req.file) return res.status(400).json({ error: 'No image file uploaded.' });
 
-        // Upload to imgbb; fall back to local disk path if it fails
+        // Upload to ImgBB CDN; local filesystem storage is not deploy-safe.
         const imgbbUrl = await uploadToImgbb(req.file.buffer, req.file.originalname);
-        const imageUrl = imgbbUrl || `/products/${req.file.filename}`;
+        const imageUrl = imgbbUrl;
 
         return res.json({ filename: imageUrl });
     } catch (error) {
@@ -3793,9 +3793,9 @@ router.post('/owner/config/banners/upload', authRequired, bannerUpload.single('b
         if (!isOwner) return res.status(403).json({ error: 'Forbidden' });
         if (!req.file) return res.status(400).json({ error: 'No banner file uploaded.' });
 
-        // Upload to imgbb; fall back to local disk path if it fails
+        // Upload to ImgBB CDN; local filesystem storage is not deploy-safe.
         const imgbbUrl = await uploadToImgbb(req.file.buffer, req.file.originalname);
-        const bannerUrl = imgbbUrl || `/api/banners/${req.file.filename}`;
+        const bannerUrl = imgbbUrl;
 
         const config = await ShopConfig.getConfig();
         config.banners = [bannerUrl];
@@ -3871,6 +3871,7 @@ router.put('/owner/config/featured', authRequired, async (req, res) => {
         return res.status(500).json({ error: 'Could not update featured products.' });
     }
 });
+
 
 
 

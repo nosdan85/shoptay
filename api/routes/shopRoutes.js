@@ -2647,7 +2647,7 @@ router.post('/orders/:orderId/link-roblox', authRequired, async (req, res) => {
         const robloxUserId = String(req.body?.robloxUserId || '').trim();
         const robloxUsername = String(req.body?.robloxUsername || '').trim();
         const robloxDisplayName = String(req.body?.robloxDisplayName || '').trim();
-        if (!orderId || !discordId || !robloxUserId || !robloxUsername) {
+        if (!orderId || !discordId || !robloxUsername) {
             return res.status(400).json({ error: 'Missing Roblox account information.' });
         }
 
@@ -3148,7 +3148,7 @@ router.post('/create-ticket', authRequired, async (req, res) => {
             order.discordUsername = dbUser?.discordUsername || req.user.discordUsername || '';
             await order.save();
         }
-        if (!order.robloxUserId || !order.robloxUsername) {
+        if (!order.robloxUsername) {
             return res.status(409).json({ error: 'Link your Roblox account before creating a ticket.', code: 'ROBLOX_LINK_REQUIRED' });
         }
         if (!order.deliverySlotId || !order.deliveryCustomerStartAt || !order.deliveryCustomerEndAt) {

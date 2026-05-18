@@ -5,7 +5,7 @@ import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
 import {
   Search, ShoppingCart, Package, X, Minus, Plus, Loader2, User, MapPin,
-  CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Gamepad2
+  CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Gamepad2, ArrowLeft
 } from "lucide-react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
@@ -39,7 +39,6 @@ interface Product { _id: string; name: string; category: string; price: number; 
 interface CartItem extends Product { quantity: number }
 interface Game { _id: string; name: string; slug: string; image?: string }
 interface Slot { id: string; ownerStartText: string; ownerEndText: string; customerStartText: string; customerEndText: string; startAt: string; endAt: string; note?: string }
-interface RobloxRes { robloxUserId: string; robloxUsername: string; robloxDisplayName: string }
 interface Purchase { username: string; productName: string; quantity?: number; price?: number }
 
 type Step = "shop" | "roblox" | "delivery" | "ticket";
@@ -86,18 +85,33 @@ export default function ShopPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
-  const [robloxQuery, setRobloxQuery] = useState("");
-  const [robloxSearching, setRobloxSearching] = useState(false);
-  const [robloxResult, setRobloxResult] = useState<RobloxRes | null>(null);
-  const [robloxLinked, setRobloxLinked] = useState(false);
+  const [robloxUsernameInput, setRobloxUsernameInput] = useState("");
   const [customerTz, setCustomerTz] = useState("America/New_York");
   const [slots, setSlots] = useState<Slot[]>([]);
   const [pickedSlot, setPickedSlot] = useState<string | null>(null);
   const [ticketResult, setTicketResult] = useState<{ channelId: string } | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [modalQty, setModalQty] = useState(1);
+  const [modalQty, setModalQty] = useState<string | number>(1);
   const [modalOpen, setModalOpen] = useState(false);
+
+  // Load cart from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("nosmarket_cart");
+      if (saved) {
+        setCart(JSON.parse(saved));
+      }
+    } catch (_) {}
+  }, []);
+
+  // Save cart to localStorage when changed
+  const saveCart = (newCart: CartItem[]) => {
+    setCart(newCart);
+    try {
+      localStorage.setItem("nosmarket_cart", JSON.stringify(newCart));
+    } catch (_) {}
+  };
 
   useEffect(() => { void load(); }, []);
 
@@ -131,13 +145,13 @@ export default function ShopPage() {
   }, [products, selectedGame, searchQuery]);
 
   const bestSellers = useMemo(() => {
-    if (bestSellerIds.length === 0) return products.slice(0, 8);
+    if (bestSellerIds.length === 0) return [];
     const bs: Product[] = [];
     for (const id of bestSellerIds) {
       const p = products.find((x) => x._id === id);
       if (p) bs.push(p);
     }
-    return bs.length > 0 ? bs : products.slice(0, 8);
+    return bs;
   }, [products, bestSellerIds]);
 
   const cartTotal = useMemo(() => cart.reduce((s, i) => s + i.price * i.quantity, 0), [cart]);
@@ -151,17 +165,35 @@ export default function ShopPage() {
 
   const addToCartFromModal = () => {
     if (!selectedProduct) return;
-    setCart((prev) => {
-      const ex = prev.find((i) => i._id === selectedProduct._id);
-      if (ex) return prev.map((i) => (i._id === selectedProduct._id ? { ...i, quantity: i.quantity + modalQty } : i));
-      return [...prev, { ...selectedProduct, quantity: modalQty }];
-    });
+    const finalQty = Math.max(1, typeof modalQty === "number" ? modalQty : parseInt(modalQty) || 1);
+    const updatedCart = [...cart];
+    const exIndex = updatedCart.findIndex((i) => i._id === selectedProduct._id);
+    if (exIndex > -1) {
+      updatedCart[exIndex].quantity += finalQty;
+    } else {
+      updatedCart.push({ ...selectedProduct, quantity: finalQty });
+    }
+    saveCart(updatedCart);
     setModalOpen(false);
     setSelectedProduct(null);
   };
 
-  const updateQty = (id: string, d: number) => setCart((p) => p.map((i) => (i._id === id ? { ...i, quantity: Math.max(1, i.quantity + d) } : i)));
-  const removeItem = (id: string) => setCart((p) => p.filter((i) => i._id !== id));
+  const updateQty = (id: string, d: number) => {
+    const updated = cart.map((i) => (i._id === id ? { ...i, quantity: Math.max(1, i.quantity + d) } : i));
+    saveCart(updated);
+  };
+
+  const removeItem = (id: string) => {
+    const updated = cart.filter((i) => i._id !== id);
+    saveCart(updated);
+  };
+
+  const clearCartState = () => {
+    setCart([]);
+    try {
+      localStorage.removeItem("nosmarket_cart");
+    } catch (_) {}
+  };
 
   const doCheckout = async () => {
     if (!user || !token) { setError("Login first"); return; }
@@ -181,33 +213,18 @@ export default function ShopPage() {
     finally { setSubmitting(false); }
   };
 
-  const searchRoblox = async () => {
-    if (!robloxQuery.trim()) return;
-    setRobloxSearching(true); setError(null);
-    try {
-      const res = await fetch(`/api/roblox/search?username=${encodeURIComponent(robloxQuery.trim())}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Not found");
-      setRobloxResult(data);
-    } catch (e) { setError(e instanceof Error ? e.message : "Search failed"); }
-    finally { setRobloxSearching(false); }
-  };
-
-  const linkRoblox = async (useUsernameOnly = false) => {
-    if (!orderId || !token) return;
-    if (!useUsernameOnly && !robloxResult) return;
+  const linkRobloxUsername = async () => {
+    if (!robloxUsernameInput.trim() || !orderId || !token) return;
     setSubmitting(true); setError(null);
     try {
-      const payload = useUsernameOnly
-        ? { robloxUsername: robloxQuery.trim(), robloxUserId: "", robloxDisplayName: robloxQuery.trim() }
-        : robloxResult;
+      const payload = { robloxUsername: robloxUsernameInput.trim(), robloxUserId: "", robloxDisplayName: robloxUsernameInput.trim() };
       const res = await fetch(`/api/shop/orders/${orderId}?action=link-roblox`, {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Link failed");
-      setRobloxLinked(true);
+
       const sRes = await fetch(`/api/shop/delivery-slots?timezone=${encodeURIComponent(customerTz)}`, { cache: "no-store" });
       const sData = await sRes.json();
       setSlots(Array.isArray(sData?.slots) ? sData.slots : []);
@@ -321,9 +338,24 @@ export default function ShopPage() {
             <div className="mb-4">
               <label className="block text-sm font-medium mb-2">Quantity</label>
               <div className="flex items-center gap-3">
-                <button onClick={() => setModalQty(Math.max(1, modalQty - 1))} className="rounded-lg bg-slate-800 p-2 hover:bg-slate-700"><Minus className="h-4 w-4" /></button>
-                <input type="number" min="1" value={modalQty} onChange={(e) => setModalQty(Math.max(1, parseInt(e.target.value) || 1))} className="w-20 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-center text-lg font-semibold" />
-                <button onClick={() => setModalQty(modalQty + 1)} className="rounded-lg bg-slate-800 p-2 hover:bg-slate-700"><Plus className="h-4 w-4" /></button>
+                <button onClick={() => setModalQty(Math.max(1, (typeof modalQty === "number" ? modalQty : parseInt(modalQty) || 1) - 1))} className="rounded-lg bg-slate-800 p-2 hover:bg-slate-700"><Minus className="h-4 w-4" /></button>
+                <input
+                  type="text"
+                  value={modalQty}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === "") {
+                      setModalQty("");
+                    } else {
+                      const parsed = parseInt(val);
+                      if (!isNaN(parsed)) {
+                        setModalQty(Math.max(1, parsed));
+                      }
+                    }
+                  }}
+                  className="w-20 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-center text-lg font-semibold outline-none focus:border-blue-500"
+                />
+                <button onClick={() => setModalQty((typeof modalQty === "number" ? modalQty : parseInt(modalQty) || 1) + 1)} className="rounded-lg bg-slate-800 p-2 hover:bg-slate-700"><Plus className="h-4 w-4" /></button>
               </div>
             </div>
             <button onClick={addToCartFromModal} className="w-full rounded-lg bg-blue-600 py-3 font-medium hover:bg-blue-500 transition-colors">Add to Cart</button>
@@ -336,6 +368,9 @@ export default function ShopPage() {
 
         {step !== "shop" && (
           <div className="mx-auto max-w-2xl space-y-6">
+            <button onClick={() => setStep("shop")} className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors">
+              <ArrowLeft className="h-4 w-4" /> Back to Shop
+            </button>
             <div className="flex gap-2">{(["roblox", "delivery", "ticket"] as const).map((s) => (
               <div key={s} className={"h-2 flex-1 rounded-full transition-colors " + (step === s ? "bg-blue-500" : (["roblox", "delivery", "ticket"].indexOf(step) > ["roblox", "delivery", "ticket"].indexOf(s) ? "bg-emerald-500" : "bg-slate-800"))} />
             ))}</div>
@@ -348,25 +383,22 @@ export default function ShopPage() {
               </div>
               {step === "roblox" && (
                 <div className="space-y-4">
-                  <h3 className="flex items-center gap-2 text-lg font-semibold"><User className="h-5 w-5" />Verify Roblox Account</h3>
-                  <div className="flex gap-2">
-                    <input value={robloxQuery} onChange={(e) => setRobloxQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void searchRoblox(); }} placeholder="Roblox username..." className="flex-1 rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none" />
-                    <button onClick={() => void searchRoblox()} disabled={robloxSearching} className="rounded-lg bg-blue-600 px-4 py-3 font-medium disabled:opacity-50">{robloxSearching ? <Loader2 className="h-5 w-5 animate-spin" /> : "Search"}</button>
+                  <h3 className="flex items-center gap-2 text-lg font-semibold"><User className="h-5 w-5" />Enter Roblox Username</h3>
+                  <div className="flex flex-col gap-3">
+                    <input
+                      value={robloxUsernameInput}
+                      onChange={(e) => setRobloxUsernameInput(e.target.value)}
+                      placeholder="Enter Roblox username..."
+                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-blue-500"
+                    />
+                    <button
+                      onClick={() => void linkRobloxUsername()}
+                      disabled={submitting || !robloxUsernameInput.trim()}
+                      className="w-full rounded-lg bg-blue-600 py-3 font-medium transition-all hover:bg-blue-500 disabled:opacity-50"
+                    >
+                      {submitting ? "Linking..." : "Confirm & Proceed"}
+                    </button>
                   </div>
-                  {robloxResult && !robloxLinked && (
-                    <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4">
-                      <p className="font-semibold">{robloxResult.robloxDisplayName}</p><p className="text-sm text-slate-400">@{robloxResult.robloxUsername}</p>
-                      <button onClick={() => void linkRoblox(false)} disabled={submitting} className="mt-3 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium disabled:opacity-50">{submitting ? "Linking..." : "Confirm"}</button>
-                    </div>
-                  )}
-                  {!robloxResult && !robloxLinked && robloxQuery.trim() && (
-                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
-                      <p className="text-sm text-amber-200">Could not find Roblox account. You can still proceed with your username.</p>
-                      <button onClick={() => void linkRoblox(true)} disabled={submitting} className="mt-3 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium disabled:opacity-50">{submitting ? "Saving..." : "Proceed with username only"}</button>
-                    </div>
-                  )}
-                  {robloxLinked && robloxResult && <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-200"><CheckCircle2 className="h-5 w-5" />Linked: {robloxResult.robloxDisplayName}</div>}
-                  {robloxLinked && !robloxResult && <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-200"><CheckCircle2 className="h-5 w-5" />Saved: {robloxQuery}</div>}
                 </div>
               )}
               {step === "delivery" && (
@@ -393,7 +425,7 @@ export default function ShopPage() {
                   ) : (
                     <div className="space-y-3">
                       <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4"><CheckCircle2 className="h-5 w-5 text-emerald-300" /><span className="text-sm">Ticket created!</span></div>
-                      <button onClick={() => { setStep("shop"); setCart([]); setOrderId(null); setRobloxResult(null); setRobloxLinked(false); setPickedSlot(null); setTicketResult(null); }} className="w-full rounded-lg bg-slate-800 py-3 text-sm">Continue Shopping</button>
+                      <button onClick={() => { setStep("shop"); clearCartState(); setOrderId(null); setRobloxUsernameInput(""); setPickedSlot(null); setTicketResult(null); }} className="w-full rounded-lg bg-slate-800 py-3 text-sm">Continue Shopping</button>
                     </div>
                   )}
                 </div>
@@ -443,7 +475,7 @@ export default function ShopPage() {
 
             {bestSellers.length > 0 && !showAll && !selectedGame && !searchQuery && (
               <div>
-                <h2 className="mb-4 text-xl font-semibold">Best Sellers</h2>
+                <h2 className="mb-4 text-xl font-semibold text-amber-400">🔥 Best Sellers</h2>
                 <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                   {bestSellers.map((p) => (
                     <div key={p._id} onClick={() => openProductModal(p)} className="group cursor-pointer overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 transition-all hover:border-blue-500/40 hover:-translate-y-1">

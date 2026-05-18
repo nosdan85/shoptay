@@ -288,7 +288,10 @@ export default function AdminPage() {
             <h1 className="text-2xl font-bold">Admin Dashboard</h1>
             <p className="text-slate-400 text-sm">Vietnam Timezone Slots, Games, and Banners configured natively.</p>
           </div>
-          <button onClick={() => void fetchAll()} className="flex items-center gap-2 rounded-lg bg-slate-900 border border-slate-800 px-4 py-2 text-sm"><RefreshCcw className="h-4 w-4" /> Sync All</button>
+          <div className="flex gap-3">
+            <a href="/shop" className="flex items-center gap-2 rounded-lg bg-slate-900 border border-slate-800 px-4 py-2 text-sm text-slate-300 hover:text-white hover:border-slate-600 transition-all">← Back to Shop</a>
+            <button onClick={() => void fetchAll()} className="flex items-center gap-2 rounded-lg bg-slate-900 border border-slate-800 px-4 py-2 text-sm"><RefreshCcw className="h-4 w-4" /> Sync All</button>
+          </div>
         </div>
 
         <div className="mb-6 flex gap-2 border-b border-slate-800 pb-3">

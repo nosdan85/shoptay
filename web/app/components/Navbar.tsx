@@ -41,6 +41,9 @@ export default function Navbar({ cartCount = 0, showCart = false }: NavbarProps)
           <Link href="/shop" className="text-slate-300 hover:text-white transition-colors duration-150 font-medium">
             Shop
           </Link>
+          <Link href="/wallet" className="text-slate-300 hover:text-white transition-colors duration-150 font-medium">
+            Wallet
+          </Link>
           <Link href="/proofs" className="text-slate-300 hover:text-white transition-colors duration-150 font-medium">
             Proofs
           </Link>

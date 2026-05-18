@@ -57,7 +57,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const getOAuthUrl = (): string => {
     if (typeof window === "undefined") return "";
     const clientId = process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID || "";
-    const redirectUri = `${window.location.origin}/auth/callback`;
+    const redirectUri =
+      process.env.NEXT_PUBLIC_DISCORD_REDIRECT_URI ||
+      `${window.location.origin}/auth/callback`;
     const params = new URLSearchParams({
       client_id: clientId,
       redirect_uri: redirectUri,

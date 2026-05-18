@@ -27,5 +27,5 @@ npm-debug.log*
 # Next.js
 web/out/
 
-# API placeholder
-api/
+# API service
+# keep tracked

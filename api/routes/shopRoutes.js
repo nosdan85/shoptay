@@ -1188,8 +1188,7 @@ const releaseLtcTicketLockAsFailed = async (orderId, discordId, lockUntil, messa
 const canAccessOwnerEndpoints = async (discordId) => {
     if (!discordId) return false;
     const ownerId = process.env.DISCORD_OWNER_ID || '';
-    if (ownerId && discordId === ownerId) return true;
-    return checkUserHasOwnerRole(discordId);
+    return ownerId && discordId === ownerId;
 };
 
 const getOptionalRequestUser = (req) => {
@@ -3851,5 +3850,6 @@ router.put('/owner/config/featured', authRequired, async (req, res) => {
         return res.status(500).json({ error: 'Could not update featured products.' });
     }
 });
+
 
 

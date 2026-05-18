@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const qs = require('qs');
@@ -2629,10 +2629,17 @@ router.get('/roblox/search', async (req, res) => {
         const found = Array.isArray(response.data?.data) ? response.data.data[0] : null;
         if (!found?.id) return res.status(404).json({ error: 'Roblox user not found.' });
 
+        let robloxAvatar = '';
+        try {
+            const avatarRes = await axios.get(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${found.id}&size=150x150&format=Png&isCircular=true`, { timeout: 5000 });
+            robloxAvatar = avatarRes.data?.data?.[0]?.imageUrl || '';
+        } catch (_) {}
+
         return res.json({
             robloxUserId: String(found.id),
             robloxUsername: String(found.name || username),
-            robloxDisplayName: String(found.displayName || found.name || username)
+            robloxDisplayName: String(found.displayName || found.name || username),
+            robloxAvatar
         });
     } catch (error) {
         console.error('Roblox search error:', error?.message || error);
@@ -2650,6 +2657,21 @@ router.post('/orders/:orderId/link-roblox', authRequired, async (req, res) => {
         if (!orderId || !discordId || !robloxUsername) {
             return res.status(400).json({ error: 'Missing Roblox account information.' });
         }
+        if (robloxUsername.length < 3 || robloxUsername.length > 20) {
+            return res.status(400).json({ error: 'Roblox username must be 3-20 characters.' });
+        }
+
+        const robloxLookup = await axios.post('https://users.roblox.com/v1/usernames/users', {
+            usernames: [robloxUsername],
+            excludeBannedUsers: false
+        }, { timeout: 10000 });
+        const foundRobloxUser = Array.isArray(robloxLookup.data?.data) ? robloxLookup.data.data[0] : null;
+        if (!foundRobloxUser?.id) {
+            return res.status(404).json({ error: 'Roblox user not found.' });
+        }
+        if (robloxUserId && String(foundRobloxUser.id) !== robloxUserId) {
+            return res.status(409).json({ error: 'Roblox account changed. Please search again.' });
+        }
 
         const { order, status, error } = await getOwnedOrder(orderId, discordId);
         if (!order) return res.status(status).json({ error });
@@ -2658,9 +2680,9 @@ router.post('/orders/:orderId/link-roblox', authRequired, async (req, res) => {
         const dbUser = await User.findOne({ discordId }).lean();
         order.discordId = discordId;
         order.discordUsername = dbUser?.discordUsername || order.discordUsername || '';
-        order.robloxUserId = robloxUserId || order.robloxUserId || '';
-        order.robloxUsername = robloxUsername;
-        order.robloxDisplayName = robloxDisplayName || robloxUsername;
+        order.robloxUserId = String(foundRobloxUser.id);
+        order.robloxUsername = String(foundRobloxUser.name || robloxUsername);
+        order.robloxDisplayName = String(foundRobloxUser.displayName || robloxDisplayName || foundRobloxUser.name || robloxUsername);
         order.robloxVerifiedAt = new Date();
         await order.save();
 
@@ -3849,6 +3871,9 @@ router.put('/owner/config/featured', authRequired, async (req, res) => {
         return res.status(500).json({ error: 'Could not update featured products.' });
     }
 });
+
+
+
 
 
 

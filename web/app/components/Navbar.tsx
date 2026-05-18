@@ -1,8 +1,8 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useAuth } from "../context/AuthContext";
-import { ShoppingCart, LogOut, User, Loader2 } from "lucide-react";
+import { ShoppingCart, LogOut, User, Loader2, Menu, X } from "lucide-react";
 import { useState, useRef } from "react";
 
 interface NavbarProps {
@@ -14,6 +14,7 @@ export default function Navbar({ cartCount = 0, showCart = false }: NavbarProps)
   const { user, isLoading, logout, getOAuthUrl } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const handleLogout = () => {
@@ -127,3 +128,4 @@ export default function Navbar({ cartCount = 0, showCart = false }: NavbarProps)
     </nav>
   );
 }
+

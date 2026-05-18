@@ -101,6 +101,7 @@ export default function ShopPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [modalQty, setModalQty] = useState<string | number>(1);
   const [modalOpen, setModalOpen] = useState(false);
+  const [robloxSearchResult, setRobloxSearchResult] = useState<null | { userId: string; username: string; displayName: string; avatar: string }>(null);
 
   // Load cart from localStorage on mount
   useEffect(() => {
@@ -220,11 +221,32 @@ export default function ShopPage() {
     finally { setSubmitting(false); }
   };
 
-  const linkRobloxUsername = async () => {
-    if (!robloxUsernameInput.trim() || !orderId || !token) return;
+  const lookupRobloxUsername = async () => {
+    if (!robloxUsernameInput.trim()) return;
     setSubmitting(true); setError(null);
     try {
-      const payload = { robloxUsername: robloxUsernameInput.trim(), robloxUserId: "", robloxDisplayName: robloxUsernameInput.trim() };
+      const res = await fetch(`/api/shop/roblox/search?username=${encodeURIComponent(robloxUsernameInput.trim())}`, { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Roblox lookup failed");
+      setRobloxSearchResult({
+        userId: String(data.robloxUserId || ""),
+        username: String(data.robloxUsername || ""),
+        displayName: String(data.robloxDisplayName || ""),
+        avatar: String(data.robloxAvatar || ""),
+      });
+    } catch (e) { setError(e instanceof Error ? e.message : "Roblox lookup failed"); setRobloxSearchResult(null); }
+    finally { setSubmitting(false); }
+  };
+
+  const linkRobloxUsername = async () => {
+    if (!robloxSearchResult || !orderId || !token) return;
+    setSubmitting(true); setError(null);
+    try {
+      const payload = {
+        robloxUsername: robloxSearchResult.username,
+        robloxUserId: robloxSearchResult.userId,
+        robloxDisplayName: robloxSearchResult.displayName,
+      };
       const res = await fetch(`/api/shop/orders/${orderId}?action=link-roblox`, {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(payload),
@@ -395,22 +417,69 @@ export default function ShopPage() {
               </div>
               {step === "roblox" && (
                 <div className="space-y-4">
-                  <h3 className="flex items-center gap-2 text-lg font-semibold"><User className="h-5 w-5" />Enter Roblox Username</h3>
-                  <div className="flex flex-col gap-3">
-                    <input
-                      value={robloxUsernameInput}
-                      onChange={(e) => setRobloxUsernameInput(e.target.value)}
-                      placeholder="Enter Roblox username..."
-                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-blue-500"
-                    />
-                    <button
-                      onClick={() => void linkRobloxUsername()}
-                      disabled={submitting || !robloxUsernameInput.trim()}
-                      className="w-full rounded-lg bg-blue-600 py-3 font-medium transition-all hover:bg-blue-500 disabled:opacity-50"
-                    >
-                      {submitting ? "Linking..." : "Confirm & Proceed"}
-                    </button>
-                  </div>
+                  {!robloxSearchResult ? (
+                    <div className="space-y-4">
+                      <h3 className="flex items-center gap-2 text-lg font-semibold"><User className="h-5 w-5" />Enter Roblox Username</h3>
+                      <div className="flex flex-col gap-3">
+                        <input
+                          value={robloxUsernameInput}
+                          onChange={(e) => setRobloxUsernameInput(e.target.value)}
+                          placeholder="Enter Roblox username..."
+                          className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-blue-500"
+                        />
+                        <button
+                          onClick={() => void lookupRobloxUsername()}
+                          disabled={submitting || !robloxUsernameInput.trim() || robloxUsernameInput.length < 3}
+                          className="w-full rounded-lg bg-blue-600 py-3 font-medium transition-all hover:bg-blue-500 disabled:opacity-50"
+                        >
+                          {submitting ? "Searching..." : "Lookup Account"}
+                        </button>
+                      </div>
+                      <p className="text-xs text-slate-500">Enter at least 3 characters to search</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <h3 className="flex items-center gap-2 text-lg font-semibold"><User className="h-5 w-5" />Verify Roblox Account</h3>
+                      <p className="text-sm text-slate-400">Is this your Roblox account?</p>
+                      <div className="flex items-center gap-4 rounded-xl border border-slate-700 bg-slate-950 p-4">
+                        <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-full bg-slate-800">
+                          {robloxSearchResult.avatar ? (
+                            <img src={robloxSearchResult.avatar} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            <User className="h-full w-full p-3 text-slate-600" />
+                          )}
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm text-slate-400">Display Name</p>
+                          <p className="text-lg font-semibold text-white">{robloxSearchResult.displayName}</p>
+                          <p className="text-sm text-blue-400">@{robloxSearchResult.username}</p>
+                          <a
+                            href={`https://www.roblox.com/users/${robloxSearchResult.userId}/profile`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-1 inline-block text-xs text-slate-400 hover:text-white"
+                          >
+                            View Profile
+                          </a>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          onClick={() => { setRobloxSearchResult(null); setRobloxUsernameInput(""); }}
+                          className="rounded-lg bg-slate-700 py-3 font-medium transition-colors hover:bg-slate-600"
+                        >
+                          Re-enter
+                        </button>
+                        <button
+                          onClick={() => void linkRobloxUsername()}
+                          disabled={submitting}
+                          className="rounded-lg bg-emerald-600 py-3 font-medium transition-colors hover:bg-emerald-500 disabled:opacity-50"
+                        >
+                          {submitting ? "Linking..." : "Confirm & Proceed"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               {step === "delivery" && (
@@ -541,6 +610,8 @@ export default function ShopPage() {
     </div>
   );
 }
+
+
 
 
 

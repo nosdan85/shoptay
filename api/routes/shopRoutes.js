@@ -2658,9 +2658,9 @@ router.post('/orders/:orderId/link-roblox', authRequired, async (req, res) => {
         const dbUser = await User.findOne({ discordId }).lean();
         order.discordId = discordId;
         order.discordUsername = dbUser?.discordUsername || order.discordUsername || '';
-        order.robloxUserId = robloxUserId;
+        order.robloxUserId = robloxUserId || order.robloxUserId || '';
         order.robloxUsername = robloxUsername;
-        order.robloxDisplayName = robloxDisplayName;
+        order.robloxDisplayName = robloxDisplayName || robloxUsername;
         order.robloxVerifiedAt = new Date();
         await order.save();
 
@@ -3772,7 +3772,7 @@ router.post('/owner/config/banners/upload', authRequired, bannerUpload.single('b
         const bannerUrl = imgbbUrl || `/products/${req.file.filename}`;
 
         const config = await ShopConfig.getConfig();
-        config.banners.push(bannerUrl);
+        config.banners = [bannerUrl];
         await config.save();
         return res.json({ filename: bannerUrl, banners: config.banners });
     } catch (error) {

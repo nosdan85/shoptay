@@ -1,11 +1,11 @@
 ﻿"use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
 import {
   Search, ShoppingCart, Package, X, Minus, Plus, Loader2, User, MapPin,
-  CalendarDays, CheckCircle2, ExternalLink, ChevronLeft, ChevronRight, Gamepad2
+  CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Gamepad2
 } from "lucide-react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
@@ -193,13 +193,17 @@ export default function ShopPage() {
     finally { setRobloxSearching(false); }
   };
 
-  const linkRoblox = async () => {
-    if (!robloxResult || !orderId || !token) return;
+  const linkRoblox = async (useUsernameOnly = false) => {
+    if (!orderId || !token) return;
+    if (!useUsernameOnly && !robloxResult) return;
     setSubmitting(true); setError(null);
     try {
+      const payload = useUsernameOnly
+        ? { robloxUsername: robloxQuery.trim(), robloxUserId: "", robloxDisplayName: robloxQuery.trim() }
+        : robloxResult;
       const res = await fetch(`/api/shop/orders/${orderId}?action=link-roblox`, {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(robloxResult),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Link failed");
@@ -352,10 +356,17 @@ export default function ShopPage() {
                   {robloxResult && !robloxLinked && (
                     <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4">
                       <p className="font-semibold">{robloxResult.robloxDisplayName}</p><p className="text-sm text-slate-400">@{robloxResult.robloxUsername}</p>
-                      <button onClick={() => void linkRoblox()} disabled={submitting} className="mt-3 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium disabled:opacity-50">{submitting ? "Linking..." : "Confirm"}</button>
+                      <button onClick={() => void linkRoblox(false)} disabled={submitting} className="mt-3 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium disabled:opacity-50">{submitting ? "Linking..." : "Confirm"}</button>
+                    </div>
+                  )}
+                  {!robloxResult && !robloxLinked && robloxQuery.trim() && (
+                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+                      <p className="text-sm text-amber-200">Could not find Roblox account. You can still proceed with your username.</p>
+                      <button onClick={() => void linkRoblox(true)} disabled={submitting} className="mt-3 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium disabled:opacity-50">{submitting ? "Saving..." : "Proceed with username only"}</button>
                     </div>
                   )}
                   {robloxLinked && robloxResult && <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-200"><CheckCircle2 className="h-5 w-5" />Linked: {robloxResult.robloxDisplayName}</div>}
+                  {robloxLinked && !robloxResult && <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-200"><CheckCircle2 className="h-5 w-5" />Saved: {robloxQuery}</div>}
                 </div>
               )}
               {step === "delivery" && (
@@ -425,12 +436,8 @@ export default function ShopPage() {
             </div>
 
             {banners.length > 0 && (
-              <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                {banners.map((b, i) => (
-                  <div key={i} className="overflow-hidden rounded-2xl border border-slate-800">
-                    <img src={imgUrl(b)} alt="" className="h-48 w-full object-cover" />
-                  </div>
-                ))}
+              <div className="overflow-hidden rounded-2xl border border-slate-800">
+                <img src={imgUrl(banners[0])} alt="" className="w-full object-cover" style={{ maxHeight: "400px" }} />
               </div>
             )}
 

@@ -451,19 +451,19 @@ export default function AdminPage() {
         {/* ─── TAB: CONFIG (BANNERS) ─── */}
         {tab === "config" && (
           <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-6">
-            <div><h2 className="font-semibold text-lg">Shop Banners</h2><p className="text-xs text-slate-400">Configure continuous scrolling showcase banners on the main shop layout.</p></div>
+            <div><h2 className="font-semibold text-lg">Shop Banner</h2><p className="text-xs text-slate-400">Only one banner is active. Uploading a new banner replaces the current one.</p></div>
             <div className="flex items-center gap-3 flex-wrap">
               <input type="file" accept="image/*" onChange={(e) => setNewBannerFile(e.target.files?.[0] || null)} className="text-sm border border-slate-700 rounded p-2 bg-slate-950" />
-              <button onClick={() => void handleBannerUpload()} disabled={submitting || !newBannerFile} className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold disabled:opacity-50">Upload Banner</button>
+              <button onClick={() => void handleBannerUpload()} disabled={submitting || !newBannerFile} className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold disabled:opacity-50">Upload / Replace Banner</button>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
-              {banners.map((b, idx) => (
-                <div key={idx} className="relative group overflow-hidden rounded-lg border border-slate-800">
-                  <img src={imgUrl(b)} alt="" className="h-32 w-full object-cover" />
-                  <button onClick={() => void deleteBanner(b)} className="absolute top-2 right-2 bg-red-600 text-white rounded p-1.5 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="h-4 w-4" /></button>
-                </div>
-              ))}
-            </div>
+            {banners[0] ? (
+              <div className="relative group overflow-hidden rounded-lg border border-slate-800">
+                <img src={imgUrl(banners[0])} alt="" className="w-full object-cover" style={{ maxHeight: "360px" }} />
+                <button onClick={() => void deleteBanner(banners[0])} className="absolute top-2 right-2 bg-red-600 text-white rounded p-1.5 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="h-4 w-4" /></button>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-slate-700 bg-slate-950 p-8 text-center text-sm text-slate-500">No banner uploaded.</div>
+            )}
           </div>
         )}
       </main>

@@ -81,7 +81,7 @@ const uploadProductImage = multer({
 // Product catalog cache (in-memory with TTL)
 let productsCache = null;
 let productsCacheAt = 0;
-const PRODUCTS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const PRODUCTS_CACHE_TTL_MS = 0; // 5 minutes
 
 const invalidateProductsCache = () => {
     productsCache = null;
@@ -3844,6 +3844,7 @@ router.put('/owner/config/featured', authRequired, async (req, res) => {
         return res.status(500).json({ error: 'Could not update featured products.' });
     }
 });
+
 
 
 

@@ -3,422 +3,362 @@
 import { useState, useEffect, useMemo } from "react";
 import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
-import { AlertCircle, Loader2, Plus, Edit2, Trash2, X, Upload, Image as ImageIcon, CalendarDays, Package, RefreshCcw } from "lucide-react";
+import {
+  AlertCircle, Loader2, Plus, Edit2, Trash2, X, Upload, Image as ImageIcon,
+  CalendarDays, Package, RefreshCcw, Gamepad2, Layers, Sliders
+} from "lucide-react";
 
-interface Product {
-  _id: string;
-  name: string;
-  price: number;
-  bulkPrice?: number;
-  image: string;
-  desc?: string;
-  category: string;
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+
+function imgUrl(src: string | undefined | null): string {
+  if (!src) return "";
+  if (src.startsWith("http")) return src;
+  return `${API_BASE}${src.startsWith("/") ? "" : "/"}${src}`;
 }
 
-interface ProductFormData {
-  name: string;
-  price: string;
-  bulkPrice: string;
-  image: string;
-  desc: string;
-  category: string;
-}
-
-interface DeliverySlot {
-  id: string;
-  ownerTimezone: string;
-  customerTimezone: string;
-  startAt: string;
-  endAt: string;
-  ownerStartText: string;
-  ownerEndText: string;
-  customerStartText: string;
-  customerEndText: string;
-  note?: string;
-}
-
-const OWNER_TIMEZONES = [
-  "America/New_York",
-  "America/Chicago",
-  "America/Denver",
-  "America/Los_Angeles",
-  "Europe/London",
-  "Europe/Paris",
-  "Asia/Tokyo",
-  "Asia/Shanghai",
-  "Australia/Sydney",
-];
+interface Product { _id: string; name: string; price: number; bulkPrice?: number; image: string; desc?: string; category: string; gameId?: string }
+interface Game { _id: string; name: string; slug: string; image?: string; active: boolean }
+interface Slot { id: string; ownerStartText: string; ownerEndText: string; customerStartText: string; customerEndText: string; customerTimezone: string; startAt: string; endAt: string; note?: string }
 
 export default function AdminPage() {
   const { user, token, isLoading, getOAuthUrl } = useAuth();
-  const [tab, setTab] = useState<"products" | "slots">("products");
+  const [tab, setTab] = useState<"products" | "slots" | "games" | "config">("products");
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  /* --- products state --- */
   const [products, setProducts] = useState<Product[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
-  const [slotsLoading, setSlotsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [showProductForm, setShowProductForm] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingProduct, setEditingProduct] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [productForm, setProductForm] = useState<ProductFormData>({
-    name: "",
-    price: "",
-    bulkPrice: "",
-    image: "",
-    desc: "",
-    category: "",
-  });
-  const [slots, setSlots] = useState<DeliverySlot[]>([]);
-  const [slotTimezone, setSlotTimezone] = useState("America/New_York");
+  const [productForm, setProductForm] = useState({ name: "", price: "", bulkPrice: "", image: "", desc: "", category: "", gameId: "" });
+
+  /* --- games state --- */
+  const [games, setGames] = useState<Game[]>([]);
+  const [gamesLoading, setGamesLoading] = useState(false);
+  const [showGameForm, setShowGameForm] = useState(false);
+  const [editingGame, setEditingGame] = useState<string | null>(null);
+  const [gameForm, setGameForm] = useState({ name: "", slug: "", image: "", active: true });
+
+  /* --- slots state --- */
+  const [slots, setSlots] = useState<Slot[]>([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
   const [slotDate, setSlotDate] = useState("");
   const [ranges, setRanges] = useState([{ startTime: "", endTime: "", note: "" }]);
-  const [creatingSlots, setCreatingSlots] = useState(false);
+
+  /* --- banners & best sellers state --- */
+  const [banners, setBanners] = useState<string[]>([]);
+  const [bestSellers, setBestSellers] = useState<string[]>([]);
+  const [newBannerFile, setNewBannerFile] = useState<File | null>(null);
 
   useEffect(() => {
     if (!isLoading && user?.isOwner && token) {
-      void fetchProducts();
-      void fetchSlots();
+      void fetchAll();
     }
-  }, [isLoading, user?.isOwner, token]);
+  }, [isLoading, user, token]);
+
+  const fetchAll = async () => {
+    void fetchProducts();
+    void fetchGames();
+    void fetchSlots();
+    void fetchConfig();
+  };
 
   const fetchProducts = async () => {
     if (!token) return;
     setProductsLoading(true);
-    setError(null);
     try {
-      const res = await fetch("/api/shop/owner/products", {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
+      const res = await fetch("/api/shop/owner/products", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Failed to fetch products");
-      setProducts(Array.isArray(data?.products) ? data.products : []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error loading products");
-    } finally {
-      setProductsLoading(false);
-    }
+      setProducts(Array.isArray(data.products) ? data.products : []);
+    } catch { /* silent */ }
+    setProductsLoading(false);
+  };
+
+  const fetchGames = async () => {
+    if (!token) return;
+    setGamesLoading(true);
+    try {
+      const res = await fetch("/api/shop/owner/games", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+      const data = await res.json();
+      setGames(Array.isArray(data) ? data : []);
+    } catch { /* silent */ }
+    setGamesLoading(false);
   };
 
   const fetchSlots = async () => {
     if (!token) return;
     setSlotsLoading(true);
-    setError(null);
     try {
-      const res = await fetch("/api/shop/delivery-slots?manage=1", {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
+      const res = await fetch("/api/shop/delivery-slots?manage=1", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Failed to fetch slots");
-      setSlots(Array.isArray(data?.slots) ? data.slots : []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error loading slots");
-    } finally {
-      setSlotsLoading(false);
-    }
+      setSlots(Array.isArray(data.slots) ? data.slots : []);
+    } catch { /* silent */ }
+    setSlotsLoading(false);
   };
 
-  const sortedSlots = useMemo(
-    () => [...slots].sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime()),
-    [slots]
-  );
+  const fetchConfig = async () => {
+    try {
+      const res = await fetch("/api/shop/config", { cache: "no-store" });
+      const data = await res.json();
+      setBanners(Array.isArray(data.banners) ? data.banners : []);
+      setBestSellers(Array.isArray(data.bestSellerIds) ? data.bestSellerIds : []);
+    } catch { /* silent */ }
+  };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  /* --- CRUD PRODUCTS --- */
+  const handleProductImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !token) return;
     setUploading(true);
-    setError(null);
     try {
       const body = new FormData();
       body.append("image", file);
-      const res = await fetch("/api/shop/owner/product-images/upload", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body,
-      });
+      const res = await fetch("/api/shop/owner/product-images/upload", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Upload failed");
+      if (!res.ok) throw new Error(data.error);
       setProductForm((prev) => ({ ...prev, image: data.filename }));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed");
-    } finally {
-      setUploading(false);
-    }
+    } catch (err) { setError("Upload failed"); }
+    setUploading(false);
   };
 
   const submitProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) return;
-    if (!productForm.name || !productForm.price || !productForm.category || !productForm.image) {
-      setError("Missing required product fields");
-      return;
-    }
-    setProductsLoading(true);
-    setError(null);
+    setSubmitting(true); setError(null);
     try {
       const payload = {
-        name: productForm.name.trim(),
+        name: productForm.name,
         price: Number(productForm.price),
         bulkPrice: productForm.bulkPrice ? Number(productForm.bulkPrice) : null,
-        image: productForm.image.trim(),
-        desc: productForm.desc.trim(),
-        category: productForm.category.trim(),
+        image: productForm.image,
+        desc: productForm.desc,
+        category: productForm.category,
+        gameId: productForm.gameId || null,
       };
-      const url = editingId ? `/api/shop/owner/products/${editingId}` : "/api/shop/owner/products";
-      const method = editingId ? "PUT" : "POST";
+      const url = editingProduct ? `/api/shop/owner/products/${editingProduct}` : "/api/shop/owner/products";
+      const method = editingProduct ? "PUT" : "POST";
       const res = await fetch(url, {
         method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(payload),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Save failed");
-      resetProductForm();
+      if (!res.ok) throw new Error("Save failed");
       setShowProductForm(false);
+      setEditingProduct(null);
+      setProductForm({ name: "", price: "", bulkPrice: "", image: "", desc: "", category: "", gameId: "" });
       await fetchProducts();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
-    } finally {
-      setProductsLoading(false);
-    }
+    } catch (err) { setError("Save failed"); }
+    setSubmitting(false);
   };
 
-  const removeProduct = async (id: string) => {
-    if (!token || !confirm("Delete this item?")) return;
-    setProductsLoading(true);
-    setError(null);
+  const deleteProduct = async (id: string) => {
+    if (!token || !confirm("Delete item?")) return;
     try {
-      const res = await fetch(`/api/shop/owner/products/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Delete failed");
+      await fetch(`/api/shop/owner/products/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
       await fetchProducts();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Delete failed");
-    } finally {
-      setProductsLoading(false);
-    }
+    } catch { /* silent */ }
   };
 
-  const beginEditProduct = (product: Product) => {
-    setProductForm({
-      name: product.name,
-      price: String(product.price),
-      bulkPrice: product.bulkPrice ? String(product.bulkPrice) : "",
-      image: product.image,
-      desc: product.desc || "",
-      category: product.category,
-    });
-    setEditingId(product._id);
-    setShowProductForm(true);
-    setTab("products");
-  };
-
-  const resetProductForm = () => {
-    setProductForm({ name: "", price: "", bulkPrice: "", image: "", desc: "", category: "" });
-    setEditingId(null);
-  };
-
-  const addRangeRow = () => setRanges((prev) => [...prev, { startTime: "", endTime: "", note: "" }]);
-  const removeRangeRow = (index: number) => setRanges((prev) => prev.filter((_, i) => i !== index));
-  const updateRangeRow = (index: number, field: "startTime" | "endTime" | "note", value: string) => {
-    setRanges((prev) => prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
-  };
-
-  const createBulkSlots = async (e: React.FormEvent) => {
+  /* --- CRUD GAMES --- */
+  const submitGame = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) return;
-    const cleanRanges = ranges
-      .map((row) => ({ startTime: row.startTime, endTime: row.endTime, note: row.note.trim() }))
-      .filter((row) => row.startTime && row.endTime);
-    if (!slotDate || cleanRanges.length === 0) {
-      setError("Pick a date and at least one valid time range");
-      return;
-    }
-    setCreatingSlots(true);
-    setError(null);
+    setSubmitting(true); setError(null);
     try {
-      const res = await fetch("/api/shop/delivery-slots?manage=1", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          ownerTimezone: slotTimezone,
-          date: slotDate,
-          ranges: cleanRanges,
-        }),
+      const url = editingGame ? `/api/shop/owner/games/${editingGame}` : "/api/shop/owner/games";
+      const method = editingGame ? "PUT" : "POST";
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(gameForm),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Could not create slots");
+      if (!res.ok) throw new Error("Save game failed");
+      setShowGameForm(false);
+      setEditingGame(null);
+      setGameForm({ name: "", slug: "", image: "", active: true });
+      await fetchGames();
+    } catch { setError("Save game failed"); }
+    setSubmitting(false);
+  };
+
+  const deleteGame = async (id: string) => {
+    if (!token || !confirm("Delete game?")) return;
+    try {
+      await fetch(`/api/shop/owner/games/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+      await fetchGames();
+    } catch { /* silent */ }
+  };
+
+  /* --- BULK SLOTS (Vietnamese timezone setup) --- */
+  const createSlots = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !slotDate) return;
+    const cleanRanges = ranges.filter((r) => r.startTime && r.endTime);
+    if (cleanRanges.length === 0) return;
+    setSubmitting(true); setError(null);
+    try {
+      // Always use Vietnamese timezone "Asia/Ho_Chi_Minh" when owner configures slots
+      const res = await fetch("/api/shop/delivery-slots", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ownerTimezone: "Asia/Ho_Chi_Minh", date: slotDate, ranges: cleanRanges }),
+      });
+      if (!res.ok) throw new Error("Failed");
       setRanges([{ startTime: "", endTime: "", note: "" }]);
       await fetchSlots();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create slots");
-    } finally {
-      setCreatingSlots(false);
-    }
+    } catch { setError("Failed to create slots"); }
+    setSubmitting(false);
   };
 
   const deleteSlot = async (id: string) => {
-    if (!token || !confirm("Delete this slot?")) return;
-    setSlotsLoading(true);
-    setError(null);
+    if (!token || !confirm("Delete slot?")) return;
     try {
-      const res = await fetch(`/api/shop/delivery-slots/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Delete slot failed");
+      await fetch(`/api/shop/delivery-slots/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
       await fetchSlots();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Delete slot failed");
-    } finally {
-      setSlotsLoading(false);
-    }
+    } catch { /* silent */ }
   };
 
-  if (isLoading) {
-    return <div className="min-h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-blue-400" /></div>;
-  }
+  /* --- BANNERS & BEST SELLERS CONFIG --- */
+  const handleBannerUpload = async () => {
+    if (!newBannerFile || !token) return;
+    setSubmitting(true);
+    try {
+      const body = new FormData();
+      body.append("banner", newBannerFile);
+      const res = await fetch("/api/shop/owner/config/banners/upload", {
+        method: "POST", headers: { Authorization: `Bearer ${token}` }, body
+      });
+      if (!res.ok) throw new Error("Upload banner failed");
+      setNewBannerFile(null);
+      await fetchConfig();
+    } catch { setError("Banner upload failed"); }
+    setSubmitting(false);
+  };
 
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-white">
-        <Navbar />
-        <div className="mx-auto max-w-md px-4 py-24">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center">
-            <AlertCircle className="mx-auto mb-4 h-12 w-12 text-amber-400" />
-            <h1 className="text-2xl font-semibold">Admin login required</h1>
-            <p className="mt-3 text-slate-400">Login with Discord owner account.</p>
-            <a href={getOAuthUrl()} className="mt-6 inline-flex rounded-lg bg-[#5865F2] px-5 py-3 font-medium">Login with Discord</a>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const deleteBanner = async (bannerUrl: string) => {
+    if (!token || !confirm("Delete banner?")) return;
+    try {
+      await fetch("/api/shop/owner/config/banners", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ bannerUrl })
+      });
+      await fetchConfig();
+    } catch { /* silent */ }
+  };
 
-  if (!user.isOwner) {
+  const toggleBestSeller = async (productId: string) => {
+    if (!token) return;
+    const isBs = bestSellers.includes(productId);
+    const updated = isBs ? bestSellers.filter((id) => id !== productId) : [...bestSellers, productId];
+    try {
+      await fetch("/api/shop/owner/config/best-sellers", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ bestSellerIds: updated }),
+      });
+      setBestSellers(updated);
+    } catch { /* silent */ }
+  };
+
+  if (isLoading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-blue-400" /></div>;
+
+  if (!user?.isOwner) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white">
-        <Navbar />
-        <div className="mx-auto max-w-md px-4 py-24">
-          <div className="rounded-2xl border border-red-500/20 bg-slate-900 p-8 text-center">
-            <AlertCircle className="mx-auto mb-4 h-12 w-12 text-red-400" />
-            <h1 className="text-2xl font-semibold">Access denied</h1>
-            <p className="mt-3 text-slate-400">Owner role required.</p>
-          </div>
+      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-4">
+        <div className="max-w-md w-full rounded-2xl border border-red-500/20 bg-slate-900 p-8 text-center">
+          <AlertCircle className="mx-auto mb-4 h-12 w-12 text-red-400" />
+          <h1 className="text-xl font-semibold">Access denied</h1>
+          <p className="mt-2 text-slate-400 text-sm">Owner account login required via Discord.</p>
+          <a href={getOAuthUrl()} className="mt-4 inline-block bg-[#5865F2] px-6 py-2.5 rounded-lg text-sm font-medium">Login with Discord</a>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-screen bg-slate-950 text-white pb-12">
       <Navbar />
+
       <main className="mx-auto max-w-7xl px-4 py-8">
-        <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="mb-8 flex flex-wrap gap-4 items-center justify-between">
           <div>
-            <h1 className="text-3xl font-semibold">Admin Dashboard</h1>
-            <p className="mt-1 text-sm text-slate-400">Products, delivery slots, real store data.</p>
+            <h1 className="text-2xl font-bold">Admin Dashboard</h1>
+            <p className="text-slate-400 text-sm">Vietnam Timezone Slots, Games, and Banners configured natively.</p>
           </div>
-          <div className="flex gap-2">
-            <button onClick={() => void fetchProducts()} className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm"><RefreshCcw className="h-4 w-4" />Refresh products</button>
-            <button onClick={() => void fetchSlots()} className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm"><RefreshCcw className="h-4 w-4" />Refresh slots</button>
-          </div>
+          <button onClick={() => void fetchAll()} className="flex items-center gap-2 rounded-lg bg-slate-900 border border-slate-800 px-4 py-2 text-sm"><RefreshCcw className="h-4 w-4" /> Sync All</button>
         </div>
 
-        <div className="mb-6 flex gap-2">
-          <button onClick={() => setTab("products")} className={`rounded-lg px-4 py-2 text-sm ${tab === "products" ? "bg-blue-600 text-white" : "bg-slate-900 text-slate-300"}`}>Products</button>
-          <button onClick={() => setTab("slots")} className={`rounded-lg px-4 py-2 text-sm ${tab === "slots" ? "bg-blue-600 text-white" : "bg-slate-900 text-slate-300"}`}>Delivery Slots</button>
+        <div className="mb-6 flex gap-2 border-b border-slate-800 pb-3">
+          {(["products", "slots", "games", "config"] as const).map((t) => (
+            <button key={t} onClick={() => setTab(t)} className={"rounded-lg px-4 py-2 text-sm font-medium capitalize " + (tab === t ? "bg-blue-600 text-white" : "bg-slate-900 text-slate-400 hover:text-slate-300")}>
+              {t}
+            </button>
+          ))}
         </div>
 
-        {error ? <div className="mb-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div> : null}
+        {error && <div className="mb-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div>}
 
+        {/* ─── TAB: PRODUCTS ─── */}
         {tab === "products" && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-900 p-4">
-              <div>
-                <h2 className="text-xl font-semibold">Items</h2>
-                <p className="text-sm text-slate-400">Add, edit, delete items directly on web.</p>
-              </div>
-              <button
-                onClick={() => {
-                  resetProductForm();
-                  setShowProductForm((prev) => !prev);
-                }}
-                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium"
-              >
-                <Plus className="h-4 w-4" />
-                Add item
-              </button>
+            <div className="flex items-center justify-between border border-slate-800 bg-slate-900 p-4 rounded-xl">
+              <div><h2 className="font-semibold text-lg">Product Items</h2><p className="text-xs text-slate-400">Add, edit, or delete store items directly.</p></div>
+              <button onClick={() => { setProductForm({ name: "", price: "", bulkPrice: "", image: "", desc: "", category: "", gameId: "" }); setEditingProduct(null); setShowProductForm(true); }} className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium"><Plus className="h-4 w-4" /> Add Item</button>
             </div>
 
             {showProductForm && (
-              <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-                <div className="mb-4 flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">{editingId ? "Edit item" : "New item"}</h3>
-                  <button onClick={() => { setShowProductForm(false); resetProductForm(); }} className="text-slate-400 hover:text-white"><X className="h-5 w-5" /></button>
+              <form onSubmit={submitProduct} className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4">
+                <h3 className="font-medium">{editingProduct ? "Edit Item" : "Create Item"}</h3>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <input required value={productForm.name} onChange={(e) => setProductForm((p) => ({ ...p, name: e.target.value }))} placeholder="Item name" className="rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none" />
+                  <input required value={productForm.category} onChange={(e) => setProductForm((p) => ({ ...p, category: e.target.value }))} placeholder="Category" className="rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none" />
+                  <input required type="number" step="0.01" value={productForm.price} onChange={(e) => setProductForm((p) => ({ ...p, price: e.target.value }))} placeholder="Price" className="rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none" />
+                  <input type="number" step="0.01" value={productForm.bulkPrice} onChange={(e) => setProductForm((p) => ({ ...p, bulkPrice: e.target.value }))} placeholder="Bulk price (optional)" className="rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none" />
+                  <select value={productForm.gameId} onChange={(e) => setProductForm((p) => ({ ...p, gameId: e.target.value }))} className="rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none">
+                    <option value="">Select Game</option>
+                    {games.map((g) => <option key={g._id} value={g._id}>{g.name}</option>)}
+                  </select>
                 </div>
-                <form onSubmit={submitProduct} className="space-y-4">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <input value={productForm.name} onChange={(e) => setProductForm((p) => ({ ...p, name: e.target.value }))} placeholder="Item name" className="rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none" />
-                    <input value={productForm.category} onChange={(e) => setProductForm((p) => ({ ...p, category: e.target.value }))} placeholder="Category" className="rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none" />
-                    <input type="number" step="0.01" value={productForm.price} onChange={(e) => setProductForm((p) => ({ ...p, price: e.target.value }))} placeholder="Price" className="rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none" />
-                    <input type="number" step="0.01" value={productForm.bulkPrice} onChange={(e) => setProductForm((p) => ({ ...p, bulkPrice: e.target.value }))} placeholder="Bulk price" className="rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none" />
+                <textarea value={productForm.desc} onChange={(e) => setProductForm((p) => ({ ...p, desc: e.target.value }))} placeholder="Description details..." rows={3} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none" />
+                <div className="space-y-2">
+                  <label className="text-xs text-slate-400">Product Image</label>
+                  <div className="flex flex-wrap gap-2">
+                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm">
+                      <Upload className="h-4 w-4" /> {uploading ? "Uploading..." : "Upload local"}
+                      <input type="file" accept="image/*" onChange={handleProductImage} className="hidden" />
+                    </label>
+                    <input value={productForm.image} onChange={(e) => setProductForm((p) => ({ ...p, image: e.target.value }))} placeholder="Or paste image URL" className="flex-1 rounded-lg border border-slate-700 bg-slate-950 px-4 py-2 outline-none" />
                   </div>
-                  <textarea value={productForm.desc} onChange={(e) => setProductForm((p) => ({ ...p, desc: e.target.value }))} placeholder="Details" rows={4} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none" />
-                  <div className="space-y-3">
-                    <label className="text-sm text-slate-300">Image</label>
-                    <div className="flex flex-wrap gap-3">
-                      <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-sm">
-                        <Upload className="h-4 w-4" />
-                        {uploading ? "Uploading..." : "Upload image"}
-                        <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
-                      </label>
-                      <input value={productForm.image} onChange={(e) => setProductForm((p) => ({ ...p, image: e.target.value }))} placeholder="Or paste image URL" className="min-w-[280px] flex-1 rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none" />
-                    </div>
-                    {productForm.image ? (
-                      <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-950 p-3">
-                        <img src={productForm.image} alt="Preview" className="h-40 w-full rounded-lg object-contain bg-slate-900" />
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="flex gap-2">
-                    <button type="submit" disabled={productsLoading} className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-medium disabled:opacity-50">{editingId ? "Save changes" : "Create item"}</button>
-                    <button type="button" onClick={() => { setShowProductForm(false); resetProductForm(); }} className="rounded-lg bg-slate-800 px-5 py-3 text-sm">Cancel</button>
-                  </div>
-                </form>
-              </div>
+                  {productForm.image && <img src={imgUrl(productForm.image)} alt="preview" className="h-20 w-20 rounded border border-slate-800 object-cover mt-2" />}
+                </div>
+                <div className="flex gap-2">
+                  <button type="submit" disabled={submitting} className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium disabled:opacity-50">Save Item</button>
+                  <button type="button" onClick={() => setShowProductForm(false)} className="rounded-lg bg-slate-800 px-5 py-2.5 text-sm">Cancel</button>
+                </div>
+              </form>
             )}
 
             <div className="grid gap-3">
-              {productsLoading && products.length === 0 ? <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center text-slate-400">Loading items...</div> : null}
-              {!productsLoading && products.length === 0 ? <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center text-slate-400">No items yet.</div> : null}
-              {products.map((product) => (
-                <div key={product._id} className="grid grid-cols-[96px_1fr_auto] gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-                  <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-xl bg-slate-950">
-                    {product.image ? <img src={product.image} alt={product.name} className="h-full w-full object-cover" /> : <ImageIcon className="h-8 w-8 text-slate-600" />}
-                  </div>
-                  <div>
-                    <div className="font-medium text-white">{product.name}</div>
-                    <div className="mt-1 text-sm text-slate-400">{product.category}</div>
-                    <div className="mt-2 text-sm text-slate-300">{product.desc || "No details"}</div>
-                    <div className="mt-3 flex gap-3 text-sm">
-                      <span className="font-medium text-emerald-300">${Number(product.price || 0).toFixed(2)}</span>
-                      {product.bulkPrice ? <span className="text-sky-300">Bulk ${Number(product.bulkPrice).toFixed(2)}</span> : null}
+              {productsLoading && <p className="text-slate-500 text-sm">Loading items...</p>}
+              {products.map((p) => (
+                <div key={p._id} className="flex gap-4 items-center justify-between border border-slate-800 bg-slate-900 p-4 rounded-xl">
+                  <div className="flex gap-3 items-center min-w-0">
+                    <img src={imgUrl(p.image)} alt="" className="h-12 w-12 rounded-lg object-cover bg-slate-950" />
+                    <div className="min-w-0">
+                      <p className="font-medium truncate text-sm">{p.name}</p>
+                      <p className="text-xs text-slate-400">{p.category} • ${p.price.toFixed(2)}</p>
                     </div>
                   </div>
-                  <div className="flex items-start gap-2">
-                    <button onClick={() => beginEditProduct(product)} className="rounded-lg bg-blue-500/15 p-2 text-blue-300"><Edit2 className="h-4 w-4" /></button>
-                    <button onClick={() => void removeProduct(product._id)} className="rounded-lg bg-red-500/15 p-2 text-red-300"><Trash2 className="h-4 w-4" /></button>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => void toggleBestSeller(p._id)} className={"rounded px-3 py-1.5 text-xs font-semibold " + (bestSellers.includes(p._id) ? "bg-amber-600 text-white" : "bg-slate-800 text-slate-400")}>Best Seller</button>
+                    <button onClick={() => {
+                      setProductForm({ name: p.name, price: String(p.price), bulkPrice: p.bulkPrice ? String(p.bulkPrice) : "", image: p.image, desc: p.desc || "", category: p.category, gameId: p.gameId || "" });
+                      setEditingProduct(p._id); setShowProductForm(true);
+                    }} className="p-2 text-blue-400 bg-slate-800/50 rounded-lg"><Edit2 className="h-4 w-4" /></button>
+                    <button onClick={() => void deleteProduct(p._id)} className="p-2 text-red-400 bg-slate-800/50 rounded-lg"><Trash2 className="h-4 w-4" /></button>
                   </div>
                 </div>
               ))}
@@ -426,61 +366,103 @@ export default function AdminPage() {
           </div>
         )}
 
+        {/* ─── TAB: SLOTS ─── */}
         {tab === "slots" && (
-          <div className="grid gap-6 lg:grid-cols-[420px_1fr]">
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <div className="mb-4">
-                <h2 className="text-xl font-semibold">Create Slots</h2>
-                <p className="text-sm text-slate-400">Multiple time ranges in one day. Customers see converted local time.</p>
-              </div>
-              <form onSubmit={createBulkSlots} className="space-y-4">
-                <select value={slotTimezone} onChange={(e) => setSlotTimezone(e.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none">
-                  {OWNER_TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
-                </select>
+          <div className="grid gap-6 lg:grid-cols-[400px_1fr]">
+            <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4 h-fit">
+              <div><h2 className="font-semibold text-lg">Vietnam Time Slots</h2><p className="text-xs text-slate-400">All slots are saved relative to your Vietnam time (`Asia/Ho_Chi_Minh`). Conversion for customers is automatic.</p></div>
+              <form onSubmit={createSlots} className="space-y-4">
                 <input type="date" value={slotDate} onChange={(e) => setSlotDate(e.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none" />
-                <div className="space-y-3">
-                  {ranges.map((row, index) => (
-                    <div key={index} className="rounded-xl border border-slate-800 bg-slate-950 p-3">
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <input type="time" value={row.startTime} onChange={(e) => updateRangeRow(index, "startTime", e.target.value)} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 outline-none" />
-                        <input type="time" value={row.endTime} onChange={(e) => updateRangeRow(index, "endTime", e.target.value)} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 outline-none" />
-                      </div>
-                      <div className="mt-3 flex gap-2">
-                        <input value={row.note} onChange={(e) => updateRangeRow(index, "note", e.target.value)} placeholder="Optional note" className="flex-1 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 outline-none" />
-                        {ranges.length > 1 ? <button type="button" onClick={() => removeRangeRow(index)} className="rounded-lg bg-red-500/15 px-3 py-2 text-red-300">Remove</button> : null}
-                      </div>
+                {ranges.map((row, idx) => (
+                  <div key={idx} className="p-3 border border-slate-800 bg-slate-950 rounded-lg space-y-2">
+                    <div className="flex gap-2">
+                      <input type="time" required value={row.startTime} onChange={(e) => setRanges((p) => p.map((r, i) => (i === idx ? { ...r, startTime: e.target.value } : r)))} className="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm outline-none" />
+                      <input type="time" required value={row.endTime} onChange={(e) => setRanges((p) => p.map((r, i) => (i === idx ? { ...r, endTime: e.target.value } : r)))} className="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm outline-none" />
                     </div>
-                  ))}
-                </div>
+                    <div className="flex gap-2">
+                      <input placeholder="Note (optional)" value={row.note} onChange={(e) => setRanges((p) => p.map((r, i) => (i === idx ? { ...r, note: e.target.value } : r)))} className="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs outline-none" />
+                      {ranges.length > 1 && <button type="button" onClick={() => setRanges((p) => p.filter((_, i) => i !== idx))} className="text-red-400 text-xs hover:underline">Delete</button>}
+                    </div>
+                  </div>
+                ))}
                 <div className="flex gap-2">
-                  <button type="button" onClick={addRangeRow} className="rounded-lg bg-slate-800 px-4 py-3 text-sm">Add range</button>
-                  <button type="submit" disabled={creatingSlots} className="rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium disabled:opacity-50">{creatingSlots ? "Creating..." : "Create slots"}</button>
+                  <button type="button" onClick={() => setRanges((p) => [...p, { startTime: "", endTime: "", note: "" }])} className="rounded bg-slate-800 px-4 py-2 text-xs">Add Range</button>
+                  <button type="submit" disabled={submitting} className="rounded bg-blue-600 px-4 py-2 text-xs font-semibold disabled:opacity-50">Create Slots</button>
                 </div>
               </form>
             </div>
-
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <div className="mb-4 flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold">Existing Slots</h2>
-                  <p className="text-sm text-slate-400">Owner-side base time shown here.</p>
-                </div>
-                <CalendarDays className="h-5 w-5 text-slate-500" />
-              </div>
-              <div className="space-y-3">
-                {slotsLoading && sortedSlots.length === 0 ? <div className="rounded-xl border border-slate-800 bg-slate-950 p-6 text-sm text-slate-400">Loading slots...</div> : null}
-                {!slotsLoading && sortedSlots.length === 0 ? <div className="rounded-xl border border-slate-800 bg-slate-950 p-6 text-sm text-slate-400">No slots yet.</div> : null}
-                {sortedSlots.map((slot) => (
-                  <div key={slot.id} className="flex items-start justify-between gap-4 rounded-xl border border-slate-800 bg-slate-950 p-4">
-                    <div>
-                      <div className="font-medium text-white">{slot.ownerStartText} - {slot.ownerEndText}</div>
-                      <div className="mt-1 text-xs text-slate-500">Timezone: {slot.ownerTimezone}</div>
-                      {slot.note ? <div className="mt-2 text-sm text-slate-300">{slot.note}</div> : null}
-                    </div>
-                    <button onClick={() => void deleteSlot(slot.id)} className="rounded-lg bg-red-500/15 p-2 text-red-300"><Trash2 className="h-4 w-4" /></button>
+            <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-3">
+              <h2 className="font-semibold text-lg">Active Slots (Vietnam Time)</h2>
+              {slotsLoading && <p className="text-slate-500 text-sm">Loading slots...</p>}
+              {slots.map((s) => (
+                <div key={s.id} className="flex items-center justify-between border border-slate-800 bg-slate-950 p-4 rounded-lg">
+                  <div>
+                    <p className="font-medium text-sm">{s.ownerStartText} - {s.ownerEndText}</p>
+                    <p className="text-xs text-slate-500">Local conversion: {s.customerStartText} ({s.customerTimezone})</p>
                   </div>
-                ))}
-              </div>
+                  <button onClick={() => void deleteSlot(s.id)} className="p-2 text-red-400 bg-slate-900 rounded"><Trash2 className="h-4 w-4" /></button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ─── TAB: GAMES ─── */}
+        {tab === "games" && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between border border-slate-800 bg-slate-900 p-4 rounded-xl">
+              <div><h2 className="font-semibold text-lg">Game Catalog</h2><p className="text-xs text-slate-400">Configure separate games with unique tags.</p></div>
+              <button onClick={() => { setEditingGame(null); setGameForm({ name: "", slug: "", image: "", active: true }); setShowGameForm(true); }} className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium"><Plus className="h-4 w-4" /> Add Game</button>
+            </div>
+
+            {showGameForm && (
+              <form onSubmit={submitGame} className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4">
+                <h3 className="font-medium">{editingGame ? "Edit Game" : "New Game"}</h3>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <input required value={gameForm.name} onChange={(e) => setGameForm((p) => ({ ...p, name: e.target.value }))} placeholder="Game name" className="rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none" />
+                  <input required value={gameForm.slug} onChange={(e) => setGameForm((p) => ({ ...p, slug: e.target.value }))} placeholder="Game slug" className="rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none" />
+                  <input value={gameForm.image} onChange={(e) => setGameForm((p) => ({ ...p, image: e.target.value }))} placeholder="Image URL (optional)" className="rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none" />
+                </div>
+                <div className="flex gap-2">
+                  <button type="submit" disabled={submitting} className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium disabled:opacity-50">Save Game</button>
+                  <button type="button" onClick={() => setShowGameForm(false)} className="rounded-lg bg-slate-800 px-5 py-2.5 text-sm">Cancel</button>
+                </div>
+              </form>
+            )}
+
+            <div className="grid gap-3">
+              {gamesLoading && <p className="text-slate-500 text-sm">Loading games...</p>}
+              {games.map((g) => (
+                <div key={g._id} className="flex items-center justify-between border border-slate-800 bg-slate-900 p-4 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    {g.image && <img src={imgUrl(g.image)} alt="" className="h-10 w-10 rounded object-cover" />}
+                    <p className="font-medium text-sm">{g.name} <span className="text-xs text-slate-500">({g.slug})</span></p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => { setGameForm({ name: g.name, slug: g.slug, image: g.image || "", active: g.active }); setEditingGame(g._id); setShowGameForm(true); }} className="p-2 text-blue-400 bg-slate-800/50 rounded-lg"><Edit2 className="h-4 w-4" /></button>
+                    <button onClick={() => void deleteGame(g._id)} className="p-2 text-red-400 bg-slate-800/50 rounded-lg"><Trash2 className="h-4 w-4" /></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ─── TAB: CONFIG (BANNERS) ─── */}
+        {tab === "config" && (
+          <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-6">
+            <div><h2 className="font-semibold text-lg">Shop Banners</h2><p className="text-xs text-slate-400">Configure continuous scrolling showcase banners on the main shop layout.</p></div>
+            <div className="flex items-center gap-3 flex-wrap">
+              <input type="file" accept="image/*" onChange={(e) => setNewBannerFile(e.target.files?.[0] || null)} className="text-sm border border-slate-700 rounded p-2 bg-slate-950" />
+              <button onClick={() => void handleBannerUpload()} disabled={submitting || !newBannerFile} className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold disabled:opacity-50">Upload Banner</button>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
+              {banners.map((b, idx) => (
+                <div key={idx} className="relative group overflow-hidden rounded-lg border border-slate-800">
+                  <img src={imgUrl(b)} alt="" className="h-32 w-full object-cover" />
+                  <button onClick={() => void deleteBanner(b)} className="absolute top-2 right-2 bg-red-600 text-white rounded p-1.5 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="h-4 w-4" /></button>
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -488,4 +470,5 @@ export default function AdminPage() {
     </div>
   );
 }
+
 

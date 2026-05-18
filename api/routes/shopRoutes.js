@@ -3404,7 +3404,7 @@ router.post('/owner/product-images/upload', authRequired, uploadProductImage.sin
         return res.json({ filename: imageUrl });
     } catch (error) {
         console.error('Upload product image error:', error);
-        return res.status(500).json({ error: 'Could not upload product image.' });
+        return res.status(500).json({ error: error.message || 'Could not upload product image.' });
     }
 });
 
@@ -3803,7 +3803,7 @@ router.post('/owner/config/banners/upload', authRequired, bannerUpload.single('b
         return res.json({ filename: bannerUrl, banners: config.banners });
     } catch (error) {
         console.error('Upload banner error:', error);
-        return res.status(500).json({ error: 'Could not upload banner.' });
+        return res.status(500).json({ error: error.message || 'Could not upload banner.' });
     }
 });
 

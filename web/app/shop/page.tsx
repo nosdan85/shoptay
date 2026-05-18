@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useMemo } from "react";
 import Navbar from "../components/Navbar";
@@ -46,36 +46,111 @@ type Step = "shop" | "roblox" | "delivery" | "ticket";
 
 function DogLoader() {
   return (
-    <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-slate-950/95">
-      <div className="relative h-14 w-64 overflow-hidden rounded-full border border-slate-700 bg-slate-800 shadow-2xl">
-        <div className="absolute inset-y-0 left-0 w-full bg-gradient-to-r from-blue-600 via-cyan-400 to-emerald-400 animate-[dogbar_1.8s_ease-in-out_infinite]" />
-        <div className="absolute left-0 top-1/2 -translate-y-1/2 animate-[dogrun_1.8s_ease-in-out_infinite]">
-          <svg viewBox="0 0 64 64" width="46" height="46">
-            <circle cx="32" cy="20" r="13" fill="#D2691E"/>
-            <circle cx="26" cy="16" r="3" fill="#222"/>
-            <circle cx="38" cy="16" r="3" fill="#222"/>
-            <ellipse cx="32" cy="24" rx="4" ry="3" fill="#222"/>
-            <ellipse cx="20" cy="28" rx="5" ry="6" fill="#D2691E" transform="rotate(-20 20 28)"/>
-            <ellipse cx="44" cy="28" rx="5" ry="6" fill="#D2691E" transform="rotate(20 44 28)"/>
-            <rect x="22" y="34" width="20" height="16" rx="6" fill="#D2691E"/>
-            <rect className="dog-leg-a" x="18" y="46" width="6" height="11" rx="3" fill="#D2691E"/>
-            <rect className="dog-leg-b" x="40" y="46" width="6" height="11" rx="3" fill="#D2691E"/>
-            <path d="M28 50 Q32 56 36 50" stroke="#222" strokeWidth="2" fill="none"/>
+    <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-slate-950/95 backdrop-blur-sm">
+      {/* Loading Container */}
+      <div className="flex flex-col items-center gap-6">
+        
+        {/* Cute Dog Icon - Large and Clear */}
+        <div className="relative w-28 h-28 animate-[wobble_1.2s_ease-in-out_infinite]">
+          <svg viewBox="0 0 128 128" width="112" height="112" className="drop-shadow-lg">
+            {/* Ears */}
+            <ellipse cx="28" cy="38" rx="20" ry="28" fill="#C17A2A" transform="rotate(-15 28 38)"/>
+            <ellipse cx="100" cy="38" rx="20" ry="28" fill="#C17A2A" transform="rotate(15 100 38)"/>
+            <ellipse cx="28" cy="38" rx="14" ry="20" fill="#8B4513" transform="rotate(-15 28 38)"/>
+            <ellipse cx="100" cy="38" rx="14" ry="20" fill="#8B4513" transform="rotate(15 100 38)"/>
+            
+            {/* Head */}
+            <circle cx="64" cy="62" r="42" fill="#D2691E"/>
+            <circle cx="64" cy="62" r="36" fill="#C17A2A"/>
+            
+            {/* Face Markings */}
+            <ellipse cx="64" cy="72" rx="22" ry="18" fill="#F5DEB3"/>
+            
+            {/* Eyes */}
+            <circle cx="48" cy="56" r="10" fill="white"/>
+            <circle cx="80" cy="56" r="10" fill="white"/>
+            <circle cx="50" cy="56" r="6" fill="#2C1810"/>
+            <circle cx="82" cy="56" r="6" fill="#2C1810"/>
+            <circle cx="52" cy="54" r="2.5" fill="white"/>
+            <circle cx="84" cy="54" r="2.5" fill="white"/>
+            
+            {/* Nose */}
+            <ellipse cx="64" cy="72" rx="8" ry="6" fill="#2C1810"/>
+            <ellipse cx="64" cy="70" rx="3" ry="2" fill="#555"/>
+            
+            {/* Mouth */}
+            <path d="M56 80 Q64 88 72 80" stroke="#2C1810" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
+            
+            {/* Tongue */}
+            <ellipse cx="64" cy="86" rx="6" ry="5" fill="#E57373"/>
+            <line x1="64" y1="83" x2="64" y2="89" stroke="#C62828" strokeWidth="1.5"/>
+            
+            {/* Spots */}
+            <circle cx="42" cy="68" r="6" fill="#8B4513" opacity="0.5"/>
+            <circle cx="86" cy="68" r="6" fill="#8B4513" opacity="0.5"/>
           </svg>
         </div>
+        
+        {/* Loading Bar */}
+        <div className="relative w-72 h-10 bg-slate-800 rounded-full border-2 border-slate-700 overflow-hidden shadow-inner">
+          {/* Progress Fill */}
+          <div className="absolute inset-y-0 left-0 w-[85%] bg-gradient-to-r from-blue-600 via-cyan-500 to-emerald-500 rounded-full animate-[progress_2s_ease-in-out_infinite]"/>
+          
+          {/* Running Dog on Bar */}
+          <div className="absolute left-0 top-1/2 -translate-y-1/2 animate-[dogbar_2s_ease-in-out_infinite] w-10 h-10">
+            <svg viewBox="0 0 64 64" width="40" height="40">
+              {/* Dog body */}
+              <circle cx="32" cy="24" r="14" fill="#D2691E"/>
+              <circle cx="26" cy="20" r="3" fill="#222"/>
+              <circle cx="38" cy="20" r="3" fill="#222"/>
+              <ellipse cx="32" cy="28" rx="4" ry="3" fill="#222"/>
+              <ellipse cx="18" cy="30" rx="5" ry="7" fill="#D2691E" transform="rotate(-20 18 30)"/>
+              <ellipse cx="46" cy="30" rx="5" ry="7" fill="#D2691E" transform="rotate(20 46 30)"/>
+              <rect x="22" y="36" width="20" height="16" rx="6" fill="#D2691E"/>
+              <rect className="dog-leg-a" x="18" y="48" width="6" height="12" rx="3" fill="#D2691E"/>
+              <rect className="dog-leg-b" x="40" y="48" width="6" height="12" rx="3" fill="#D2691E"/>
+              <path d="M28 54 Q32 60 36 54" stroke="#222" strokeWidth="2" fill="none"/>
+            </svg>
+          </div>
+        </div>
+        
+        {/* Loading Text */}
+        <p className="text-slate-300 font-medium text-base animate-pulse tracking-wide">Loading shop...</p>
       </div>
+      
       <style>{`
-        @keyframes dogbar { 0%,100%{opacity:.45} 50%{opacity:.9} }
-        @keyframes dogrun { 0%{transform:translate(0,-50%) scaleX(1)} 45%{transform:translate(210px,-50%) scaleX(1)} 50%{transform:translate(210px,-50%) scaleX(-1)} 95%{transform:translate(0,-50%) scaleX(-1)} 100%{transform:translate(0,-50%) scaleX(1)} }
-        .dog-leg-a{animation:dogleg .28s ease-in-out infinite alternate;transform-origin:21px 46px}
-        .dog-leg-b{animation:dogleg .28s ease-in-out infinite alternate-reverse;transform-origin:43px 46px}
-        @keyframes dogleg{from{transform:rotate(-12deg)}to{transform:rotate(12deg)}}
+        @keyframes wobble {
+          0%, 100% { transform: rotate(-3deg); }
+          50% { transform: rotate(3deg); }
+        }
+        @keyframes progress {
+          0% { width: 5%; opacity: 0.7; }
+          50% { width: 90%; opacity: 1; }
+          100% { width: 5%; opacity: 0.7; }
+        }
+        @keyframes dogbar {
+          0% { transform: translateX(0) scaleX(1); }
+          48% { transform: translateX(228px) scaleX(1); }
+          50% { transform: translateX(228px) scaleX(-1); }
+          98% { transform: translateX(0) scaleX(-1); }
+          100% { transform: translateX(0) scaleX(1); }
+        }
+        .dog-leg-a {
+          animation: dogleg .22s ease-in-out infinite alternate;
+          transform-origin: 21px 48px;
+        }
+        .dog-leg-b {
+          animation: dogleg .22s ease-in-out infinite alternate-reverse;
+          transform-origin: 43px 48px;
+        }
+        @keyframes dogleg {
+          from { transform: rotate(-18deg); }
+          to { transform: rotate(18deg); }
+        }
       `}</style>
-      <p className="mt-3 text-sm text-slate-400 animate-pulse">Loading...</p>
     </div>
   );
 }
-
 export default function ShopPage() {
   const { user, token } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -585,6 +660,9 @@ export default function ShopPage() {
                   <button onClick={() => setShowAll(true)} className="rounded-lg bg-slate-800 px-4 py-2 text-sm transition-colors hover:bg-slate-700">View Full</button>
                 )}
               </div>
+                {showAll && (
+                  <button onClick={() => setShowAll(false)} className="flex items-center gap-2 rounded-lg bg-slate-700 px-4 py-2 text-sm transition-colors hover:bg-slate-600"><ArrowLeft className="h-4 w-4" /> Back</button>
+                )}
               <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
                 {(showAll ? filtered : filtered.slice(0, 8)).map((p) => (
                   <div key={p._id} onClick={() => openProductModal(p)} className="group cursor-pointer overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 transition-all duration-200 hover:border-blue-500/40 hover:-translate-y-1">
@@ -610,6 +688,7 @@ export default function ShopPage() {
     </div>
   );
 }
+
 
 
 

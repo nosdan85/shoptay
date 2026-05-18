@@ -6,24 +6,25 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // Chuy?n ti?p t?i backend th?t /api/shop/auth/discord
+    console.log("[PROXY] Exchanging Discord code with backend:", `${API_BASE_URL}/api/shop/auth/discord`);
     const res = await fetch(`${API_BASE_URL}/api/shop/auth/discord`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
 
+    const data = await res.json();
+
     if (!res.ok) {
-      const errorData = await res.json();
-      return NextResponse.json(errorData, { status: res.status });
+      console.error("[PROXY] Backend error details:", data);
+      return NextResponse.json(data, { status: res.status });
     }
 
-    const data = await res.json();
     return NextResponse.json(data);
   } catch (error) {
-    console.error("Discord exchange API error:", error);
+    console.error("[PROXY] Discord exchange API exception:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Internal server error at proxy layer" },
       { status: 500 }
     );
   }

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useMemo } from "react";
 import Navbar from "../components/Navbar";
@@ -40,31 +40,38 @@ interface CartItem extends Product { quantity: number }
 interface Game { _id: string; name: string; slug: string; image?: string }
 interface Slot { id: string; ownerStartText: string; ownerEndText: string; customerStartText: string; customerEndText: string; startAt: string; endAt: string; note?: string }
 interface Purchase { username: string; productName: string; quantity?: number; price?: number }
+interface TicketResult { channelId: string; guildId?: string; url?: string }
 
 type Step = "shop" | "roblox" | "delivery" | "ticket";
 
 function DogLoader() {
   return (
     <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-slate-950/95">
-      <div className="relative h-12 w-48 overflow-hidden rounded-full bg-slate-800">
-        <div className="absolute inset-y-0 left-0 bg-blue-500 animate-[load_2s_ease-in-out_infinite] rounded-full" style={{ width: "0%", animationName: "dogbar" }} />
+      <div className="relative h-14 w-64 overflow-hidden rounded-full border border-slate-700 bg-slate-800 shadow-2xl">
+        <div className="absolute inset-y-0 left-0 w-full bg-gradient-to-r from-blue-600 via-cyan-400 to-emerald-400 animate-[dogbar_1.8s_ease-in-out_infinite]" />
+        <div className="absolute left-0 top-1/2 -translate-y-1/2 animate-[dogrun_1.8s_ease-in-out_infinite]">
+          <svg viewBox="0 0 64 64" width="46" height="46">
+            <circle cx="32" cy="20" r="13" fill="#D2691E"/>
+            <circle cx="26" cy="16" r="3" fill="#222"/>
+            <circle cx="38" cy="16" r="3" fill="#222"/>
+            <ellipse cx="32" cy="24" rx="4" ry="3" fill="#222"/>
+            <ellipse cx="20" cy="28" rx="5" ry="6" fill="#D2691E" transform="rotate(-20 20 28)"/>
+            <ellipse cx="44" cy="28" rx="5" ry="6" fill="#D2691E" transform="rotate(20 44 28)"/>
+            <rect x="22" y="34" width="20" height="16" rx="6" fill="#D2691E"/>
+            <rect className="dog-leg-a" x="18" y="46" width="6" height="11" rx="3" fill="#D2691E"/>
+            <rect className="dog-leg-b" x="40" y="46" width="6" height="11" rx="3" fill="#D2691E"/>
+            <path d="M28 50 Q32 56 36 50" stroke="#222" strokeWidth="2" fill="none"/>
+          </svg>
+        </div>
       </div>
-      <style>{`@keyframes dogbar { 0%{width:0%} 50%{width:70%} 100%{width:100%} }`}</style>
-      <div className="mt-4 text-3xl">
-        <svg viewBox="0 0 64 64" width="48" height="48">
-          <circle cx="32" cy="20" r="14" fill="#D2691E"/>
-          <circle cx="26" cy="16" r="3" fill="#333"/>
-          <circle cx="38" cy="16" r="3" fill="#333"/>
-          <ellipse cx="32" cy="24" rx="4" ry="3" fill="#333"/>
-          <ellipse cx="20" cy="28" rx="5" ry="6" fill="#D2691E" transform="rotate(-20 20 28)"/>
-          <ellipse cx="44" cy="28" rx="5" ry="6" fill="#D2691E" transform="rotate(20 44 28)"/>
-          <rect x="22" y="34" width="20" height="18" rx="6" fill="#D2691E"/>
-          <rect x="18" y="48" width="6" height="12" rx="3" fill="#D2691E"/>
-          <rect x="40" y="48" width="6" height="12" rx="3" fill="#D2691E"/>
-          <path d="M28 52 Q32 58 36 52" stroke="#333" strokeWidth="2" fill="none"/>
-        </svg>
-      </div>
-      <p className="mt-3 text-sm text-slate-400">Loading...</p>
+      <style>{`
+        @keyframes dogbar { 0%,100%{opacity:.45} 50%{opacity:.9} }
+        @keyframes dogrun { 0%{transform:translate(0,-50%) scaleX(1)} 45%{transform:translate(210px,-50%) scaleX(1)} 50%{transform:translate(210px,-50%) scaleX(-1)} 95%{transform:translate(0,-50%) scaleX(-1)} 100%{transform:translate(0,-50%) scaleX(1)} }
+        .dog-leg-a{animation:dogleg .28s ease-in-out infinite alternate;transform-origin:21px 46px}
+        .dog-leg-b{animation:dogleg .28s ease-in-out infinite alternate-reverse;transform-origin:43px 46px}
+        @keyframes dogleg{from{transform:rotate(-12deg)}to{transform:rotate(12deg)}}
+      `}</style>
+      <p className="mt-3 text-sm text-slate-400 animate-pulse">Loading...</p>
     </div>
   );
 }
@@ -89,7 +96,7 @@ export default function ShopPage() {
   const [customerTz, setCustomerTz] = useState("America/New_York");
   const [slots, setSlots] = useState<Slot[]>([]);
   const [pickedSlot, setPickedSlot] = useState<string | null>(null);
-  const [ticketResult, setTicketResult] = useState<{ channelId: string } | null>(null);
+  const [ticketResult, setTicketResult] = useState<TicketResult | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [modalQty, setModalQty] = useState<string | number>(1);
@@ -258,7 +265,12 @@ export default function ShopPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed");
-      setTicketResult({ channelId: data.channelId });
+      const ticketUrl = data?.guildId && data?.channelId
+        ? `https://discord.com/channels/${data.guildId}/${data.channelId}`
+        : data?.panelUrl || "";
+      setTicketResult({ channelId: data.channelId, guildId: data.guildId, url: ticketUrl });
+      clearCartState();
+      if (ticketUrl) window.location.href = ticketUrl;
     } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
     finally { setSubmitting(false); }
   };
@@ -363,18 +375,18 @@ export default function ShopPage() {
         </div>
       )}
 
-      <main className="mx-auto max-w-7xl px-4 py-6">
+      <main className="mx-auto max-w-7xl px-4 py-6 animate-page-enter">
         {error && <div className="mb-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div>}
 
         {step !== "shop" && (
-          <div className="mx-auto max-w-2xl space-y-6">
+          <div className="mx-auto max-w-2xl space-y-6 animate-page-enter">
             <button onClick={() => setStep("shop")} className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors">
               <ArrowLeft className="h-4 w-4" /> Back to Shop
             </button>
             <div className="flex gap-2">{(["roblox", "delivery", "ticket"] as const).map((s) => (
               <div key={s} className={"h-2 flex-1 rounded-full transition-colors " + (step === s ? "bg-blue-500" : (["roblox", "delivery", "ticket"].indexOf(step) > ["roblox", "delivery", "ticket"].indexOf(s) ? "bg-emerald-500" : "bg-slate-800"))} />
             ))}</div>
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-4">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-4 animate-section-enter">
               <div className="border-b border-slate-800 pb-3">
                 <p className="text-sm text-slate-400">Order {orderId}</p>
                 <div className="mt-2 space-y-1">{cart.map((i) => (
@@ -436,7 +448,7 @@ export default function ShopPage() {
 
         {step === "shop" && (
           <div className="space-y-8">
-            <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/50 py-2">
+            <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/50 py-2 animate-section-enter">
               <div className="flex animate-[scroll_30s_linear_infinite] whitespace-nowrap">
                 {[...recentPurchases, ...recentPurchases].map((p, i) => (
                   <span key={i} className="mx-6 inline-flex items-center gap-2 text-sm text-slate-300">
@@ -450,12 +462,12 @@ export default function ShopPage() {
               <style>{`@keyframes scroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}`}</style>
             </div>
 
-            <div className="relative">
+            <div className="relative animate-section-enter">
               <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
               <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search items..." className="w-full rounded-xl border border-slate-800 bg-slate-900 py-3 pl-10 pr-4 outline-none transition-colors focus:border-blue-500" />
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 animate-section-enter">
               <button onClick={() => setSelectedGame(null)} className={"rounded-lg px-4 py-2 text-sm font-medium transition-all " + (!selectedGame ? "bg-blue-600 text-white" : "bg-slate-900 text-slate-300 hover:bg-slate-800")}>
                 All Games
               </button>
@@ -468,17 +480,18 @@ export default function ShopPage() {
             </div>
 
             {banners.length > 0 && (
-              <div className="overflow-hidden rounded-2xl border border-slate-800">
+              <div className="overflow-hidden rounded-2xl border border-slate-800 animate-section-enter">
                 <img src={imgUrl(banners[0])} alt="" className="w-full object-cover" style={{ maxHeight: "400px" }} />
               </div>
             )}
 
             {bestSellers.length > 0 && !showAll && !selectedGame && !searchQuery && (
-              <div>
-                <h2 className="mb-4 text-xl font-semibold text-amber-400">🔥 Best Sellers</h2>
-                <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                  {bestSellers.map((p) => (
-                    <div key={p._id} onClick={() => openProductModal(p)} className="group cursor-pointer overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 transition-all hover:border-blue-500/40 hover:-translate-y-1">
+              <div className="animate-section-enter">
+                <h2 className="mb-4 text-xl font-semibold text-amber-400">?? Best Sellers</h2>
+                <div className="overflow-hidden">
+                  <div className="flex w-max gap-4 animate-[bestSellerScroll_28s_linear_infinite]">
+                    {[...bestSellers, ...bestSellers].map((p, index) => (
+                    <div key={`${p._id}-${index}`} onClick={() => openProductModal(p)} className="group w-[calc((100vw-48px)/2)] max-w-[220px] shrink-0 cursor-pointer overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 transition-all hover:border-blue-500/40 hover:-translate-y-1 md:w-[220px]">
                       <div className="h-32 bg-slate-950">
                         {p.image ? <img src={imgUrl(p.image)} alt={p.name} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center"><Package className="h-8 w-8 text-slate-700" /></div>}
                       </div>
@@ -491,11 +504,12 @@ export default function ShopPage() {
                       </div>
                     </div>
                   ))}
+                  </div>
                 </div>
               </div>
             )}
 
-            <div>
+            <div className="animate-section-enter">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-xl font-semibold">{selectedGame ? games.find((g) => g._id === selectedGame)?.name || "Items" : "All Items"}</h2>
                 {!showAll && filtered.length > 8 && !searchQuery && (
@@ -527,3 +541,6 @@ export default function ShopPage() {
     </div>
   );
 }
+
+
+

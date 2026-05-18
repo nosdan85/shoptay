@@ -18,6 +18,14 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
+body * {
+  -webkit-tap-highlight-color: transparent;
+}
+
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: #1e293b; }
 ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
@@ -33,6 +41,9 @@ body {
 @keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); } 50% { box-shadow: 0 0 12px 4px rgba(59, 130, 246, 0.2); } }
 @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
 @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-6px); } }
+@keyframes page-enter { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes section-enter { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes best-seller-scroll { from { transform: translateX(0); } to { transform: translateX(calc(-50% - 1rem)); } }
 
 .animate-spin { animation: spin 1s linear infinite; }
 .animate-fade-in { animation: fade-in 0.3s ease-out forwards; }
@@ -43,3 +54,39 @@ body {
 .animate-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
 .animate-shimmer { animation: shimmer 1.5s linear infinite; background-size: 200% 100%; }
 .animate-float { animation: float 3s ease-in-out infinite; }
+.animate-page-enter { animation: page-enter 0.45s ease-out both; }
+.animate-section-enter { animation: section-enter 0.4s ease-out both; }
+.animate-\[bestSellerScroll_28s_linear_infinite\] { animation: best-seller-scroll 28s linear infinite; }
+
+button,
+[role="button"],
+a {
+  transition:
+    transform 180ms ease,
+    opacity 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+button:hover,
+[role="button"]:hover,
+a:hover {
+  transform: translateY(-1px);
+}
+
+button:active,
+[role="button"]:active,
+a:active {
+  transform: translateY(0) scale(0.98);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.8);
+  outline-offset: 2px;
+}
+

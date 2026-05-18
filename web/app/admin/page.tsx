@@ -31,7 +31,6 @@ export default function AdminPage() {
   const [productsLoading, setProductsLoading] = useState(false);
   const [showProductForm, setShowProductForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
   const [productForm, setProductForm] = useState({ name: "", price: "", bulkPrice: "", image: "", desc: "", category: "", gameId: "" });
 
   /* --- games state --- */
@@ -50,7 +49,7 @@ export default function AdminPage() {
   /* --- banners & best sellers state --- */
   const [banners, setBanners] = useState<string[]>([]);
   const [bestSellers, setBestSellers] = useState<string[]>([]);
-  const [newBannerFile, setNewBannerFile] = useState<File | null>(null);
+  const [newBannerUrl, setNewBannerUrl] = useState("");
 
   useEffect(() => {
     if (!isLoading && user?.isOwner && token) {
@@ -108,21 +107,6 @@ export default function AdminPage() {
   };
 
   /* --- CRUD PRODUCTS --- */
-  const handleProductImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !token) return;
-    setUploading(true);
-    try {
-      const body = new FormData();
-      body.append("image", file);
-      const res = await fetch("/api/shop/owner/product-images/upload", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setProductForm((prev) => ({ ...prev, image: data.filename }));
-    } catch (err) { setError("Upload failed"); }
-    setUploading(false);
-  };
-
   const submitProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) return;
@@ -221,19 +205,21 @@ export default function AdminPage() {
   };
 
   /* --- BANNERS & BEST SELLERS CONFIG --- */
-  const handleBannerUpload = async () => {
-    if (!newBannerFile || !token) return;
+  const handleBannerSave = async () => {
+    if (!newBannerUrl.trim() || !token) return;
     setSubmitting(true);
+    setError(null);
     try {
-      const body = new FormData();
-      body.append("banner", newBannerFile);
-      const res = await fetch("/api/shop/owner/config/banners/upload", {
-        method: "POST", headers: { Authorization: `Bearer ${token}` }, body
+      const res = await fetch("/api/shop/owner/config/banners", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ bannerUrl: newBannerUrl.trim() }),
       });
-      if (!res.ok) throw new Error("Upload banner failed");
-      setNewBannerFile(null);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Save banner failed");
+      setNewBannerUrl("");
       await fetchConfig();
-    } catch { setError("Banner upload failed"); }
+    } catch (err) { setError(err instanceof Error ? err.message : "Save banner failed"); }
     setSubmitting(false);
   };
 

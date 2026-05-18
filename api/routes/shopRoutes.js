@@ -3807,6 +3807,30 @@ router.post('/owner/config/banners/upload', authRequired, bannerUpload.single('b
     }
 });
 
+// PUT /api/shop/owner/config/banners — body: { bannerUrl }
+router.put('/owner/config/banners', authRequired, async (req, res) => {
+    try {
+        const discordId = String(req.user?.discordId || '').trim();
+        if (!discordId) return res.status(401).json({ error: 'Authentication required' });
+        const isOwner = await canAccessOwnerEndpoints(discordId);
+        if (!isOwner) return res.status(403).json({ error: 'Forbidden' });
+
+        const bannerUrl = String(req.body?.bannerUrl || '').trim();
+        if (!bannerUrl) return res.status(400).json({ error: 'bannerUrl is required.' });
+        if (!/^https?:\/\//i.test(bannerUrl)) {
+            return res.status(400).json({ error: 'Banner must be a full image URL.' });
+        }
+
+        const config = await ShopConfig.getConfig();
+        config.banners = [bannerUrl];
+        await config.save();
+        return res.json({ success: true, banners: config.banners });
+    } catch (error) {
+        console.error('Save banner URL error:', error);
+        return res.status(500).json({ error: 'Could not save banner URL.' });
+    }
+});
+
 // DELETE /api/shop/owner/config/banners — body: { bannerUrl }
 router.delete('/owner/config/banners', authRequired, async (req, res) => {
     try {

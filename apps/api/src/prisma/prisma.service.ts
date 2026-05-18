@@ -85,7 +85,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 
   // Transaction helper
-  async transaction<T>(
+  async runTransaction<T>(
     fn: (prisma: PrismaService) => Promise<T>,
     options?: {
       timeout?: number;
@@ -130,3 +130,4 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     }
   }
 }
+

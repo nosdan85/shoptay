@@ -60,7 +60,7 @@ export class WalletService {
       balance: parseFloat(wallet.balance.toString()),
       currency: 'USD',
       balanceCents: Math.round(parseFloat(wallet.balance.toString()) * 100),
-      transactions: wallet.transactions.map((t) => ({
+      transactions: wallet.transactions.map((t: any) => ({
         id: t.id,
         type: t.type,
         amount: parseFloat(t.amount.toString()),
@@ -70,7 +70,7 @@ export class WalletService {
         orderId: t.orderId,
         createdAt: t.createdAt,
       })),
-      pendingTopups: wallet.topups.map((t) => ({
+      pendingTopups: wallet.topups.map((t: any) => ({
         id: t.id,
         amount: parseFloat(t.amount.toString()),
         method: t.method,
@@ -111,7 +111,7 @@ export class WalletService {
     ]);
 
     return {
-      data: transactions.map((t) => ({
+      data: transactions.map((t: any) => ({
         id: t.id,
         type: t.type,
         amount: parseFloat(t.amount.toString()),
@@ -454,7 +454,7 @@ export class WalletService {
     ]);
 
     return {
-      data: topups.map((t) => ({
+      data: topups.map((t: any) => ({
         id: t.id,
         amount: parseFloat(t.amount.toString()),
         amountCents: Math.round(parseFloat(t.amount.toString()) * 100),
@@ -504,7 +504,7 @@ export class WalletService {
     ]);
 
     return {
-      data: transactions.map((t) => ({
+      data: transactions.map((t: any) => ({
         id: t.id,
         type: t.type,
         amount: parseFloat(t.amount.toString()),
@@ -573,3 +573,4 @@ export class WalletService {
     return { success: true, message: 'Topup rejected' };
   }
 }
+

@@ -1,0 +1,550 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  MODERATOR
+  ADMIN
+  OWNER
+}
+
+enum OrderStatus {
+  PENDING
+  AWAITING_PAYMENT
+  PAID
+  PROCESSING
+  READY_FOR_DELIVERY
+  DELIVERED
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  AWAITING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  PAYPAL
+  CASHAPP
+  LITECOIN
+  WALLET
+  SQUARE
+}
+
+enum TransactionType {
+  PURCHASE
+  TOPUP
+  REFUND
+  DISCOUNT
+  WITHDRAWAL
+}
+
+enum TicketStatus {
+  OPEN
+  PENDING
+  RESOLVED
+  CLOSED
+}
+
+enum TicketType {
+  PAYMENT
+  DELIVERY
+  GENERAL
+  DISPUTE
+  REFUND
+}
+
+model User {
+  id              String    @id @default(cuid())
+  discordId       String    @unique
+  username        String
+  email           String?
+  avatar          String?
+  role            UserRole  @default(USER)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  lastLoginAt     DateTime?
+  
+  orders          Order[]
+  sessions        Session[]
+  wallet          Wallet?
+  topups          Topup[]
+  notifications   Notification[]
+  
+  @@map("users")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token        String   @unique
+  ipAddress    String?
+  userAgent    String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  
+  @@map("sessions")
+}
+
+model Game {
+  id          String     @id @default(cuid())
+  name        String
+  slug        String     @unique
+  description String?
+  iconUrl     String?
+  bannerUrl   String?
+  isActive    Boolean    @default(true)
+  sortOrder   Int        @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  
+  categories  Category[]
+  products    Product[]
+  
+  @@map("games")
+}
+
+model Category {
+  id          String     @id @default(cuid())
+  gameId      String
+  game        Game       @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  name        String
+  slug        String
+  description String?
+  iconUrl     String?
+  isActive    Boolean    @default(true)
+  sortOrder   Int        @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  
+  products    Product[]
+  
+  @@unique([gameId, slug])
+  @@map("categories")
+}
+
+model Product {
+  id                 String        @id @default(cuid())
+  gameId             String
+  game               Game          @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  categoryId         String
+  category           Category      @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  name               String
+  slug               String
+  description        String?
+  shortDescription   String?
+  price              Decimal       @db.Decimal(10, 2)
+  originalPriceString String?
+  bulkPriceCents     Int?          // Bulk price in cents (for qty > threshold)
+  bulkPriceString    String?
+  stock              Int           @default(0)
+  maxPerOrder        Int           @default(99)
+  image              String        @default("") // Primary image
+  imageUrls          String[]      // Additional images
+  images             ProductImage[]
+  isActive           Boolean       @default(true)
+  isDigital          Boolean       @default(false)
+  deliveryInfo       String?
+  metadata           Json?
+  sortOrder          Int           @default(0)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  deletedAt          DateTime?     // Soft delete
+
+  orderItems         OrderItem[]
+
+  @@unique([categoryId, slug])
+  @@index([gameId])
+  @@index([categoryId])
+  @@index([isActive])
+  @@index([sortOrder])
+  @@index([deletedAt])
+  @@map("products")
+}
+
+model ProductImage {
+  id           String    @id @default(cuid())
+  productId    String?
+  product      Product?  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  filename     String
+  originalName String
+  mimeType     String
+  size         Int
+  url          String
+  isPrimary    Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  deletedAt    DateTime? // Soft delete
+
+  @@index([productId])
+  @@index([deletedAt])
+  @@map("product_images")
+}
+
+model Order {
+  id                      String        @id @default(cuid())
+  orderNumber             String        @unique // NOS-XXXXXXXX format
+  userId                  String?
+  user                    User?         @relation(fields: [userId], references: [id])
+  discordId               String?
+  discordUsername         String?
+  customerEmail           String?
+  robloxUserId            String?
+  robloxUsername          String?
+  robloxDisplayName       String?
+  robloxVerifiedAt        DateTime?
+  deliverySlotId          String?
+  deliverySlot            DeliverySlot? @relation(fields: [deliverySlotId], references: [id])
+  deliveryOwnerTimezone  String?
+  deliveryOwnerStartAt   DateTime?
+  deliveryOwnerEndAt     DateTime?
+  deliveryCustomerTimezone String?
+  deliveryCustomerStartAt DateTime?
+  deliveryCustomerEndAt   DateTime?
+  deliveredAt            DateTime?
+  confirmationRequestedAt DateTime?
+  confirmationRequestedBy String?
+  confirmedAt            DateTime?
+  confirmIp              String?
+  confirmUa              String?
+  confirmationDiscountCode String?
+  status                 OrderStatus   @default(PENDING)
+
+  items                  OrderItem[]
+  subtotalAmount         Decimal       @db.Decimal(10, 2)
+  discountAmount         Decimal?      @default(0) @db.Decimal(10, 2)
+  discountPercent        Int?
+  couponCode             String?
+  totalAmount            Decimal       @db.Decimal(10, 2)
+  paymentMethod          String?
+  paymentStatus          PaymentStatus @default(PENDING)
+  memoExpected           String?
+  txnId                  String?
+  paidAt                  DateTime?
+  manualPaymentNote       String?
+  manualPaymentConfirmedBy String?
+  paypalOrderId          String?
+  channelId              String?
+  channelName            String?
+  ticketStatus           String        @default("none")
+  ticketCreatedAt        DateTime?
+  notes                  String?
+  adminNotes             String?
+  ipAddress              String?
+  userAgent              String?
+  completedAt            DateTime?
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  transactions           Transaction[]
+  payments               Payment[]
+
+  @@index([userId])
+  @@index([discordId])
+  @@index([orderNumber])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([createdAt])
+  @@index([confirmationDiscountCode])
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id          String   @id @default(cuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id])
+  name        String
+  quantity    Int
+  unitPrice   Decimal  @db.Decimal(10, 2)
+  lineTotal   Decimal  @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+
+  @@map("order_items")
+}
+
+model Coupon {
+  id              String    @id @default(cuid())
+  code            String    @unique
+  type            String    @default("percent") // "percent" | "fixed"
+  discount        Decimal   @db.Decimal(5, 2)
+  minOrderAmount  Decimal?  @db.Decimal(10, 2)
+  maxUses         Int?
+  usedCount       Int       @default(0)
+  expiresAt       DateTime?
+  isActive        Boolean   @default(true)
+  firstOrderOnly  Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("coupons")
+}
+
+model Payment {
+  id              String        @id @default(cuid())
+  orderId         String?
+  order           Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  userId          String
+  method          PaymentMethod
+  status          PaymentStatus @default(PENDING)
+  
+  amount          Decimal       @db.Decimal(10, 2)
+  currency        String        @default("USD")
+  
+  // PayPal specific
+  paypalOrderId   String?
+  paypalCaptureId String?
+  
+  // Square specific
+  squarePaymentId String?
+  
+  // Crypto specific
+  cryptoAddress   String?
+  cryptoAmount    String?
+  cryptoCurrency  String?
+  cryptoTxHash    String?
+  cryptoInvoiceId String?
+  
+  // LTC specific
+  ltcAddress      String?
+  ltcAmount       String?
+  ltcInvoiceUrl   String?
+  
+  providerData    Json?
+  
+  completedAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  @@map("payments")
+}
+
+model Wallet {
+  id          String        @id @default(cuid())
+  userId      String        @unique
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balance     Decimal       @default(0) @db.Decimal(12, 2)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  
+  transactions Transaction[]
+  topups       Topup[]
+  
+  @@map("wallets")
+}
+
+model Transaction {
+  id          String          @id @default(cuid())
+  walletId    String
+  wallet      Wallet          @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  orderId     String?
+  order       Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  type        TransactionType
+  amount      Decimal         @db.Decimal(12, 2)
+  balanceBefore Decimal       @db.Decimal(12, 2)
+  balanceAfter  Decimal       @db.Decimal(12, 2)
+  description String?
+  metadata    Json?
+  createdAt   DateTime        @default(now())
+  
+  @@map("transactions")
+}
+
+model Topup {
+  id              String        @id @default(cuid())
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  walletId        String
+  wallet          Wallet        @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  
+  amount          Decimal       @db.Decimal(10, 2)
+  method          PaymentMethod
+  status          PaymentStatus @default(PENDING)
+  
+  squarePaymentId String?
+  squareStatus    String?
+  
+  completedAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  @@map("topups")
+}
+
+model DeliverySlot {
+  id                String    @id @default(cuid())
+  startAt           DateTime
+  endAt             DateTime
+  ownerTimezone     String    @default("UTC")
+  note              String?
+  isActive          Boolean   @default(true)
+  maxOrders         Int       @default(10)
+  currentOrders     Int       @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  orders            Order[]
+
+  @@index([startAt])
+  @@index([isActive])
+
+  @@map("delivery_slots")
+}
+
+model ShopConfig {
+  id              String    @id @default("default")
+  shopName        String    @default("Nos Market")
+  shopDescription String?
+  contactEmail    String?
+  discordServerUrl String?
+  bestSellerIds   String[]
+  banners         Json?     // [{url, alt, link}]
+  announcements   Json?     // [{title, content, type}]
+  maintenanceMode Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@map("shop_config")
+}
+
+model DeliveryProof {
+  id               String    @id @default(cuid())
+  orderId          String    @unique
+  order            Order     @relation(fields: [orderId], references: [id])
+  discordId        String?
+  discordUsername  String?
+  totalAmount      Decimal   @db.Decimal(10, 2)
+  items            Json      // [{ name, packQuantity, deliveredLabel, lineTotal }]
+  imageUrls        String[]
+  imageHashes      String[]
+  source           String    @default("manual") // auto_vouch | manual | admin
+  vouchMessageId   String?
+  createdAt        DateTime  @default(now())
+
+  images           DeliveryProofImage[]
+
+  @@index([discordId])
+  @@index([createdAt])
+  @@map("delivery_proofs")
+}
+
+model DeliveryProofImage {
+  id           String         @id @default(cuid())
+  proofId      String
+  proof        DeliveryProof  @relation(fields: [proofId], references: [id], onDelete: Cascade)
+  position     Int
+  contentType  String?
+  data         Bytes?         // Stored image data (optional)
+  sourceUrl    String?
+  createdAt    DateTime      @default(now())
+
+  @@unique([proofId, position])
+  @@map("delivery_proof_images")
+}
+
+model Proof {
+  id          String   @id @default(cuid())
+  imageUrl    String
+  gameName    String?
+  productName String?
+  userDisplay String   // Anonymized username
+  createdAt   DateTime @default(now())
+  
+  @@map("proofs")
+}
+
+model Ticket {
+  id              String    @id @default(cuid())
+  channelId       String    @unique
+  channelName     String?
+  guildId         String?
+  discordId       String    // Customer Discord ID
+  discordUsername String?
+  orderId         String?
+  order           Order?   @relation(fields: [orderId], references: [id])
+  type            TicketType
+  status          TicketStatus @default(OPEN)
+  priority        String    @default("normal") // low | normal | high | urgent
+  subject         String?
+  description     String?
+  metadata        Json?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  closedAt        DateTime?
+
+  messages        TicketMessage[]
+
+  @@index([discordId])
+  @@index([orderId])
+  @@index([status])
+  @@map("tickets")
+}
+
+model TicketMessage {
+  id          String    @id @default(cuid())
+  ticketId    String
+  ticket      Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId    String    // Discord user ID
+  authorType  String    // customer | staff | bot
+  content     String
+  attachments String[]  // Image URLs
+  isDeleted   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  @@index([ticketId])
+  @@map("ticket_messages")
+}
+
+model Notification {
+  id          String    @id @default(cuid())
+  userId      String?
+  user        User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String    // order_created | payment_confirmed | delivery_ready | delivery_confirmed | ticket_reply | system
+  title       String
+  message     String
+  data        Json?
+  isRead      Boolean   @default(false)
+  channel     String    @default("all") // in_app | email | discord_dm | all
+  sentAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  adminId     String?
+  admin       User?     @relation(fields: [adminId], references: [id])
+  action      String    // order_marked_paid | balance_adjusted | product_updated | etc.
+  targetType  String    // Order | User | Product | etc.
+  targetId    String
+  changes     Json?     // Before/after values
+  ip          String?
+  userAgent   String?
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+
+  @@index([adminId])
+  @@index([targetType, targetId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model OrderSequence {
+  id    String @id @default("order_seq")
+  value Int    @default(0)
+}

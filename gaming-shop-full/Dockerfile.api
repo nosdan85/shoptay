@@ -1,0 +1,82 @@
+# ============================================
+# Nos Market API Dockerfile - Production
+# Multi-stage build for minimal image size
+# ============================================
+
+# Stage 1: Dependencies
+FROM node:20-alpine AS deps
+
+RUN apk add --no-cache libc6-compat python3 make g++
+
+WORKDIR /app
+
+COPY package*.json ./
+COPY packages/*/package*.json ./packages/
+
+RUN npm ci --only=production --ignore-scripts 2>/dev/null || npm ci --only=production
+
+# Stage 2: Builder
+FROM node:20-alpine AS builder
+
+RUN apk add --no-cache libc6-compat python3 make g++
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+COPY packages/*/package*.json ./packages/
+
+# Install all dependencies
+RUN npm ci
+
+# Copy source code
+COPY . .
+
+# Generate Prisma client
+RUN npx prisma generate --schema=apps/api/prisma/schema.prisma
+
+# Build the API
+RUN npm run build --workspace=apps/api
+
+# Stage 3: Production
+FROM node:20-alpine AS runner
+
+LABEL maintainer="NosMarket"
+LABEL description="NosMarket API Service - Gaming Marketplace"
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Create non-root user for security
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nestjs
+
+# Copy package files and install production deps
+COPY package*.json ./
+COPY packages/*/package*.json ./packages/
+
+# Copy node_modules from deps stage
+COPY --from=deps --chown=nodejs:nodejs /app/node_modules ./node_modules
+
+# Copy Prisma schema for migrations
+COPY --from=builder --chown=nodejs:nodejs /app/apps/api/prisma ./prisma
+
+# Copy built application
+COPY --from=builder --chown=nodejs:nodejs /app/apps/api/dist ./dist
+
+# Set ownership
+RUN chown -R nodejs:nodejs /app
+
+# Switch to non-root user
+USER nodejs
+
+# Expose port (API runs on 3001)
+EXPOSE 3001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD wget -qO- http://localhost:3001/health || exit 1
+
+# Start the application
+CMD ["node", "dist/main.js"]

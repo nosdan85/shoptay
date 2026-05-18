@@ -1,0 +1,62 @@
+# ============================================
+# Build Stage
+# ============================================
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Copy package files
+COPY package.json package-lock.json* ./
+
+# Install all dependencies
+RUN npm ci
+
+# Copy source code
+COPY apps/web ./apps/web
+COPY packages/shared ./packages/shared
+COPY packages/config ./packages/config
+COPY turbo.json ./
+
+# Build Next.js application
+RUN npm run build --workspace=apps/web
+
+# ============================================
+# Production Stage
+# ============================================
+FROM node:20-alpine AS production
+
+LABEL maintainer="NosMarket"
+LABEL description="NosMarket Web Application"
+
+WORKDIR /app
+
+# Create non-root user for security
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nextjs -u 1001
+
+# Copy package files
+COPY package.json package-lock.json* ./
+
+# Install production dependencies only
+RUN npm ci --only=production && \
+    npm cache clean --force
+
+# Copy built application from builder
+COPY --from=builder /app/apps/web/public ./apps/web/public
+COPY --from=builder /app/apps/web/.next ./apps/web/.next
+
+# Set ownership
+RUN chown -R nextjs:nodejs /app
+
+# Switch to non-root user
+USER nextjs
+
+# Expose port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget -qO- http://localhost:3000 || exit 1
+
+# Start Next.js
+CMD ["node_modules/next/dist/bin/next", "start", "-p", "3000", "-l", "INFO"]

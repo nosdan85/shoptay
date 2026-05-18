@@ -1,0 +1,672 @@
+// Prisma schema for Nos Market - Gaming Marketplace
+// PostgreSQL database schema with all models
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum OrderStatus {
+  PENDING
+  WAITING_PAYMENT
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  CANCELLED
+}
+
+enum TicketStatus {
+  PENDING
+  CREATING
+  CREATED
+  READY
+  FAILED
+  PANEL
+  OPEN
+  CLOSED
+  ARCHIVED
+}
+
+enum WalletTransactionType {
+  TOPUP
+  PURCHASE
+  ADJUSTMENT
+  REFUND
+}
+
+enum WalletTransactionStatus {
+  PENDING
+  COMPLETED
+  REJECTED
+  CANCELLED
+}
+
+enum WalletTransactionDirection {
+  CREDIT
+  DEBIT
+}
+
+enum PaymentMethod {
+  PAYPAL_FF
+  CASHAPP
+  LTC
+  WALLET
+  PAYPAL_REST
+}
+
+enum PaymentAttemptStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+enum DeliveryProofSource {
+  AUTO_VOUCH
+}
+
+enum TicketType {
+  PAYMENT
+  DELIVERY
+  WALLET_TOPUP
+  SUPPORT
+}
+
+enum NotificationType {
+  ORDER_UPDATE
+  PAYMENT_CONFIRMED
+  DELIVERY_READY
+  VOUCH_POSTED
+  SYSTEM
+}
+
+enum BlacklistType {
+  IP
+  DISCORD_ID
+  EMAIL
+}
+
+enum FraudStatus {
+  OPEN
+  REVIEWED
+  CLEARED
+  FLAGGED
+}
+
+enum WebhookStatus {
+  RECEIVED
+  PROCESSED
+  FAILED
+}
+
+// ============================================================================
+// USER & AUTHENTICATION
+// ============================================================================
+
+model User {
+  id                String    @id @default(cuid())
+  discordId         String    @unique
+  discordUsername   String
+  accessToken       String?   // Encrypted
+  refreshToken      String?   // Encrypted
+  tokenExpiresAt    DateTime?
+  scopes            String[]
+  walletBalanceCents Int       @default(0)
+  linkToken         String?
+  linkTokenExpiresAt DateTime?
+  joinedAt          DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  sessions           Session[]
+  orders             Order[]
+  walletTransactions WalletTransaction[]
+  notifications      Notification[]
+  apiKeys            ApiKey[]
+
+  @@index([discordId])
+  @@index([joinedAt])
+}
+
+model Session {
+  id              String   @id @default(cuid())
+  userId          String
+  discordSessionId String?
+  token           String   @unique // Hashed
+  userAgent       String?
+  ipAddress       String?
+  expiresAt       DateTime
+  isRevoked       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+}
+
+// ============================================================================
+// CATALOG
+// ============================================================================
+
+model Game {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  icon        String?
+  banner      String?
+  description String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  products Product[]
+
+  @@index([slug])
+  @@index([isActive])
+  @@index([sortOrder])
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  icon      String?
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products Product[]
+
+  @@index([slug])
+  @@index([isActive])
+  @@index([sortOrder])
+}
+
+model Product {
+  id                 String    @id @default(cuid())
+  name               String
+  priceCents         Int       // Store price in cents, displayed as decimal
+  originalPriceString String?
+  bulkPriceCents     Int?      // Bulk price in cents (for qty > threshold)
+  bulkPriceString    String?
+  image              String    // Primary image path/URL
+  imageUrl           String?   // Computed/public URL
+  description        String?
+  categoryId         String
+  gameId             String?
+  isActive           Boolean   @default(true)
+  sortOrder          Int       @default(0)
+  stock              Int       @default(-1) // -1 = unlimited
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  deletedAt          DateTime? // Soft delete
+
+  category Category @relation(fields: [categoryId], references: [id])
+  game     Game?    @relation(fields: [gameId], references: [id])
+  orderItems OrderItem[]
+
+  @@index([categoryId])
+  @@index([gameId])
+  @@index([isActive])
+  @@index([sortOrder])
+  @@index([deletedAt])
+}
+
+// ============================================================================
+// ORDERS
+// ============================================================================
+
+model Order {
+  id   String @id @default(cuid())
+  orderId String @unique // Auto-generated like ORD-XXXXX
+
+  // Customer Info
+  customerEmail      String   @db.VarChar(255)
+  discordId          String?
+  discordUsername    String?
+  robloxUserId       String?
+  robloxUsername     String?
+  robloxDisplayName  String?
+  robloxVerifiedAt   DateTime?
+
+  // Delivery
+  deliverySlotId        String?
+  deliveryOwnerTimezone String?
+  deliveryOwnerStartAt  DateTime?
+  deliveryOwnerEndAt    DateTime?
+  deliveryCustomerTimezone String?
+  deliveryCustomerStartAt DateTime?
+  deliveryCustomerEndAt   DateTime?
+  deliveredAt             DateTime?
+  confirmationRequestedAt DateTime?
+  confirmationRequestedBy  String?
+  confirmedAt             DateTime?
+  confirmIp              String?
+  confirmUa              String?
+  confirmationDiscountCode String?
+
+  // Items (via OrderItem relation)
+  items OrderItem[]
+
+  // Pricing
+  subtotalAmount  Int      @default(0) // Cents
+  discountAmount  Int      @default(0) // Cents
+  discountPercent Int?
+  couponCode      String?
+  total            Int      // Cents
+  totalAmount      Int      // Cents (required)
+
+  // Payment
+  status              OrderStatus  @default(PENDING)
+  paymentMethod       String?      // paypal_ff, cashapp, ltc, wallet
+  paymentStatus       PaymentStatus @default(PENDING)
+  memoExpected        String?
+  txnId               String?
+  paidAt              DateTime?
+  manualPaymentNote   String?
+  manualPaymentConfirmedBy String?
+  paypalOrderId       String?
+
+  // Ticket
+  channelId            String?
+  ticketStatus         TicketStatus @default(PENDING)
+  ticketError          String?
+  paypalTicketChannelId String?
+  paypalTicketStatus   TicketStatus?
+  paypalTicketError    String?
+  ltcTicketChannelId   String?
+  ltcTicketStatus      TicketStatus?
+  ltcTicketError       String?
+
+  // Relations
+  userId         String?
+  deliverySlot   DeliverySlot?     @relation(fields: [deliverySlotId], references: [id])
+  deliveryProof DeliveryProof?
+  walletTransactions WalletTransaction[]
+  paymentAttempts PaymentAttempt[]
+  fraudCase      FraudCase?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([discordId])
+  @@index([robloxUserId])
+  @@index([createdAt])
+  @@index([paymentMethod, paymentStatus, createdAt])
+  @@index([memoExpected])
+  @@index([couponCode])
+  @@index([status])
+  @@index([channelId])
+}
+
+model OrderItem {
+  id        String @id @default(cuid())
+  orderId   String
+  productId String?
+  name      String
+  quantity  Int
+  price     Int    // Cents (per-item price at time of purchase)
+  lineTotal Int    // Cents
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+}
+
+// ============================================================================
+// DELIVERY
+// ============================================================================
+
+model DeliverySlot {
+  id                String   @id @default(cuid())
+  startAt           DateTime
+  endAt             DateTime
+  ownerTimezone     String
+  customerTimezone  String?
+  note              String?
+  active            Boolean  @default(true)
+  sortOrder         Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  orders Order[]
+
+  @@index([active])
+  @@index([startAt])
+}
+
+// ============================================================================
+// WALLET
+// ============================================================================
+
+model WalletTransaction {
+  id               String                    @id @default(cuid())
+  userId           String
+  type             WalletTransactionType
+  amountCents      Int
+  balanceBeforeCents Int?
+  balanceAfterCents Int?
+  method           String?   // paypal_ff, cashapp, ltc
+  status           WalletTransactionStatus @default(PENDING)
+  referenceCode    String?
+  orderId          String?
+  paymentAddress   String?
+  memoExpected     String?
+  discordId        String?
+  discordUsername  String?
+  direction        WalletTransactionDirection
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order Order? @relation(fields: [orderId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([referenceCode])
+}
+
+// ============================================================================
+// PAYMENTS
+// ============================================================================
+
+model PaymentAttempt {
+  id               String              @id @default(cuid())
+  orderId          String?
+  userId           String?
+  topupId          String?
+  method           PaymentMethod
+  status           PaymentAttemptStatus @default(PENDING)
+  amountCents      Int?
+  currency         String?             @default("USD")
+  txnId            String?
+  providerReference String?
+  providerResponse String?
+  memoExpected     String?
+  metadata         Json?
+  completedAt      DateTime?
+  failedAt         DateTime?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  order Order? @relation(fields: [orderId], references: [id])
+  user  User?  @relation(fields: [userId], references: [id])
+
+  @@index([orderId])
+  @@index([userId])
+  @@index([providerReference])
+  @@index([status])
+  @@index([topupId])
+}
+
+// ============================================================================
+// DELIVERY PROOF
+// ============================================================================
+
+model DeliveryProof {
+  id              String              @id @default(cuid())
+  orderId         String              @unique
+  discordId       String?
+  discordUsername String?
+  totalAmount     Int                 // Cents
+  items           Json                // Array of {name, packQuantity, deliveredLabel, lineTotal}
+  imageUrls       String[]
+  imageHashes     String[]
+  vouchMessageIds String[]
+  source          DeliveryProofSource @default(AUTO_VOUCH)
+  createdAt       DateTime @default(now())
+
+  order  Order                   @relation(fields: [orderId], references: [id])
+  images DeliveryProofImage[]
+
+  @@index([createdAt])
+}
+
+model DeliveryProofImage {
+  id          String   @id @default(cuid())
+  proofId     String
+  orderId     String
+  position    Int
+  contentType String?
+  data        Bytes?   // Binary image data
+  sourceUrl   String?
+
+  proof DeliveryProof @relation(fields: [proofId], references: [id], onDelete: Cascade)
+
+  @@index([proofId])
+}
+
+// ============================================================================
+// TICKETS
+// ============================================================================
+
+model Ticket {
+  channelId   String      @id
+  guildId     String
+  discordId   String      // Customer
+  discordUsername String
+  orderId     String?
+  topupId     String?
+  type        TicketType
+  status      TicketStatus @default(OPEN)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  closedAt    DateTime?
+
+  order    Order?         @relation(fields: [orderId], references: [id])
+  messages TicketMessage[]
+
+  @@index([discordId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model TicketMessage {
+  id              String   @id @default(cuid())
+  ticketId        String
+  discordId       String
+  discordUsername String
+  content         String
+  isStaff         Boolean  @default(false)
+  attachments     String[] // JSON array
+  createdAt       DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// CONFIGURATION
+// ============================================================================
+
+model ShopConfig {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+// ============================================================================
+// COUPONS
+// ============================================================================
+
+model Coupon {
+  code            String    @unique
+  discountType    String    // PERCENT or FIXED
+  discountValue   Int       // Cents for FIXED, percent for PERCENT
+  minOrderCents   Int?
+  maxDiscountCents Int?
+  maxUses         Int?
+  usedCount       Int       @default(0)
+  expiresAt       DateTime?
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([isActive])
+  @@index([expiresAt])
+}
+
+// ============================================================================
+// ADMIN & AUDIT
+// ============================================================================
+
+model AdminLog {
+  id           String   @id @default(cuid())
+  adminId      String
+  adminUsername String
+  action       String
+  target       String
+  targetId     String?
+  details      Json?
+  ipAddress    String?
+  createdAt    DateTime @default(now())
+
+  @@index([adminId])
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  userType   String?  // admin, user, system, bot
+  action     String
+  entityType String
+  entityId   String
+  changes    Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// FRAUD
+// ============================================================================
+
+model FraudCase {
+  id         String      @id @default(cuid())
+  orderId    String      @unique
+  score      Int         // 0-100
+  signals    Json
+  status     FraudStatus @default(OPEN)
+  reviewedBy String?
+  reviewedAt DateTime?
+  notes      String?
+  createdAt  DateTime    @default(now())
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// NOTIFICATIONS
+// ============================================================================
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String
+  data      Json?
+  readAt    DateTime?
+  createdAt DateTime        @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([readAt])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// SECURITY
+// ============================================================================
+
+model Blacklist {
+  id        String        @id @default(cuid())
+  ipAddress String?       @unique
+  discordId String?       @unique
+  type      BlacklistType
+  reason    String
+  expiresAt DateTime?
+  createdAt DateTime      @default(now())
+  createdBy String
+
+  @@index([type])
+  @@index([expiresAt])
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  name       String
+  key        String    @unique // Hashed
+  userId     String?
+  permissions String[] // JSON array
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([key])
+  @@index([isActive])
+}
+
+// ============================================================================
+// WEBHOOKS
+// ============================================================================
+
+model WebhookLog {
+  id           String        @id @default(cuid())
+  provider     String        // paypal, square, nowpayments
+  eventType    String
+  payload      String        // JSON text
+  signature    String?
+  status       WebhookStatus @default(RECEIVED)
+  errorMessage String?
+  retryCount   Int           @default(0)
+  processedAt  DateTime?
+  createdAt    DateTime      @default(now())
+
+  @@index([provider])
+  @@index([status])
+  @@index([createdAt])
+  @@index([provider, eventType])
+  @@index([processedAt])
+}
+
+// ============================================================================
+// COUNTERS
+// ============================================================================
+
+model Counter {
+  _key String @id // Maps to _id in Prisma
+  seq  Int    @default(0)
+}

@@ -1,0 +1,102 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": [".env"],
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**", "tsconfig.tsbuildinfo"],
+      "env": ["NODE_ENV", "DATABASE_URL", "REDIS_URL"],
+      "inputs": ["apps/**/src/**", "packages/**/src/**", "apps/**/package.json", "packages/**/package.json", "tsconfig.json", "apps/**/tsconfig.json"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true,
+      "env": ["NODE_ENV", "DATABASE_URL", "REDIS_URL"],
+      "inputs": ["apps/**/src/**", "packages/**/src/**"]
+    },
+    "lint": {
+      "cache": true,
+      "outputs": [".turbo/**"],
+      "inputs": [
+        "apps/**/src/**",
+        "packages/**/src/**",
+        "apps/**/*.{ts,tsx,js,jsx}",
+        "packages/**/*.{ts,tsx,js,jsx}",
+        "*.config.{js,ts,mjs}",
+        ".eslintrc*",
+        "eslint.config.js"
+      ]
+    },
+    "test": {
+      "cache": true,
+      "outputs": ["coverage/**", "*.coverage.xml", "test-results/**"],
+      "inputs": ["apps/**/src/**", "packages/**/src/**", "**/*.test.{ts,tsx}", "**/*.spec.{ts,tsx}"],
+      "env": ["NODE_ENV", "DATABASE_URL", "REDIS_URL", "JWT_SECRET"]
+    },
+    "typecheck": {
+      "cache": true,
+      "outputs": ["*.tsbuildinfo", ".tsbuildinfo"],
+      "inputs": ["apps/**/src/**", "packages/**/src/**", "apps/**/tsconfig.json", "packages/**/tsconfig.json"]
+    },
+    "db:generate": {
+      "cache": false,
+      "inputs": ["packages/shared/prisma/schema.prisma"]
+    },
+    "db:push": {
+      "cache": false,
+      "env": ["DATABASE_URL"],
+      "inputs": ["packages/shared/prisma/schema.prisma"]
+    },
+    "db:migrate": {
+      "cache": false,
+      "env": ["DATABASE_URL"],
+      "inputs": ["packages/shared/prisma/migrations/**", "packages/shared/prisma/schema.prisma"]
+    },
+    "db:seed": {
+      "cache": false,
+      "env": ["DATABASE_URL", "NODE_ENV"],
+      "inputs": ["apps/**/prisma/seed.ts", "packages/shared/prisma/seed.ts"]
+    },
+    "db:studio": {
+      "cache": false,
+      "persistent": true
+    },
+    "clean": {
+      "cache": false,
+      "outputs": ["**/dist/**", "**/.next/**", "**/.turbo/**", "**/coverage/**"]
+    },
+    "format": {
+      "cache": true,
+      "outputs": [".prettier.cache"],
+      "inputs": ["**/*.{ts,tsx,js,jsx,json,css,md,yml,yaml}"],
+      "outputMode": "new-only"
+    },
+    "security:audit": {
+      "cache": true,
+      "outputs": ["npm-audit-report.json"]
+    }
+  },
+  "globalEnv": [
+    "NODE_ENV",
+    "DATABASE_URL",
+    "REDIS_URL",
+    "JWT_SECRET",
+    "PORT",
+    "NEXT_PUBLIC_API_URL",
+    "NEXT_PUBLIC_SITE_URL",
+    "DISCORD_CLIENT_ID",
+    "DISCORD_CLIENT_SECRET",
+    "DISCORD_BOT_TOKEN",
+    "PAYPAL_CLIENT_ID",
+    "PAYPAL_CLIENT_SECRET",
+    "SQUARE_APPLICATION_ID",
+    "SQUARE_ACCESS_TOKEN",
+    "NOWPAYMENTS_API_KEY"
+  ],
+  "globalDependencies": [
+    ".env",
+    "package.json",
+    "packages/config/**",
+    "turbo.json"
+  ]
+}

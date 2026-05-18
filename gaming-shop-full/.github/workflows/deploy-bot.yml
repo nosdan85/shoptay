@@ -1,0 +1,157 @@
+name: Deploy Bot
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/bot/**'
+      - 'packages/shared/**'
+      - 'Dockerfile.bot'
+      - 'docker-compose.prod.yml'
+  workflow_dispatch:
+    inputs:
+      restart_only:
+        description: 'Restart bot only (skip build)'
+        required: false
+        default: 'false'
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/nosmarket-bot
+  NODE_VERSION: '20'
+
+jobs:
+  deploy:
+    name: Deploy Bot to Server
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build and push Docker image
+        if: ${{ github.event.inputs.restart_only != 'true' }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.bot
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy bot to server via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_SSH_PORT || '22' }}
+          script: |
+            set -e
+
+            IMAGE_TAG="${{ github.sha }}"
+            if [ "${{ github.event.inputs.restart_only }}" == "true" ]; then
+              echo "Restart-only mode, using current image..."
+            else
+              echo "Pulling latest Docker image..."
+              docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG}
+            fi
+
+            echo "Updating docker-compose.prod.yml..."
+            cd /opt/nosmarket
+
+            # Update image tag if not restart-only
+            if [ "${{ github.event.inputs.restart_only }}" != "true" ]; then
+              sed -i 's|image: .*nosmarket/bot:.*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG}|' docker-compose.prod.yml
+            fi
+
+            echo "Stopping current bot..."
+            docker compose -f docker-compose.prod.yml stop bot
+
+            echo "Removing old bot container..."
+            docker compose -f docker-compose.prod.yml rm -f bot
+
+            echo "Starting bot..."
+            docker compose -f docker-compose.prod.yml up -d bot
+
+            echo "Waiting for bot to start..."
+            sleep 10
+
+            echo "Checking bot logs..."
+            docker compose -f docker-compose.prod.yml logs bot --tail 50
+
+            echo "Checking bot status..."
+            if docker compose -f docker-compose.prod.yml ps bot | grep -q "Up"; then
+              echo "Bot is running!"
+            else
+              echo "Bot failed to start!"
+              exit 1
+            fi
+
+  health-check:
+    name: Bot Health Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: deploy
+    environment: production
+
+    steps:
+      - name: Check bot health via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_SSH_PORT || '22' }}
+          script: |
+            set -e
+
+            cd /opt/nosmarket
+
+            echo "Checking bot process..."
+            if docker compose -f docker-compose.prod.yml exec -T bot pgrep -x node > /dev/null; then
+              echo "✓ Bot process is running"
+            else
+              echo "✗ Bot process is not running"
+              docker compose -f docker-compose.prod.yml logs bot
+              exit 1
+            fi
+
+            echo "Checking bot logs for errors..."
+            if docker compose -f docker-compose.prod.yml logs bot --tail 100 | grep -i "error\|exception\|fatal" | grep -v "DiscordAPIError\|RateLimit"; then
+              echo "✗ Found errors in bot logs"
+              docker compose -f docker-compose.prod.yml logs bot
+              exit 1
+            else
+              echo "✓ No critical errors in bot logs"
+            fi
+
+            echo "Bot health check passed!"

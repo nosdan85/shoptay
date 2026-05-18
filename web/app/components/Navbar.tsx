@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useAuth } from "../context/AuthContext";
@@ -33,7 +33,7 @@ export default function Navbar({ cartCount = 0, showCart = false }: NavbarProps)
   return (
     <nav className="border-b border-slate-700 bg-slate-900/80 backdrop-blur-md sticky top-0 z-50 transition-all duration-200">
       <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-        <Link href="/" className="text-2xl font-bold text-white hover:text-blue-400 transition-colors duration-200">
+        <Link href="/shop" className="text-2xl font-bold text-white hover:text-blue-400 transition-colors duration-200">
           NosMarket
         </Link>
 
@@ -41,15 +41,14 @@ export default function Navbar({ cartCount = 0, showCart = false }: NavbarProps)
           <Link href="/shop" className="text-slate-300 hover:text-white transition-colors duration-150 font-medium">
             Shop
           </Link>
-          <Link href="/wallet" className="text-slate-300 hover:text-white transition-colors duration-150 font-medium">
-            Wallet
-          </Link>
           <Link href="/proofs" className="text-slate-300 hover:text-white transition-colors duration-150 font-medium">
             Proofs
           </Link>
-          <Link href="/admin" className="text-slate-300 hover:text-white transition-colors duration-150 font-medium">
-            Admin
-          </Link>
+          {user?.isOwner && (
+            <Link href="/admin" className="text-slate-300 hover:text-white transition-colors duration-150 font-medium">
+              Admin
+            </Link>
+          )}
 
           {showCart && (
             <Link href="/shop" className="relative text-slate-300 hover:text-white transition-colors duration-150">

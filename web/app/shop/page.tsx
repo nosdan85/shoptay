@@ -1,410 +1,448 @@
-"use client";
+﻿"use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Navbar from "../components/Navbar";
-import { Search, ShoppingCart, Package, Loader2, X, Plus, Minus } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+import { Search, ShoppingCart, Package, X, Minus, Plus, Loader2, User, MapPin, CalendarDays, CheckCircle2, ExternalLink } from "lucide-react";
 
 interface Product {
-  id: string;
+  _id: string;
   name: string;
   category: string;
-  game: string;
   price: number;
   bulkPrice?: number;
   image?: string;
-  itemDescription?: string;
+  desc?: string;
 }
 
-interface CartItem extends Product {
-  quantity: number;
+interface CartItem extends Product { quantity: number }
+
+interface DeliverySlot {
+  id: string;
+  ownerTimezone: string;
+  customerTimezone: string;
+  startAt: string;
+  endAt: string;
+  ownerStartText: string;
+  ownerEndText: string;
+  customerStartText: string;
+  customerEndText: string;
+  note?: string;
 }
 
-const mockProducts: Product[] = [
-  { id: "1", name: "Ancient Chest", category: "Chest", game: "NosTale", price: 15.99, bulkPrice: 13.99, itemDescription: "$15.99 for 1x Ancient Chest" },
-  { id: "2", name: "Reroll Ticket", category: "Reroll", game: "NosTale", price: 2.50, bulkPrice: 1.99, itemDescription: "$2.50 for 1x Reroll Ticket" },
-  { id: "3", name: "Power Seal", category: "Seal", game: "NosTale", price: 8.00, bulkPrice: 6.50, itemDescription: "$8.00 for 1x Power Seal" },
-  { id: "4", name: "Legendary Shard", category: "Shard", game: "NosTale", price: 5.99, bulkPrice: 4.99, itemDescription: "$5.99 for 1x Legendary Shard" },
-  { id: "5", name: "Mystic Relic", category: "Relic", game: "NosTale", price: 25.00, bulkPrice: 20.00, itemDescription: "$25.00 for 1x Mystic Relic" },
-  { id: "6", name: "Warrior Set", category: "Sets", game: "NosTale", price: 45.00, bulkPrice: 38.00, itemDescription: "$45.00 for 1x Warrior Set" },
-  { id: "7", name: "Combo Pack", category: "Combo", game: "NosTale", price: 12.99, bulkPrice: 10.99, itemDescription: "$12.99 for 1x Combo Pack" },
-  { id: "8", name: "Dragon Chest", category: "Chest", game: "NosTale", price: 35.00, bulkPrice: 29.00, itemDescription: "$35.00 for 1x Dragon Chest" },
-  { id: "9", name: "Skill Reroll", category: "Reroll", game: "NosTale", price: 3.50, bulkPrice: 2.75, itemDescription: "$3.50 for 1x Skill Reroll" },
-  { id: "10", name: "Time Seal", category: "Seal", game: "NosTale", price: 6.50, bulkPrice: 5.25, itemDescription: "$6.50 for 1x Time Seal" },
-  { id: "11", name: "Fire Shard", category: "Shard", game: "NosTale", price: 7.99, bulkPrice: 6.49, itemDescription: "$7.99 for 1x Fire Shard" },
-  { id: "12", name: "Mage Set", category: "Sets", game: "NosTale", price: 42.00, bulkPrice: 35.00, itemDescription: "$42.00 for 1x Mage Set" },
+interface RobloxResult {
+  robloxUserId: string;
+  robloxUsername: string;
+  robloxDisplayName: string;
+}
+
+const CUSTOMER_TIMEZONES = [
+  { value: "America/New_York", label: "US Eastern (New York)" },
+  { value: "America/Chicago", label: "US Central (Chicago)" },
+  { value: "America/Denver", label: "US Mountain (Denver)" },
+  { value: "America/Los_Angeles", label: "US Pacific (Los Angeles)" },
+  { value: "America/Sao_Paulo", label: "Brazil (Sao Paulo)" },
+  { value: "Europe/London", label: "UK (London)" },
+  { value: "Europe/Paris", label: "France (Paris)" },
+  { value: "Europe/Berlin", label: "Germany (Berlin)" },
+  { value: "Asia/Tokyo", label: "Japan (Tokyo)" },
+  { value: "Asia/Shanghai", label: "China (Shanghai)" },
+  { value: "Asia/Hong_Kong", label: "Hong Kong" },
+  { value: "Asia/Singapore", label: "Singapore" },
+  { value: "Australia/Sydney", label: "Australia (Sydney)" },
+  { value: "Pacific/Auckland", label: "New Zealand (Auckland)" },
 ];
 
-const categories = ["All", "Chest", "Reroll", "Shard", "Seal", "Relic", "Sets", "Combo"];
-const games = ["All", "NosTale", "Metin2", "League of Legends"];
+type Step = "shop" | "roblox" | "delivery" | "ticket";
 
 export default function ShopPage() {
-  const [activeCategory, setActiveCategory] = useState("All");
-  const [activeGame, setActiveGame] = useState("All");
-  const [sortBy, setSortBy] = useState("Default");
-  const [searchQuery, setSearchQuery] = useState("");
+  const { user, token } = useAuth();
+  const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [toast, setToast] = useState<string | null>(null);
-  const [toastVisible, setToastVisible] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [isCartOpen, setIsCartOpen] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [addQty, setAddQty] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [step, setStep] = useState<Step>("shop");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [orderId, setOrderId] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Simulate loading products
-  useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 600);
-    return () => clearTimeout(timer);
-  }, []);
+  const [robloxQuery, setRobloxQuery] = useState("");
+  const [robloxSearching, setRobloxSearching] = useState(false);
+  const [robloxResult, setRobloxResult] = useState<RobloxResult | null>(null);
+  const [robloxLinked, setRobloxLinked] = useState(false);
 
-  const filteredProducts = mockProducts
-    .filter((p) => activeCategory === "All" || p.category === activeCategory)
-    .filter((p) => activeGame === "All" || p.game === activeGame)
-    .filter((p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
-    .sort((a, b) => {
-      if (sortBy === "Price Low-High") return a.price - b.price;
-      if (sortBy === "Price High-Low") return b.price - a.price;
-      return 0;
-    });
+  const [customerTimezone, setCustomerTimezone] = useState("America/New_York");
+  const [deliverySlots, setDeliverySlots] = useState<DeliverySlot[]>([]);
+  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [slotsLoaded, setSlotsLoaded] = useState(false);
 
-  const addToCart = (product: Product, quantity = 1) => {
+  const [ticketResult, setTicketResult] = useState<{ channelId: string; alreadyExists?: boolean } | null>(null);
+
+  useEffect(() => { void loadProducts(); }, []);
+
+  const loadProducts = async () => {
+    try {
+      const res = await fetch("/api/shop/products", { cache: "no-store" });
+      const data = await res.json();
+      setProducts(Array.isArray(data) ? data : []);
+    } catch { setProducts([]); }
+    finally { setLoading(false); }
+  };
+
+  const filtered = useMemo(
+    () => products.filter((p) => p.name.toLowerCase().includes(searchQuery.toLowerCase())),
+    [products, searchQuery]
+  );
+
+  const cartTotal = useMemo(() => cart.reduce((s, i) => s + i.price * i.quantity, 0), [cart]);
+  const cartCount = useMemo(() => cart.reduce((s, i) => s + i.quantity, 0), [cart]);
+
+  const addToCart = (p: Product, qty = 1) => {
     setCart((prev) => {
-      const existing = prev.find((item) => item.id === product.id);
-      if (existing) {
-        return prev.map((item) =>
-          item.id === product.id ? { ...item, quantity: item.quantity + quantity } : item
-        );
-      }
-      return [...prev, { ...product, quantity }];
+      const existing = prev.find((i) => i._id === p._id);
+      if (existing) return prev.map((i) => i._id === p._id ? { ...i, quantity: i.quantity + qty } : i);
+      return [...prev, { ...p, quantity: qty }];
     });
-    showToast(`Added ${quantity}x ${product.name} to bag`);
+  };
+  const updateQty = (id: string, delta: number) => {
+    setCart((prev) => prev.map((i) => i._id === id ? { ...i, quantity: Math.max(1, i.quantity + delta) } : i));
+  };
+  const removeItem = (id: string) => setCart((prev) => prev.filter((i) => i._id !== id));
+
+  const doCheckout = async () => {
+    if (!user || !token) { setError("Login with Discord first"); return; }
+    if (cart.length === 0) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/shop/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          cartItems: cart.map((i) => ({ product: i._id, name: i.name, quantity: i.quantity, price: i.price })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Checkout failed");
+      setOrderId(data.orderId);
+      setStep("roblox");
+    } catch (err) { setError(err instanceof Error ? err.message : "Checkout failed"); }
+    finally { setSubmitting(false); }
   };
 
-  const showToast = (message: string) => {
-    setToast(message);
-    setToastVisible(true);
-    setTimeout(() => setToastVisible(false), 2200);
-    setTimeout(() => setToast(null), 2700);
+  const searchRoblox = async () => {
+    if (!robloxQuery.trim()) return;
+    setRobloxSearching(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/roblox/search?username=${encodeURIComponent(robloxQuery.trim())}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Roblox user not found");
+      setRobloxResult(data);
+    } catch (err) { setError(err instanceof Error ? err.message : "Roblox search failed"); }
+    finally { setRobloxSearching(false); }
   };
 
-  const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-  const cartTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-
-  const removeFromCart = (id: string) => {
-    setCart((prev) => prev.filter((item) => item.id !== id));
-    showToast("Item removed from bag");
+  const linkRoblox = async () => {
+    if (!robloxResult || !orderId || !token) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/shop/orders/${orderId}?action=link-roblox`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(robloxResult),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Link failed");
+      setRobloxLinked(true);
+      const slotRes = await fetch(`/api/shop/delivery-slots?timezone=${encodeURIComponent(customerTimezone)}`, { cache: "no-store" });
+      const slotData = await slotRes.json();
+      setDeliverySlots(Array.isArray(slotData?.slots) ? slotData.slots : []);
+      setSlotsLoaded(true);
+      setStep("delivery");
+    } catch (err) { setError(err instanceof Error ? err.message : "Link failed"); }
+    finally { setSubmitting(false); }
   };
 
-  const handleOpenDetail = (product: Product) => {
-    setSelectedProduct(product);
-    setAddQty(1);
+  const confirmSlot = async () => {
+    if (!selectedSlot || !orderId || !token) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/shop/orders/${orderId}?action=delivery-slot`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ slotId: selectedSlot, customerTimezone }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Slot selection failed");
+      setStep("ticket");
+    } catch (err) { setError(err instanceof Error ? err.message : "Slot selection failed"); }
+    finally { setSubmitting(false); }
   };
 
-  const getItemPricing = (item: CartItem) => {
-    const regularUnits = Math.min(item.quantity, 10);
-    const bulkUnits = Math.max(0, item.quantity - 10);
-    const regularPrice = Math.max(1, Math.floor(item.price));
-    const bulkPrice = Math.max(1, Math.floor(item.bulkPrice || item.price * 0.85));
-    const total = regularUnits * regularPrice + bulkUnits * bulkPrice;
-    return { regularUnits, bulkUnits, regularPrice, bulkPrice, total, bulkApplied: bulkUnits > 0 };
+  const createTicket = async () => {
+    if (!orderId || !token) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/shop/orders/${orderId}?action=create-ticket`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ orderId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Ticket creation failed");
+      setTicketResult({ channelId: data.channelId, alreadyExists: data.alreadyExists });
+    } catch (err) { setError(err instanceof Error ? err.message : "Ticket creation failed"); }
+    finally { setSubmitting(false); }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center">
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
         <Navbar />
-        <div className="flex flex-col items-center gap-4 animate-fade-in">
-          <Loader2 className="w-12 h-12 text-blue-400 animate-spin" />
-          <p className="text-slate-400 font-medium animate-pulse">Loading products...</p>
-        </div>
+        <Loader2 className="h-10 w-10 animate-spin text-blue-400" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white">
-      <Navbar cartCount={cartItemCount} showCart />
+    <div className="min-h-screen bg-slate-950 text-white">
+      <Navbar />
 
-      {/* Product Detail Modal */}
-      {selectedProduct && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in"
-          onClick={() => setSelectedProduct(null)}
+      {/* Floating cart button */}
+      {step === "shop" && (
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full bg-blue-600 px-5 py-3 font-medium shadow-2xl"
         >
-          <div
-            className="bg-slate-800 border border-slate-700 rounded-2xl max-w-2xl w-full shadow-2xl animate-fade-in-up"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex flex-col md:flex-row">
-              <div className="md:w-1/2 bg-slate-700 flex items-center justify-center p-8 rounded-t-2xl md:rounded-l-2xl md:rounded-tr-none">
-                <Package className="w-32 h-32 text-slate-500" />
-              </div>
-              <div className="md:w-1/2 p-6 flex flex-col">
-                <button
-                  onClick={() => setSelectedProduct(null)}
-                  className="self-end text-slate-400 hover:text-white mb-2 transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-                <span className="text-blue-400 text-xs font-bold uppercase tracking-wider">{selectedProduct.category}</span>
-                <h2 className="text-2xl font-bold text-white mt-1 mb-2">{selectedProduct.name}</h2>
-                <p className="text-slate-400 text-sm mb-4 font-serif">{selectedProduct.itemDescription}</p>
-
-                <div className="space-y-1 mb-4">
-                  <div className="flex items-center gap-2 text-green-400 text-sm">
-                    <span>&#10003;</span> Instant Delivery
-                  </div>
-                  <div className="flex items-center gap-2 text-green-400 text-sm">
-                    <span>&#10003;</span> Secure Transaction
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 mb-5">
-                  <button
-                    onClick={() => setAddQty(Math.max(1, addQty - 1))}
-                    className="p-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
-                  >
-                    <Minus className="w-4 h-4" />
-                  </button>
-                  <input
-                    type="number"
-                    min="1"
-                    value={addQty}
-                    onChange={(e) => setAddQty(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="w-16 text-center bg-slate-700 border border-slate-600 rounded-lg py-2 text-white focus:outline-none focus:border-blue-500"
-                  />
-                  <button
-                    onClick={() => setAddQty(addQty + 1)}
-                    className="p-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
-                  <span className="text-xs text-slate-400 ml-1">selected</span>
-                </div>
-
-                <button
-                  onClick={() => {
-                    addToCart(selectedProduct, addQty);
-                    setSelectedProduct(null);
-                  }}
-                  className="w-full py-3 bg-blue-600 hover:bg-blue-500 rounded-lg font-bold text-white transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-blue-600/30"
-                >
-                  ADD TO CART  ${(selectedProduct.price * addQty).toFixed(2)}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+          <ShoppingCart className="h-5 w-5" />
+          {cartCount > 0 && <span>Cart ({cartCount})</span>}
+        </button>
       )}
 
-      {/* Cart Drawer */}
-      {isCartOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm animate-fade-in"
-          onClick={() => setIsCartOpen(false)}
-        >
-          <div
-            className="absolute right-0 top-0 h-full w-full max-w-md bg-slate-800 border-l border-slate-700 shadow-2xl animate-slide-in-right flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between p-5 border-b border-slate-700">
-              <h2 className="text-xl font-bold flex items-center gap-2">
-                <ShoppingCart className="w-5 h-5 text-blue-400" />
-                Bag ({cartItemCount})
-              </h2>
-              <button onClick={() => setIsCartOpen(false)} className="text-slate-400 hover:text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
+      {/* Cart sidebar */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={() => setSidebarOpen(false)}>
+          <div className="absolute right-0 top-0 h-full w-full max-w-md bg-slate-900 border-l border-slate-800 flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-slate-800 p-4">
+              <h2 className="text-lg font-semibold">Cart ({cartCount})</h2>
+              <button onClick={() => setSidebarOpen(false)}><X className="h-5 w-5" /></button>
             </div>
-
-            <div className="flex-1 overflow-y-auto p-5 space-y-3">
-              {cart.length === 0 ? (
-                <div className="text-center py-12 text-slate-400">
-                  <ShoppingCart className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>Your bag is empty</p>
-                </div>
-              ) : (
-                cart.map((item) => {
-                  const pricing = getItemPricing(item);
-                  return (
-                    <div key={item.id} className="flex gap-3 bg-slate-700/50 rounded-lg p-3 animate-fade-in">
-                      <div className="w-14 h-14 bg-slate-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <Package className="w-7 h-7 text-slate-400" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-white truncate">{item.name}</p>
-                        <p className="text-xs text-slate-400">{item.quantity}x  qty {item.quantity}x {item.name}</p>
-                        {pricing.bulkApplied && (
-                          <span className="inline-block mt-1 px-2 py-0.5 bg-green-500/15 text-green-400 text-xs rounded font-medium">
-                            Bulk discount applied
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex flex-col items-end justify-between">
-                        <p className="text-sm font-bold text-green-400">${pricing.total.toFixed(2)}</p>
-                        <button
-                          onClick={() => removeFromCart(item.id)}
-                          className="text-red-400 hover:text-red-300 text-xs hover:underline transition-colors"
-                        >
-                          Remove
-                        </button>
-                      </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {cart.length === 0 ? <p className="text-center text-slate-400 py-12">Cart empty</p> : null}
+              {cart.map((item) => (
+                <div key={item._id} className="flex gap-3 rounded-xl border border-slate-800 bg-slate-950 p-3">
+                  <div className="h-12 w-12 flex-shrink-0 overflow-hidden rounded-lg bg-slate-900">
+                    {item.image ? <img src={item.image} alt="" className="h-full w-full object-cover" /> : <Package className="h-full w-full p-2 text-slate-600" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="truncate text-sm font-medium">{item.name}</p>
+                    <div className="mt-1 flex items-center gap-2">
+                      <button onClick={() => updateQty(item._id, -1)} className="rounded bg-slate-800 p-1"><Minus className="h-3 w-3" /></button>
+                      <span className="text-sm">{item.quantity}</span>
+                      <button onClick={() => updateQty(item._id, 1)} className="rounded bg-slate-800 p-1"><Plus className="h-3 w-3" /></button>
                     </div>
-                  );
-                })
-              )}
-            </div>
-
-            {cart.length > 0 && (
-              <div className="p-5 border-t border-slate-700 space-y-4">
-                <div className="flex justify-between text-lg font-bold">
-                  <span>Subtotal</span>
-                  <span className="text-green-400">${cartTotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex flex-col items-end justify-between">
+                    <span className="text-sm font-medium text-emerald-300">${(item.price * item.quantity).toFixed(2)}</span>
+                    <button onClick={() => removeItem(item._id)} className="text-xs text-red-300">Remove</button>
+                  </div>
                 </div>
-                <button
-                  onClick={() => setIsCartOpen(false)}
-                  className="w-full py-3 bg-blue-600 hover:bg-blue-500 rounded-lg font-bold text-white transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
-                >
-                  Checkout
+              ))}
+            </div>
+            {cart.length > 0 ? (
+              <div className="border-t border-slate-800 p-4 space-y-3">
+                <div className="flex justify-between text-lg font-semibold">
+                  <span>Total</span>
+                  <span className="text-emerald-300">${cartTotal.toFixed(2)}</span>
+                </div>
+                <button onClick={() => { setSidebarOpen(false); void doCheckout(); }} disabled={submitting} className="w-full rounded-lg bg-blue-600 py-3 font-medium disabled:opacity-50">
+                  {submitting ? "Processing..." : "Checkout"}
                 </button>
               </div>
-            )}
+            ) : null}
           </div>
         </div>
       )}
 
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        {/* Search and Filters */}
-        <div className="mb-8 space-y-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search products..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-blue-500 transition-colors"
-            />
-          </div>
+      <main className="mx-auto max-w-7xl px-4 py-8">
+        {error ? <div className="mb-6 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div> : null}
 
-          <div className="flex flex-wrap gap-2">
-            {categories.map((cat, i) => (
-              <button
-                key={cat}
-                onClick={() => setActiveCategory(cat)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover:scale-105 ${
-                  activeCategory === cat
-                    ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30"
-                    : "bg-slate-800 text-slate-300 hover:bg-slate-700"
-                }`}
-                style={{ animationDelay: `${i * 30}ms` }}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
+        {/* CHECKOUT FLOW */}
+        {step !== "shop" && (
+          <div className="mx-auto max-w-2xl space-y-8">
+            <div className="flex gap-2">
+              {(["roblox", "delivery", "ticket"] as const).map((s) => (
+                <div key={s} className={"h-2 flex-1 rounded-full " + (step === s ? "bg-blue-500" : (["roblox", "delivery", "ticket"].indexOf(step) > ["roblox", "delivery", "ticket"].indexOf(s) ? "bg-emerald-500" : "bg-slate-800"))} />
+              ))}
+            </div>
 
-          <div className="flex flex-wrap gap-2">
-            {games.map((game, i) => (
-              <button
-                key={game}
-                onClick={() => setActiveGame(game)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover:scale-105 ${
-                  activeGame === game
-                    ? "bg-purple-600 text-white shadow-lg shadow-purple-600/30"
-                    : "bg-slate-800 text-slate-300 hover:bg-slate-700"
-                }`}
-                style={{ animationDelay: `${i * 30}ms` }}
-              >
-                {game}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-4">
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500 transition-colors"
-            >
-              <option value="Default">Default Sort</option>
-              <option value="Price Low-High">Price: Low to High</option>
-              <option value="Price High-Low">Price: High to Low</option>
-            </select>
-
-            <button
-              onClick={() => setIsCartOpen(true)}
-              className="ml-auto flex items-center gap-2 px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white hover:bg-slate-700 transition-colors"
-            >
-              <ShoppingCart className="w-5 h-5" />
-              {cartItemCount > 0 && (
-                <span className="bg-blue-500 text-white text-xs rounded-full px-2 py-0.5 font-bold">
-                  {cartItemCount}
-                </span>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Product Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {filteredProducts.map((product, i) => (
-            <div
-              key={product.id}
-              className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden hover:border-blue-500 hover:shadow-lg hover:shadow-blue-500/10 transition-all duration-300 hover:-translate-y-1 flex flex-col justify-between animate-fade-in-up"
-              style={{ animationDelay: `${i * 40}ms` }}
-            >
-              <button onClick={() => handleOpenDetail(product)} className="w-full">
-                <div className="bg-slate-700 h-36 flex items-center justify-center group">
-                  <Package className="w-14 h-14 text-slate-500 group-hover:scale-110 transition-transform duration-300" />
-                </div>
-              </button>
-              <div className="p-4 flex flex-col flex-grow">
-                <div className="flex items-start justify-between mb-1">
-                  <h3 className="text-white font-semibold text-sm flex-1 line-clamp-1 text-left">{product.name}</h3>
-                  <span className="px-2 py-0.5 bg-slate-700 text-slate-300 text-xs rounded ml-2 flex-shrink-0">
-                    {product.category}
-                  </span>
-                </div>
-                <p className="text-slate-400 text-xs mb-3 text-left">{product.game}</p>
-                <div className="flex items-center justify-between mt-auto">
-                  <span className="text-lg font-bold text-green-400">${product.price.toFixed(2)}</span>
-                  <button
-                    onClick={() => addToCart(product)}
-                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold transition-all duration-200 hover:scale-105 active:scale-95"
-                  >
-                    Add to Cart
-                  </button>
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-4">
+              <div className="border-b border-slate-800 pb-3">
+                <p className="text-sm text-slate-400">Order {orderId}</p>
+                <div className="mt-2 space-y-1">
+                  {cart.map((i) => (
+                    <div key={i._id} className="flex justify-between text-sm">
+                      <span>{i.quantity}x {i.name}</span>
+                      <span className="text-slate-300">${(i.price * i.quantity).toFixed(2)}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between border-t border-slate-800 pt-2 font-semibold">
+                    <span>Total</span>
+                    <span className="text-emerald-300">${cartTotal.toFixed(2)}</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
 
-        {filteredProducts.length === 0 && (
-          <div className="text-center py-20 animate-fade-in">
-            <Package className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-            <p className="text-slate-400 text-lg">No products found matching your criteria.</p>
-            <button
-              onClick={() => { setSearchQuery(""); setActiveCategory("All"); setActiveGame("All"); }}
-              className="mt-4 px-6 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors"
-            >
-              Clear Filters
-            </button>
+              {/* ROBLOX */}
+              {step === "roblox" && (
+                <div className="space-y-4">
+                  <h3 className="flex items-center gap-2 text-lg font-semibold"><User className="h-5 w-5" />Verify Roblox Account</h3>
+                  <p className="text-sm text-slate-400">Search your Roblox username to link it with this order.</p>
+                  <div className="flex gap-2">
+                    <input value={robloxQuery} onChange={(e) => setRobloxQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void searchRoblox(); }} placeholder="Roblox username..." className="flex-1 rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none" />
+                    <button onClick={() => void searchRoblox()} disabled={robloxSearching} className="rounded-lg bg-blue-600 px-4 py-3 font-medium disabled:opacity-50">
+                      {robloxSearching ? <Loader2 className="h-5 w-5 animate-spin" /> : "Search"}
+                    </button>
+                  </div>
+                  {robloxResult && !robloxLinked && (
+                    <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4">
+                      <p className="font-semibold">{robloxResult.robloxDisplayName}</p>
+                      <p className="text-sm text-slate-400">@{robloxResult.robloxUsername}</p>
+                      <button onClick={() => void linkRoblox()} disabled={submitting} className="mt-3 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium disabled:opacity-50">
+                        {submitting ? "Linking..." : "Confirm this is my account"}
+                      </button>
+                    </div>
+                  )}
+                  {robloxLinked && robloxResult && (
+                    <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-200">
+                      <CheckCircle2 className="h-5 w-5" />
+                      Linked: {robloxResult.robloxDisplayName}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* DELIVERY */}
+              {step === "delivery" && (
+                <div className="space-y-4">
+                  <h3 className="flex items-center gap-2 text-lg font-semibold"><MapPin className="h-5 w-5" />Choose Delivery Time</h3>
+                  <div>
+                    <label className="text-sm text-slate-400">Your timezone</label>
+                    <select value={customerTimezone} onChange={(e) => setCustomerTimezone(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none">
+                      {CUSTOMER_TIMEZONES.map((tz) => <option key={tz.value} value={tz.value}>{tz.label}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm text-slate-400">Available slots (in your local time)</label>
+                    {deliverySlots.length === 0 && slotsLoaded ? <p className="text-sm text-slate-400">No available slots right now.</p> : null}
+                    {deliverySlots.map((slot) => (
+                      <button
+                        key={slot.id}
+                        onClick={() => setSelectedSlot(slot.id)}
+                        className={"w-full rounded-xl border p-4 text-left transition-all " + (selectedSlot === slot.id ? "border-blue-500 bg-blue-500/10" : "border-slate-800 bg-slate-950 hover:border-slate-700")}
+                      >
+                        <div className="flex items-center gap-2">
+                          <CalendarDays className="h-4 w-4 text-blue-300" />
+                          <span className="text-sm font-medium">{slot.customerStartText} - {slot.customerEndText}</span>
+                        </div>
+                        {slot.note ? <p className="mt-1 text-xs text-slate-400">{slot.note}</p> : null}
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={() => void confirmSlot()} disabled={!selectedSlot || submitting} className="w-full rounded-lg bg-blue-600 py-3 font-medium disabled:opacity-50">
+                    {submitting ? "Saving..." : "Confirm delivery time"}
+                  </button>
+                </div>
+              )}
+
+              {/* TICKET */}
+              {step === "ticket" && (
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold">Create Support Ticket</h3>
+                  <p className="text-sm text-slate-400">A Discord ticket will be created with your order details, Roblox account, and delivery time. Payment instructions will be provided there.</p>
+                  {!ticketResult ? (
+                    <button onClick={() => void createTicket()} disabled={submitting} className="w-full rounded-lg bg-emerald-600 py-3 font-medium disabled:opacity-50">
+                      {submitting ? "Creating ticket..." : "Create Discord Ticket"}
+                    </button>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+                        <CheckCircle2 className="h-5 w-5 text-emerald-300" />
+                        <span className="text-sm">Ticket created!</span>
+                      </div>
+                      {ticketResult.channelId ? (
+                        <a
+                          href={"https://discord.com/channels/" + ticketResult.channelId}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 rounded-lg bg-[#5865F2] px-5 py-3 text-sm font-medium"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                          Open Ticket in Discord
+                        </a>
+                      ) : null}
+                      <button
+                        onClick={() => {
+                          setStep("shop");
+                          setCart([]);
+                          setOrderId(null);
+                          setRobloxResult(null);
+                          setRobloxLinked(false);
+                          setSelectedSlot(null);
+                          setTicketResult(null);
+                        }}
+                        className="w-full rounded-lg bg-slate-800 py-3 text-sm"
+                      >
+                        Continue Shopping
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
-      </main>
 
-      {/* Toast Notification */}
-      {toast && (
-        <div
-          className={`fixed bottom-6 left-1/2 -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 transition-all duration-300 z-[100] ${
-            toastVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-          }`}
-        >
-          <span className="bg-white/20 rounded-full px-2 py-0.5 text-xs font-bold">OK</span>
-          <span className="text-sm font-medium">{toast}</span>
-        </div>
-      )}
+        {/* SHOP BROWSING */}
+        {step === "shop" && (
+          <>
+            <div className="mb-6">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search items..." className="w-full rounded-xl border border-slate-800 bg-slate-900 py-3 pl-10 pr-4 outline-none" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+              {filtered.map((product) => (
+                <div key={product._id} className="group overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 transition-all hover:border-blue-500/40">
+                  <div className="relative h-40 bg-slate-950">
+                    {product.image ? <img src={product.image} alt={product.name} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center"><Package className="h-10 w-10 text-slate-700" /></div>}
+                  </div>
+                  <div className="space-y-2 p-4">
+                    <h3 className="truncate text-sm font-medium">{product.name}</h3>
+                    <p className="text-xs text-slate-500">{product.category}</p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-lg font-semibold text-emerald-300">${product.price.toFixed(2)}</span>
+                      <button onClick={() => addToCart(product)} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium">Add</button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {filtered.length === 0 && !loading ? (
+              <div className="py-20 text-center text-slate-400">
+                <Package className="mx-auto mb-4 h-16 w-16 opacity-30" />
+                <p>No items found.</p>
+              </div>
+            ) : null}
+          </>
+        )}
+      </main>
     </div>
   );
 }

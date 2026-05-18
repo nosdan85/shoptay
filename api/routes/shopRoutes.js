@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const qs = require('qs');
@@ -2652,8 +2652,7 @@ router.post('/orders/:orderId/link-roblox', authRequired, async (req, res) => {
 
         const { order, status, error } = await getOwnedOrder(orderId, discordId);
         if (!order) return res.status(status).json({ error });
-        if (order.paymentStatus !== 'paid' && order.status !== 'Completed') {
-            return res.status(402).json({ error: 'Payment must be confirmed before linking Roblox.' });
+        // Payment check removed - Roblox linking allowed before payment
         }
 
         const dbUser = await User.findOne({ discordId }).lean();
@@ -2725,8 +2724,7 @@ router.post('/orders/:orderId/delivery-slot', authRequired, async (req, res) => 
 
         const { order, status, error } = await getOwnedOrder(orderId, discordId);
         if (!order) return res.status(status).json({ error });
-        if (order.paymentStatus !== 'paid' && order.status !== 'Completed') {
-            return res.status(402).json({ error: 'Payment must be confirmed before selecting delivery time.' });
+        // Payment check removed - delivery slot selection allowed before payment
         }
 
         const slot = await DeliverySlot.findOne({ _id: slotId, active: true });
@@ -3144,8 +3142,7 @@ router.post('/create-ticket', authRequired, async (req, res) => {
 
         const { order, status, error } = await getOwnedOrder(orderId, req.user.discordId);
         if (!order) return res.status(status).json({ error });
-        if (order.paymentStatus !== 'paid' && order.status !== 'Completed') {
-            return res.status(402).json({ error: 'Payment must be confirmed before creating a ticket.' });
+        // Payment check removed - ticket creation allowed before payment (manual payment confirmation)
         }
         if (!order.discordId) {
             const dbUser = await User.findOne({ discordId: req.user.discordId }).lean();
@@ -3341,7 +3338,7 @@ router.get('/orders', authRequired, async (req, res) => {
     }
 });
 
-// ─── Product image library ────────────────────────────────────────────────────
+// â”€â”€â”€ Product image library â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/owner/product-images', authRequired, async (req, res) => {
     try {
         const discordId = String(req.user?.discordId || '').trim();
@@ -3387,7 +3384,7 @@ router.post('/owner/product-images/upload', authRequired, uploadProductImage.sin
     }
 });
 
-// ─── Owner product CRUD ───────────────────────────────────────────────────────
+// â”€â”€â”€ Owner product CRUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/owner/products', authRequired, async (req, res) => {
     try {
         const discordId = String(req.user?.discordId || '').trim();
@@ -3497,7 +3494,7 @@ router.delete('/owner/products/:id', authRequired, async (req, res) => {
     }
 });
 
-// ─── Bulk delivery slots ──────────────────────────────────────────────────────
+// â”€â”€â”€ Bulk delivery slots â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.post('/delivery-slots/bulk', authRequired, async (req, res) => {
     try {
         const ownerDiscordId = String(req.user?.discordId || '').trim();
@@ -3608,7 +3605,7 @@ router.delete('/delivery-slots/:id', authRequired, async (req, res) => {
 
 module.exports = router;
 
-// ─── BANNER IMAGE CONFIG ───────────────────────────────────────────────────────
+// â”€â”€â”€ BANNER IMAGE CONFIG â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const BANNER_DIR = path.resolve(process.env.BANNER_IMAGE_DIR || './uploads/banners');
 try { fs.mkdirSync(BANNER_DIR, { recursive: true }); } catch (_) {}
 const bannerStorage = multer.diskStorage({
@@ -3629,16 +3626,16 @@ const bannerUpload = multer({
     limits: { fileSize: 5 * 1024 * 1024 }
 });
 
-// ─── MASKED USERNAME HELPER ────────────────────────────────────────────────────
+// â”€â”€â”€ MASKED USERNAME HELPER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const maskUsername = (username) => {
     const raw = String(username || '').trim();
     if (!raw || raw.length <= 2) return raw + '***';
     return raw[0] + '*'.repeat(Math.min(raw.length - 1, 4));
 };
 
-// ─── PUBLIC SHOP ENDPOINTS ────────────────────────────────────────────────────
+// â”€â”€â”€ PUBLIC SHOP ENDPOINTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-// GET /api/shop/games — list active games
+// GET /api/shop/games â€” list active games
 router.get('/games', async (req, res) => {
     try {
         const games = await Game.find({ active: true }).sort({ name: 1 }).lean();
@@ -3649,7 +3646,7 @@ router.get('/games', async (req, res) => {
     }
 });
 
-// GET /api/shop/config — banners + best sellers
+// GET /api/shop/config â€” banners + best sellers
 router.get('/config', async (req, res) => {
     try {
         const config = await ShopConfig.getConfig();
@@ -3664,7 +3661,7 @@ router.get('/config', async (req, res) => {
     }
 });
 
-// GET /api/shop/recent-purchases — public feed of confirmed orders (masked usernames)
+// GET /api/shop/recent-purchases â€” public feed of confirmed orders (masked usernames)
 router.get('/recent-purchases', async (req, res) => {
     try {
         const limit = Math.min(Number(req.query?.limit) || 20, 50);
@@ -3680,7 +3677,7 @@ router.get('/recent-purchases', async (req, res) => {
     }
 });
 
-// ─── ADMIN SHOP ENDPOINTS ──────────────────────────────────────────────────────
+// â”€â”€â”€ ADMIN SHOP ENDPOINTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // GET /api/shop/owner/games
 router.get('/owner/games', authRequired, async (req, res) => {
@@ -3786,7 +3783,7 @@ router.post('/owner/config/banners/upload', authRequired, bannerUpload.single('b
     }
 });
 
-// DELETE /api/shop/owner/config/banners — body: { bannerUrl }
+// DELETE /api/shop/owner/config/banners â€” body: { bannerUrl }
 router.delete('/owner/config/banners', authRequired, async (req, res) => {
     try {
         const discordId = String(req.user?.discordId || '').trim();
@@ -3850,6 +3847,8 @@ router.put('/owner/config/featured', authRequired, async (req, res) => {
         return res.status(500).json({ error: 'Could not update featured products.' });
     }
 });
+
+
 
 
 

@@ -2653,7 +2653,6 @@ router.post('/orders/:orderId/link-roblox', authRequired, async (req, res) => {
         const { order, status, error } = await getOwnedOrder(orderId, discordId);
         if (!order) return res.status(status).json({ error });
         // Payment check removed - Roblox linking allowed before payment
-        }
 
         const dbUser = await User.findOne({ discordId }).lean();
         order.discordId = discordId;
@@ -2725,7 +2724,6 @@ router.post('/orders/:orderId/delivery-slot', authRequired, async (req, res) => 
         const { order, status, error } = await getOwnedOrder(orderId, discordId);
         if (!order) return res.status(status).json({ error });
         // Payment check removed - delivery slot selection allowed before payment
-        }
 
         const slot = await DeliverySlot.findOne({ _id: slotId, active: true });
         if (!slot) return res.status(404).json({ error: 'Delivery slot not found.' });
@@ -3143,7 +3141,6 @@ router.post('/create-ticket', authRequired, async (req, res) => {
         const { order, status, error } = await getOwnedOrder(orderId, req.user.discordId);
         if (!order) return res.status(status).json({ error });
         // Payment check removed - ticket creation allowed before payment (manual payment confirmation)
-        }
         if (!order.discordId) {
             const dbUser = await User.findOne({ discordId: req.user.discordId }).lean();
             order.discordId = req.user.discordId;

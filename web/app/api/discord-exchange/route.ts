@@ -6,7 +6,8 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    const res = await fetch(`${API_BASE_URL}/api/shop/discord-exchange`, {
+    // Chuy?n ti?p t?i backend th?t /api/shop/auth/discord
+    const res = await fetch(`${API_BASE_URL}/api/shop/auth/discord`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),

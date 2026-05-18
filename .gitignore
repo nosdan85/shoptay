@@ -26,6 +26,3 @@ npm-debug.log*
 
 # Next.js
 web/out/
-
-# API service
-# keep tracked

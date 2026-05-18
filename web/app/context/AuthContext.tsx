@@ -56,10 +56,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const getOAuthUrl = (): string => {
     if (typeof window === "undefined") return "";
-    const clientId = process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID || "";
+    const clientId = String(process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID || "").trim();
     const redirectUri =
       process.env.NEXT_PUBLIC_DISCORD_REDIRECT_URI ||
       `${window.location.origin}/auth/callback`;
+    if (!clientId || clientId.includes("your-discord-client-id")) {
+      return "#discord-env-missing";
+    }
     const params = new URLSearchParams({
       client_id: clientId,
       redirect_uri: redirectUri,

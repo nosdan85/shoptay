@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
-import { ALL_TIMEZONES, detectUserTimezone, filterTimezones } from "@/lib/timezones";
+import { ALL_TIMEZONES, detectUserTimezone, filterTimezones, formatPrice, getTimezoneInfo, getTimezonesGroupedByCountry, type CountryGroup } from "@/lib/timezones";
 import {
   Search, ShoppingCart, Package, X, Minus, Plus, Loader2, User, MapPin,
   CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Gamepad2, ArrowLeft
@@ -35,107 +35,45 @@ type Step = "shop" | "roblox" | "delivery" | "ticket";
 function DogLoader() {
   return (
     <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-slate-950/95 backdrop-blur-sm">
-      {/* Loading Container */}
-      <div className="flex flex-col items-center gap-6">
-        
-        {/* Cute Dog Icon - Large and Clear */}
-        <div className="relative w-28 h-28 animate-[wobble_1.2s_ease-in-out_infinite]">
-          <svg viewBox="0 0 128 128" width="112" height="112" className="drop-shadow-lg">
-            {/* Ears */}
-            <ellipse cx="28" cy="38" rx="20" ry="28" fill="#C17A2A" transform="rotate(-15 28 38)"/>
-            <ellipse cx="100" cy="38" rx="20" ry="28" fill="#C17A2A" transform="rotate(15 100 38)"/>
-            <ellipse cx="28" cy="38" rx="14" ry="20" fill="#8B4513" transform="rotate(-15 28 38)"/>
-            <ellipse cx="100" cy="38" rx="14" ry="20" fill="#8B4513" transform="rotate(15 100 38)"/>
-            
+      <style>{`
+        @keyframes progress { 0%, 100% { width: 8%; opacity: 0.5; } 50% { width: 92%; opacity: 1; } }
+      `}</style>
+
+      {/* Running Dog on Loading Bar */}
+      <div className="relative w-72 mb-4">
+        {/* Bar */}
+        <div className="h-3 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
+          <div className="h-full bg-gradient-to-r from-blue-600 via-cyan-500 to-emerald-500 rounded-full animate-[progress_2s_ease-in-out_infinite]"/>
+        </div>
+
+        {/* Dog running across bar */}
+        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-8 h-8 animate-[run_0.6s_ease-in-out_infinite]">
+          <svg viewBox="0 0 64 64" width="32" height="32">
+            {/* Body */}
+            <ellipse cx="32" cy="36" rx="16" ry="10" fill="#C17A2A"/>
             {/* Head */}
-            <circle cx="64" cy="62" r="42" fill="#D2691E"/>
-            <circle cx="64" cy="62" r="36" fill="#C17A2A"/>
-            
-            {/* Face Markings */}
-            <ellipse cx="64" cy="72" rx="22" ry="18" fill="#F5DEB3"/>
-            
+            <circle cx="44" cy="28" r="10" fill="#C17A2A"/>
             {/* Eyes */}
-            <circle cx="48" cy="56" r="10" fill="white"/>
-            <circle cx="80" cy="56" r="10" fill="white"/>
-            <circle cx="50" cy="56" r="6" fill="#2C1810"/>
-            <circle cx="82" cy="56" r="6" fill="#2C1810"/>
-            <circle cx="52" cy="54" r="2.5" fill="white"/>
-            <circle cx="84" cy="54" r="2.5" fill="white"/>
-            
-            {/* Nose */}
-            <ellipse cx="64" cy="72" rx="8" ry="6" fill="#2C1810"/>
-            <ellipse cx="64" cy="70" rx="3" ry="2" fill="#555"/>
-            
-            {/* Mouth */}
-            <path d="M56 80 Q64 88 72 80" stroke="#2C1810" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
-            
-            {/* Tongue */}
-            <ellipse cx="64" cy="86" rx="6" ry="5" fill="#E57373"/>
-            <line x1="64" y1="83" x2="64" y2="89" stroke="#C62828" strokeWidth="1.5"/>
-            
-            {/* Spots */}
-            <circle cx="42" cy="68" r="6" fill="#8B4513" opacity="0.5"/>
-            <circle cx="86" cy="68" r="6" fill="#8B4513" opacity="0.5"/>
+            <circle cx="46" cy="26" r="3" fill="#222"/>
+            <circle cx="47" cy="25" r="1" fill="white"/>
+            {/* Ears */}
+            <ellipse cx="40" cy="20" rx="5" ry="7" fill="#8B4513" transform="rotate(-20 40 20)"/>
+            {/* Legs animation */}
+            <rect x="22" y="42" width="5" height="10" rx="2" fill="#C17A2A" className="leg-a"/>
+            <rect x="30" y="42" width="5" height="10" rx="2" fill="#C17A2A" className="leg-b"/>
+            {/* Tail */}
+            <path d="M16 34 Q10 28 8 30" stroke="#C17A2A" strokeWidth="3" fill="none" strokeLinecap="round"/>
+            <style>{`
+              @keyframes run { 0%, 100% { transform: translateX(0) translateY(0); } 25% { transform: translateX(6px) translateY(-3px); } 75% { transform: translateX(6px) translateY(2px); } }
+              .leg-a { animation: leg 0.3s ease-in-out infinite alternate; transform-origin: 24px 42px; }
+              .leg-b { animation: leg 0.3s ease-in-out infinite alternate-reverse; transform-origin: 32px 42px; }
+              @keyframes leg { from { transform: rotate(-20deg); } to { transform: rotate(20deg); } }
+            `}</style>
           </svg>
         </div>
-        
-        {/* Loading Bar */}
-        <div className="relative w-72 h-10 bg-slate-800 rounded-full border-2 border-slate-700 overflow-hidden shadow-inner">
-          {/* Progress Fill */}
-          <div className="absolute inset-y-0 left-0 w-[85%] bg-gradient-to-r from-blue-600 via-cyan-500 to-emerald-500 rounded-full animate-[progress_2s_ease-in-out_infinite]"/>
-          
-          {/* Running Dog on Bar */}
-          <div className="absolute left-0 top-1/2 -translate-y-1/2 animate-[dogbar_2s_ease-in-out_infinite] w-10 h-10">
-            <svg viewBox="0 0 64 64" width="40" height="40">
-              {/* Dog body */}
-              <circle cx="32" cy="24" r="14" fill="#D2691E"/>
-              <circle cx="26" cy="20" r="3" fill="#222"/>
-              <circle cx="38" cy="20" r="3" fill="#222"/>
-              <ellipse cx="32" cy="28" rx="4" ry="3" fill="#222"/>
-              <ellipse cx="18" cy="30" rx="5" ry="7" fill="#D2691E" transform="rotate(-20 18 30)"/>
-              <ellipse cx="46" cy="30" rx="5" ry="7" fill="#D2691E" transform="rotate(20 46 30)"/>
-              <rect x="22" y="36" width="20" height="16" rx="6" fill="#D2691E"/>
-              <rect className="dog-leg-a" x="18" y="48" width="6" height="12" rx="3" fill="#D2691E"/>
-              <rect className="dog-leg-b" x="40" y="48" width="6" height="12" rx="3" fill="#D2691E"/>
-              <path d="M28 54 Q32 60 36 54" stroke="#222" strokeWidth="2" fill="none"/>
-            </svg>
-          </div>
-        </div>
-        
-        {/* Loading Text */}
-        <p className="text-slate-300 font-medium text-base animate-pulse tracking-wide">Loading shop...</p>
       </div>
-      
-      <style>{`
-        @keyframes wobble {
-          0%, 100% { transform: rotate(-3deg); }
-          50% { transform: rotate(3deg); }
-        }
-        @keyframes progress {
-          0% { width: 5%; opacity: 0.7; }
-          50% { width: 90%; opacity: 1; }
-          100% { width: 5%; opacity: 0.7; }
-        }
-        @keyframes dogbar {
-          0% { transform: translateX(0) scaleX(1); }
-          48% { transform: translateX(228px) scaleX(1); }
-          50% { transform: translateX(228px) scaleX(-1); }
-          98% { transform: translateX(0) scaleX(-1); }
-          100% { transform: translateX(0) scaleX(1); }
-        }
-        .dog-leg-a {
-          animation: dogleg .22s ease-in-out infinite alternate;
-          transform-origin: 21px 48px;
-        }
-        .dog-leg-b {
-          animation: dogleg .22s ease-in-out infinite alternate-reverse;
-          transform-origin: 43px 48px;
-        }
-        @keyframes dogleg {
-          from { transform: rotate(-18deg); }
-          to { transform: rotate(18deg); }
-        }
-      `}</style>
+
+      <p className="text-slate-400 text-sm font-medium">Loading shop...</p>
     </div>
   );
 }
@@ -158,6 +96,7 @@ export default function ShopPage() {
   const [robloxUsernameInput, setRobloxUsernameInput] = useState("");
   const [customerTz, setCustomerTz] = useState(detectUserTimezone());
   const [tzSearch, setTzSearch] = useState("");
+  const [expandedCountry, setExpandedCountry] = useState<string | null>(null);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [pickedSlot, setPickedSlot] = useState<string | null>(null);
   const [ticketResult, setTicketResult] = useState<TicketResult | null>(null);
@@ -228,15 +167,35 @@ export default function ShopPage() {
 
   const timezoneOptions = useMemo(() => {
     const detected = customerTz && !ALL_TIMEZONES.some((tz) => tz.value === customerTz)
-      ? [{ value: customerTz, label: "Detected timezone", country: "Your device" }]
+      ? [{ value: customerTz, label: "Detected timezone", country: "Your device", currency: "USD", currencySymbol: "$", currencyCode: "USD" }]
       : [];
-    return [...detected, ...filterTimezones(tzSearch)].slice(0, 12);
+    return [...detected, ...filterTimezones(tzSearch)];
   }, [customerTz, tzSearch]);
+
+  const timezoneCountryGroups = useMemo<CountryGroup[]>(() => {
+    const optionsByValue = new Set(timezoneOptions.map((tz) => tz.value));
+    const groups = getTimezonesGroupedByCountry()
+      .map((group) => ({ ...group, zones: group.zones.filter((zone) => optionsByValue.has(zone.value)) }))
+      .filter((group) => group.zones.length > 0);
+    const detected = timezoneOptions.find((tz) => tz.country === "Your device");
+    return detected ? [{ country: detected.country, flag: "🌐", zones: [detected] }, ...groups] : groups;
+  }, [timezoneOptions]);
 
   const selectedTimezoneLabel = useMemo(() => {
     const found = ALL_TIMEZONES.find((tz) => tz.value === customerTz);
     return found ? `${found.country} - ${found.label}` : `Detected - ${customerTz}`;
   }, [customerTz]);
+
+  const selectTimezone = (tzValue: string) => {
+    setCustomerTz(tzValue);
+    setTzSearch("");
+    setExpandedCountry(null);
+    setPickedSlot(null);
+    void fetch(`/api/shop/delivery-slots?timezone=${encodeURIComponent(tzValue)}`, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => setSlots(Array.isArray(data?.slots) ? data.slots : []))
+      .catch(() => {});
+  };
 
   const cartTotal = useMemo(() => cart.reduce((s, i) => s + i.price * i.quantity, 0), [cart]);
   const cartCount = useMemo(() => cart.reduce((s, i) => s + i.quantity, 0), [cart]);
@@ -572,13 +531,7 @@ export default function ShopPage() {
                         type="button"
                         onClick={() => {
                           const detected = detectUserTimezone();
-                          setCustomerTz(detected);
-                          setTzSearch("");
-                          setPickedSlot(null);
-                          void fetch(`/api/shop/delivery-slots?timezone=${encodeURIComponent(detected)}`, { cache: "no-store" })
-                            .then((res) => res.json())
-                            .then((data) => setSlots(Array.isArray(data?.slots) ? data.slots : []))
-                            .catch(() => {});
+                          selectTimezone(detected);
                         }}
                         className="rounded-lg bg-slate-800 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-700"
                       >
@@ -595,28 +548,54 @@ export default function ShopPage() {
                       />
                     </div>
                     <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
-                      {timezoneOptions.map((tz) => (
-                        <button
-                          key={tz.value}
-                          type="button"
-                          onClick={() => {
-                            setCustomerTz(tz.value);
-                            setTzSearch("");
-                            setPickedSlot(null);
-                            void fetch(`/api/shop/delivery-slots?timezone=${encodeURIComponent(tz.value)}`, { cache: "no-store" })
-                              .then((res) => res.json())
-                              .then((data) => setSlots(Array.isArray(data?.slots) ? data.slots : []))
-                              .catch(() => {});
-                          }}
-                          className={"w-full rounded-lg border p-3 text-left transition-all " + (customerTz === tz.value ? "border-blue-500 bg-blue-500/10" : "border-slate-800 bg-slate-900 hover:border-slate-700")}
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="text-sm font-medium text-slate-100">{tz.country}</span>
-                            <span className="text-xs text-slate-500">{tz.value}</span>
+                      {timezoneCountryGroups.map((group) => {
+                        const isExpanded = expandedCountry === group.country;
+                        const hasMultiple = group.zones.length > 1;
+                        const isAnySelected = group.zones.some((zone) => zone.value === customerTz);
+
+                        return (
+                          <div key={group.country} className="space-y-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (hasMultiple) {
+                                  setExpandedCountry(isExpanded ? null : group.country);
+                                  return;
+                                }
+                                selectTimezone(group.zones[0].value);
+                              }}
+                              className={"w-full rounded-lg border p-3 text-left transition-all " + (!hasMultiple && isAnySelected ? "border-blue-500 bg-blue-500/10" : "border-slate-800 bg-slate-900 hover:border-slate-700")}
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="text-sm font-medium text-slate-100">{group.flag} {group.country}</span>
+                                {hasMultiple ? (
+                                  <span className="text-xs text-slate-500">{group.zones.length} zones {isExpanded ? "▲" : "▼"}</span>
+                                ) : (
+                                  <span className="text-xs text-slate-500">{group.zones[0].value.split("/").pop()?.replaceAll("_", " ")}</span>
+                                )}
+                              </div>
+                              {!hasMultiple && <p className="mt-1 text-xs text-slate-400">{group.zones[0].label}</p>}
+                            </button>
+                            {hasMultiple && isExpanded && (
+                              <div className="ml-4 space-y-1 border-l-2 border-slate-700 pl-3">
+                                {group.zones.map((tz) => (
+                                  <button
+                                    key={tz.value}
+                                    type="button"
+                                    onClick={() => selectTimezone(tz.value)}
+                                    className={"w-full rounded-lg border p-2 text-left transition-all " + (customerTz === tz.value ? "border-blue-500 bg-blue-500/10" : "border-slate-800 bg-slate-950 hover:border-slate-700")}
+                                  >
+                                    <div className="flex items-center justify-between gap-3">
+                                      <span className="text-sm text-slate-200">{tz.label}</span>
+                                      <span className="text-xs text-slate-500">{tz.value.split("/").pop()?.replaceAll("_", " ")}</span>
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                          <p className="mt-1 text-xs text-slate-400">{tz.label}</p>
-                        </button>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                   <div className="space-y-2">{slots.length === 0 && <p className="text-sm text-slate-400">No available slots.</p>}
@@ -687,7 +666,7 @@ export default function ShopPage() {
 
             {bestSellers.length > 0 && !showAll && !selectedGame && !searchQuery && (
               <div className="animate-section-enter">
-                <h2 className="mb-4 text-xl font-semibold text-amber-400">?? Best Sellers</h2>
+                <h2 className="mb-4 text-xl font-semibold text-amber-400">🔥 Best Sellers</h2>
                 <div className="overflow-hidden">
                   <div className="flex w-max gap-4 animate-[bestSellerScroll_28s_linear_infinite]">
                     {[...bestSellers, ...bestSellers].map((p, index) => (
@@ -744,6 +723,10 @@ export default function ShopPage() {
     </div>
   );
 }
+
+
+
+
 
 
 

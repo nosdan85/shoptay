@@ -18,7 +18,7 @@ function imgUrl(src: string | undefined | null): string {
 
 interface Product { _id: string; name: string; price: number; bulkPrice?: number; image: string; desc?: string; category: string; gameId?: string }
 interface Game { _id: string; name: string; slug: string; image?: string; active: boolean }
-interface Slot { id: string; ownerStartText: string; ownerEndText: string; customerStartText: string; customerEndText: string; customerTimezone: string; startAt: string; endAt: string; note?: string }
+interface Slot { _id: string; ownerTimezone: string; startAt: string; endAt: string; active: boolean; note?: string }
 
 export default function AdminPage() {
   const { user, token, isLoading, getOAuthUrl } = useAuth();
@@ -51,18 +51,12 @@ export default function AdminPage() {
   const [bestSellers, setBestSellers] = useState<string[]>([]);
   const [newBannerUrl, setNewBannerUrl] = useState("");
 
-  useEffect(() => {
-    if (!isLoading && user?.isOwner && token) {
-      void fetchAll();
-    }
-  }, [isLoading, user, token]);
-
-  const fetchAll = async () => {
+  async function fetchAll() {
     void fetchProducts();
     void fetchGames();
     void fetchSlots();
     void fetchConfig();
-  };
+  }
 
   const fetchProducts = async () => {
     if (!token) return;
@@ -105,6 +99,13 @@ export default function AdminPage() {
       setBestSellers(Array.isArray(data.bestSellerIds) ? data.bestSellerIds : []);
     } catch { /* silent */ }
   };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!isLoading && user?.isOwner && token) {
+      void fetchAll();
+    }
+  }, [isLoading, user, token]);
 
   /* --- CRUD PRODUCTS --- */
   const submitProduct = async (e: React.FormEvent) => {
@@ -194,6 +195,47 @@ export default function AdminPage() {
       await fetchSlots();
     } catch { setError("Failed to create slots"); }
     setSubmitting(false);
+  };
+
+  const formatSlotRange = useMemo(
+    () => (slot: Slot) => {
+      try {
+        const start = new Date(slot.startAt);
+        const end = new Date(slot.endAt);
+        const dateText = new Intl.DateTimeFormat("en-US", {
+          timeZone: slot.ownerTimezone,
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        }).format(start);
+        const startText = new Intl.DateTimeFormat("en-US", {
+          timeZone: slot.ownerTimezone,
+          hour: "numeric",
+          minute: "2-digit",
+        }).format(start);
+        const endText = new Intl.DateTimeFormat("en-US", {
+          timeZone: slot.ownerTimezone,
+          hour: "numeric",
+          minute: "2-digit",
+        }).format(end);
+        return `${dateText} • ${startText} - ${endText} (Vietnam)`;
+      } catch {
+        return `${slot.startAt} - ${slot.endAt}`;
+      }
+    },
+    []
+  );
+
+  const toggleSlot = async (id: string, active: boolean) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`/api/shop/delivery-slots/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ active }),
+      });
+      if (res.ok) await fetchSlots();
+    } catch { /* silent */ }
   };
 
   const deleteSlot = async (id: string) => {
@@ -378,12 +420,15 @@ export default function AdminPage() {
               <h2 className="font-semibold text-lg">Active Slots (Vietnam Time)</h2>
               {slotsLoading && <p className="text-slate-500 text-sm">Loading slots...</p>}
               {slots.map((s) => (
-                <div key={s.id} className="flex items-center justify-between border border-slate-800 bg-slate-950 p-4 rounded-lg">
-                  <div>
-                    <p className="font-medium text-sm">{s.ownerStartText} - {s.ownerEndText}</p>
-                    <p className="text-xs text-slate-500">Local conversion: {s.customerStartText} ({s.customerTimezone})</p>
+                <div key={s._id} className={"flex items-center justify-between border border-slate-800 bg-slate-950 p-4 rounded-lg " + (s.active ? "" : "opacity-50")}>
+                  <div className={s.active ? "" : "line-through"}>
+                    <p className="font-medium text-sm">{formatSlotRange(s)}</p>
+                    {s.note && <p className="text-xs text-slate-400 mt-1">{s.note}</p>}
                   </div>
-                  <button onClick={() => void deleteSlot(s.id)} className="p-2 text-red-400 bg-slate-900 rounded"><Trash2 className="h-4 w-4" /></button>
+                  <div className="flex gap-2">
+                    <button onClick={() => void toggleSlot(s._id, !s.active)} className={"p-2 rounded " + (s.active ? "text-amber-400 bg-slate-900" : "text-green-400 bg-slate-900")} title={s.active ? "Deactivate" : "Activate"}><RefreshCcw className="h-4 w-4" /></button>
+                    <button onClick={() => void deleteSlot(s._id)} className="p-2 text-red-400 bg-slate-900 rounded"><Trash2 className="h-4 w-4" /></button>
+                  </div>
                 </div>
               ))}
             </div>

@@ -1,4 +1,4 @@
-﻿export interface TimezoneOption {
+export interface TimezoneOption {
   value: string;
   label: string;
   country: string;
@@ -160,10 +160,46 @@ export function convertPrice(usdPrice: number, targetCurrency: string): number {
   return Math.round(converted * 100) / 100;
 }
 
-export function formatPrice(usdPrice: number, currency: string, symbol: string): string {
-  const converted = convertPrice(usdPrice, currency);
-  if (currency === "USD" || currency === "EUR" || currency === "GBP" || currency === "AUD" || currency === "CAD" || currency === "NZD" || currency === "SGD" || currency === "HKD" || currency === "TWD" || currency === "CNY") {
-    return symbol + converted.toFixed(2);
+export function formatPrice(usdPrice: number, currency: string = "USD", symbol: string = ""): string {
+  const finalCurrency = currency || "USD";
+  let finalSymbol = symbol;
+  if (!finalSymbol) {
+    const found = ALL_TIMEZONES.find((tz) => tz.currency === finalCurrency);
+    finalSymbol = found ? found.currencySymbol : "$";
   }
-  return symbol + Math.round(converted).toLocaleString();
+  const converted = convertPrice(usdPrice, finalCurrency);
+  if (finalCurrency === "USD" || finalCurrency === "EUR" || finalCurrency === "GBP" || finalCurrency === "AUD" || finalCurrency === "CAD" || finalCurrency === "NZD" || finalCurrency === "SGD" || finalCurrency === "HKD" || finalCurrency === "TWD" || finalCurrency === "CNY") {
+    return finalSymbol + converted.toFixed(2);
+  }
+  return finalSymbol + Math.round(converted).toLocaleString();
+}
+
+export interface CountryGroup {
+  country: string;
+  flag: string;
+  zones: TimezoneOption[];
+}
+
+export function getTimezonesGroupedByCountry(): CountryGroup[] {
+  const map = new Map<string, TimezoneOption[]>();
+  for (const tz of ALL_TIMEZONES) {
+    const existing = map.get(tz.country) || [];
+    existing.push(tz);
+    map.set(tz.country, existing);
+  }
+  const flags: Record<string, string> = {
+    Vietnam: "🇻🇳", Japan: "🇯🇵", "South Korea": "🇰🇷", Singapore: "🇸🇬",
+    Thailand: "🇹🇭", Indonesia: "🇮🇩", Philippines: "🇵🇭", Malaysia: "🇲🇾",
+    China: "🇨🇳", "Hong Kong": "🇭🇰", Taiwan: "🇹🇼", India: "🇮🇳", UAE: "🇦🇪",
+    "United States": "🇺🇸", Canada: "🇨🇦", Brazil: "🇧🇷", Mexico: "🇲🇽",
+    "United Kingdom": "🇬🇧", France: "🇫🇷", Germany: "🇩🇪", Italy: "🇮🇹",
+    Spain: "🇪🇸", Netherlands: "🇳🇱", Russia: "🇷🇺", Turkey: "🇹🇷",
+    Poland: "🇵🇱", Australia: "🇦🇺", "New Zealand": "🇳🇿", Egypt: "🇪🇬",
+    "South Africa": "🇿🇦", Iceland: "🇮🇸"
+  };
+  const result: CountryGroup[] = [];
+  for (const [country, zones] of map) {
+    result.push({ country, flag: flags[country] || "🌐", zones });
+  }
+  return result;
 }

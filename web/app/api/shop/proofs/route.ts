@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || process.env.API_BASE_URL || "http://localhost:5000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || process.env.API_BASE_URL || "http://localhost:5000";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/shop/proofs`, {
-      method: "GET",
+    const url = new URL(request.url);
+    const page = url.searchParams.get("page") || "1";
+    const res = await fetch(`${API_BASE_URL}/api/shop/proofs?page=${page}`, {
       headers: { "Content-Type": "application/json" },
-      cache: "no-store",
+      cache: "no-store"
     });
     const data = await res.json();
     return NextResponse.json(data, { status: res.status });

@@ -548,7 +548,10 @@ const isStaffUser = async (discordId) => {
         return true;
     }
 
-    return checkUserHasOwnerRole(userId);
+    // Also check owner role membership
+    const hasRole = await checkUserHasOwnerRole(userId).catch(() => false);
+    if (hasRole) return true;
+    return false;
 };
 
 const formatPurchasedItemsForDm = (items) => {
@@ -1074,7 +1077,7 @@ const sendAutoVouchFromTicketImages = async ({ order, imageUrls }) => {
         await saveProofRecord({
             order,
             imageUrls: Array.from(new Set(uploadedImageUrls)),
-            imageBuffers: [],  // Don't store binary data - URLs are sufficient
+            imageBuffers: uploadedImageBuffers,
             vouchMessageIds: sentMessageIds
         });
     } catch (error) {

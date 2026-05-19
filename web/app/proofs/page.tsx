@@ -1,99 +1,228 @@
-"use client";
+﻿"use client"
 
-import Navbar from "../components/Navbar";
-import { ShieldCheck, ImageIcon, ExternalLink, Loader2 } from "lucide-react";
+import { useEffect, useState } from "react"
+import Navbar from "../components/Navbar"
+import { ShieldCheck, ImageIcon, ExternalLink, Loader2, Home, Trash2, ChevronLeft, ChevronRight, X } from "lucide-react"
+import { formatPrice } from "@/lib/timezones"
 
-const proofs = [
-  { id: 1, username: "@VoidRunner", total: "$42.50", items: ["Ancient Chest", "Power Seal"], date: "May 16, 2026" },
-  { id: 2, username: "@AetherMage", total: "$18.99", items: ["Legendary Shard", "Reroll Ticket"], date: "May 14, 2026" },
-  { id: 3, username: "@NightForge", total: "$65.00", items: ["Warrior Set", "Time Seal"], date: "May 13, 2026" },
-  { id: 4, username: "@LunaHex", total: "$25.00", items: ["Mystic Relic"], date: "May 12, 2026" },
-  { id: 5, username: "@SteelNova", total: "$39.49", items: ["Dragon Chest", "Fire Shard"], date: "May 10, 2026" },
-  { id: 6, username: "@ArcBloom", total: "$54.99", items: ["Mage Set", "Combo Pack"], date: "May 9, 2026" },
-];
+interface ProofItem {
+  name: string
+  packQuantity: number
+  deliveredLabel: string
+  lineTotal: number
+}
+
+interface Proof {
+  id: string
+  orderId: string
+  discordUsername: string
+  totalAmount: number
+  items: ProofItem[]
+  imageUrls: string[]
+  createdAt: string
+}
+
+interface ProofsResponse {
+  page: number
+  hasMore: boolean
+  items: Proof[]
+}
+
+const ITEMS_PER_PAGE = 12
 
 export default function ProofsPage() {
-  return (
-    <div className="min-h-screen bg-slate-900 text-white">
-      <Navbar />
+  const [proofs, setProofs] = useState<Proof[]>([])
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null)
 
-      <main className="max-w-7xl mx-auto px-4 py-12">
+  const fetchProofs = async (pageNum: number) => {
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/shop/proofs?page=${pageNum}&limit=${ITEMS_PER_PAGE}`)
+      const data: ProofsResponse = await res.json()
+      setProofs(data.items)
+      setHasMore(data.hasMore)
+      setPage(data.page)
+    } catch (error) {
+      console.error("Failed to fetch proofs:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchProofs(1)
+  }, [])
+
+  const handlePrevPage = () => {
+    if (page > 1) fetchProofs(page - 1)
+  }
+
+  const handleNextPage = () => {
+    if (hasMore) fetchProofs(page + 1)
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    })
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-900">
+      <Navbar />
+      
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="mb-10 animate-fade-in-up">
-          <div className="inline-flex items-center gap-3 px-4 py-2 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 text-sm font-semibold mb-4">
-            <ShieldCheck className="w-4 h-4" />
-            Verified Deliveries
-          </div>
-          <h1 className="text-4xl font-bold mb-3">Proof of Delivery</h1>
-          <p className="text-slate-400 max-w-3xl text-base">
-            Every completed order is logged and verified by our team. Browse recent customer delivery confirmations below.
-          </p>
-          <div className="flex items-center gap-4 mt-4">
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-4">
             <a
-              href="https://discord.gg/vouch"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300 transition-colors"
+              href="/"
+              className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
             >
-              <ExternalLink className="w-4 h-4" />
-              Discord Vouch Channel
+              <Home className="w-5 h-5" />
+              <span className="font-medium">Home</span>
             </a>
+            
+            <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+              <ShieldCheck className="w-8 h-8 text-green-400" />
+              Proofs
+            </h1>
           </div>
+          
+          <a
+            href="https://discord.com/channels/1398984938111369256/1399154220434853969"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors text-white font-medium"
+          >
+            <ExternalLink className="w-5 h-5" />
+            Vouch Channel
+          </a>
         </div>
 
-        {/* Proof Grid */}
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {proofs.map((proof, i) => (
-            <div
-              key={proof.id}
-              className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden hover:border-green-500/40 hover:shadow-lg hover:shadow-green-500/10 transition-all duration-300 hover:-translate-y-1 animate-fade-in-up"
-              style={{ animationDelay: `${i * 60}ms` }}
-            >
-              <div className="h-48 bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center relative">
-                <ImageIcon className="w-14 h-14 text-slate-500" />
-                {proof.items.length > 1 && (
-                  <div className="absolute top-3 right-3 px-2 py-1 bg-black/50 rounded-md text-xs text-white">
-                    {proof.items.length} photos
+        {/* Loading State */}
+        {loading && proofs.length === 0 && (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!loading && proofs.length === 0 && (
+          <div className="text-center py-20">
+            <ImageIcon className="w-16 h-16 mx-auto text-slate-600 mb-4" />
+            <p className="text-slate-400 text-xl">No proofs yet</p>
+          </div>
+        )}
+
+        {/* Proofs Grid */}
+        {!loading && proofs.length > 0 && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+              {proofs.map((proof) => (
+                <div
+                  key={proof.id}
+                  className="bg-slate-800/50 backdrop-blur-sm rounded-xl p-5 border border-slate-700/50 hover:border-slate-600/50 transition-all"
+                >
+                  {/* Images Grid */}
+                  {proof.imageUrls.length > 0 ? (
+                    <div className="grid grid-cols-2 gap-2 mb-4">
+                      {proof.imageUrls.map((url, idx) => (
+                        <img
+                          key={idx}
+                          src={url}
+                          alt={`Proof ${idx + 1}`}
+                          className="w-full h-32 object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                          onClick={() => setLightboxImage(url)}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="w-full h-32 bg-slate-700/50 rounded-lg flex items-center justify-center mb-4">
+                      <ImageIcon className="w-8 h-8 text-slate-500" />
+                    </div>
+                  )}
+
+                  {/* User Info */}
+                  <div className="mb-3">
+                    <p className="text-slate-400 text-sm">Order: {proof.orderId}</p>
+                    <p className="text-white font-semibold text-lg">@{proof.discordUsername}</p>
                   </div>
-                )}
-              </div>
-              <div className="p-5 space-y-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-lg font-semibold text-white">{proof.username}</p>
-                    <p className="text-sm text-slate-400">Order total {proof.total}</p>
-                  </div>
-                  <span className="px-3 py-1 rounded-full bg-green-500/15 text-green-400 text-xs font-semibold border border-green-500/20 animate-bounce-in">
-                    Verified
-                  </span>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-400 mb-2 uppercase tracking-wider">Items delivered</p>
-                  <div className="flex flex-wrap gap-2">
-                    {proof.items.map((item) => (
-                      <span key={item} className="px-2.5 py-1 rounded-md bg-slate-900 text-slate-300 text-sm border border-slate-700 hover:border-blue-500/30 transition-colors">
-                        {item}
-                      </span>
+
+                  {/* Items */}
+                  <div className="mb-3 space-y-1">
+                    {proof.items.map((item, idx) => (
+                      <div key={idx} className="flex justify-between text-sm">
+                        <span className="text-slate-300">
+                          {item.name} <span className="text-slate-500">{item.deliveredLabel}</span>
+                        </span>
+                        <span className="text-slate-400">{formatPrice(item.lineTotal, "USD")}</span>
+                      </div>
                     ))}
                   </div>
-                </div>
-                <div className="flex items-center justify-between pt-2 border-t border-slate-700/50">
-                  <p className="text-xs text-slate-500">Delivered {proof.date}</p>
-                  <div className="flex items-center gap-1 text-green-400 text-xs font-medium">
-                    <Loader2 className="w-3 h-3" />
-                    Confirmed
+
+                  {/* Total & Date */}
+                  <div className="flex justify-between items-center pt-3 border-t border-slate-700">
+                    <span className="text-green-400 font-bold text-lg">
+                      {formatPrice(proof.totalAmount, "USD")}
+                    </span>
+                    <span className="text-slate-500 text-sm">{formatDate(proof.createdAt)}</span>
                   </div>
                 </div>
-              </div>
+              ))}
             </div>
-          ))}
-        </div>
 
-        {/* Footer disclaimer */}
-        <div className="mt-12 text-center text-slate-500 text-sm animate-fade-in">
-          <p>This website only provides a marketplace for digital item transactions. All deliveries are processed by our staff team via Discord.</p>
+            {/* Pagination */}
+            <div className="flex items-center justify-center gap-4">
+              <button
+                onClick={handlePrevPage}
+                disabled={page === 1 || loading}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors text-white font-medium"
+              >
+                <ChevronLeft className="w-5 h-5" />
+                Previous
+              </button>
+
+              <span className="text-slate-400 font-medium">Page {page}</span>
+
+              <button
+                onClick={handleNextPage}
+                disabled={!hasMore || loading}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors text-white font-medium"
+              >
+                Next
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Lightbox Modal */}
+      {lightboxImage && (
+        <div
+          className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4"
+          onClick={() => setLightboxImage(null)}
+        >
+          <button
+            className="absolute top-4 right-4 p-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
+            onClick={() => setLightboxImage(null)}
+          >
+            <X className="w-6 h-6 text-white" />
+          </button>
+          <img
+            src={lightboxImage}
+            alt="Full size proof"
+            className="max-w-full max-h-full object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
-      </main>
+      )}
     </div>
-  );
+  )
 }

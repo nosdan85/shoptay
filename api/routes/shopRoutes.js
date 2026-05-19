@@ -3571,7 +3571,15 @@ router.get('/delivery-slots/manage', authRequired, async (req, res) => {
             .limit(200)
             .lean();
 
-        return res.json({ slots });
+        return res.json({
+            slots: slots.map((slot) => ({
+                ...toDeliverySlotPayload(slot, slot.ownerTimezone),
+                _id: String(slot._id),
+                active: Boolean(slot.active),
+                createdAt: slot.createdAt || null,
+                updatedAt: slot.updatedAt || null
+            }))
+        });
     } catch (error) {
         console.error('Manage delivery slots error:', error);
         return res.status(500).json({ error: 'Could not load delivery slots.' });
@@ -3593,9 +3601,26 @@ router.patch('/delivery-slots/:id', authRequired, async (req, res) => {
 
         if (req.body.active !== undefined) slot.active = Boolean(req.body.active);
         if (req.body.note !== undefined) slot.note = String(req.body.note || '').trim().slice(0, 500);
+        if (req.body.startAt !== undefined) {
+            const startAt = new Date(req.body.startAt);
+            if (!Number.isFinite(startAt.getTime())) return res.status(400).json({ error: 'Invalid start time.' });
+            slot.startAt = startAt;
+        }
+        if (req.body.endAt !== undefined) {
+            const endAt = new Date(req.body.endAt);
+            if (!Number.isFinite(endAt.getTime())) return res.status(400).json({ error: 'Invalid end time.' });
+            slot.endAt = endAt;
+        }
+        if (slot.endAt <= slot.startAt) return res.status(400).json({ error: 'End time must be after start time.' });
         await slot.save();
 
-        return res.json({ slot: toDeliverySlotPayload(slot, slot.ownerTimezone) });
+        return res.json({
+            slot: {
+                ...toDeliverySlotPayload(slot, slot.ownerTimezone),
+                _id: String(slot._id),
+                active: Boolean(slot.active)
+            }
+        });
     } catch (error) {
         console.error('Update delivery slot error:', error);
         return res.status(500).json({ error: 'Could not update delivery slot.' });

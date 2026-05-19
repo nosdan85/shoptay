@@ -1,9 +1,9 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useMemo } from "react";
 import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
-import { ALL_TIMEZONES, detectUserTimezone, filterTimezones } from "../lib/timezones";
+import { ALL_TIMEZONES, detectUserTimezone, filterTimezones } from "@/lib/timezones";
 import {
   Search, ShoppingCart, Package, X, Minus, Plus, Loader2, User, MapPin,
   CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Gamepad2, ArrowLeft

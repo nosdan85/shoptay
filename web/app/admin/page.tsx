@@ -4,8 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
 import {
-  AlertCircle, Loader2, Plus, Edit2, Trash2, X, Image as ImageIcon,
-  CalendarDays, Package, RefreshCcw, Gamepad2, Layers, Sliders
+  AlertCircle, Loader2, Plus, Edit2, Trash2, RefreshCcw
 } from "lucide-react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
@@ -14,6 +13,19 @@ function imgUrl(src: string | undefined | null): string {
   if (!src) return "";
   if (src.startsWith("http")) return src;
   return `${API_BASE}${src.startsWith("/") ? "" : "/"}${src}`;
+}
+
+function toVietnamDateTimeParts(iso: string): { date: string; time: string } {
+  const shifted = new Date(new Date(iso).getTime() + 7 * 60 * 60 * 1000);
+  const normalized = shifted.toISOString();
+  return {
+    date: normalized.slice(0, 10),
+    time: normalized.slice(11, 16),
+  };
+}
+
+function toVietnamIso(date: string, time: string): string {
+  return new Date(`${date}T${time}:00+07:00`).toISOString();
 }
 
 interface Product { _id: string; name: string; price: number; bulkPrice?: number; image: string; desc?: string; category: string; gameId?: string }
@@ -45,6 +57,8 @@ export default function AdminPage() {
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [slotDate, setSlotDate] = useState("");
   const [ranges, setRanges] = useState([{ startTime: "", endTime: "", note: "" }]);
+  const [editingSlot, setEditingSlot] = useState<string | null>(null);
+  const [slotEditForm, setSlotEditForm] = useState({ date: "", startTime: "", endTime: "", note: "", active: true });
 
   /* --- banners & best sellers state --- */
   const [banners, setBanners] = useState<string[]>([]);
@@ -184,16 +198,20 @@ export default function AdminPage() {
     if (cleanRanges.length === 0) return;
     setSubmitting(true); setError(null);
     try {
-      // Always use Vietnamese timezone "Asia/Ho_Chi_Minh" when owner configures slots
       const res = await fetch("/api/shop/delivery-slots", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ ownerTimezone: "Asia/Ho_Chi_Minh", date: slotDate, ranges: cleanRanges }),
       });
-      if (!res.ok) throw new Error("Failed");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed to create slots");
+      if (!Array.isArray(data?.slots) || data.slots.length === 0) {
+        throw new Error("No valid slots were created. Check start/end times.");
+      }
       setRanges([{ startTime: "", endTime: "", note: "" }]);
+      setSlotDate("");
       await fetchSlots();
-    } catch { setError("Failed to create slots"); }
+    } catch (err) { setError(err instanceof Error ? err.message : "Failed to create slots"); }
     setSubmitting(false);
   };
 
@@ -234,16 +252,55 @@ export default function AdminPage() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ active }),
       });
-      if (res.ok) await fetchSlots();
-    } catch { /* silent */ }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed to update slot");
+      await fetchSlots();
+    } catch (err) { setError(err instanceof Error ? err.message : "Failed to update slot"); }
   };
 
   const deleteSlot = async (id: string) => {
     if (!token || !confirm("Delete slot?")) return;
     try {
-      await fetch(`/api/shop/delivery-slots/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`/api/shop/delivery-slots/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed to delete slot");
       await fetchSlots();
-    } catch { /* silent */ }
+    } catch (err) { setError(err instanceof Error ? err.message : "Failed to delete slot"); }
+  };
+
+  const startEditSlot = (slot: Slot) => {
+    const start = toVietnamDateTimeParts(slot.startAt);
+    const end = toVietnamDateTimeParts(slot.endAt);
+    setEditingSlot(slot._id);
+    setSlotEditForm({
+      date: start.date,
+      startTime: start.time,
+      endTime: end.time,
+      note: slot.note || "",
+      active: slot.active,
+    });
+  };
+
+  const saveSlotEdit = async () => {
+    if (!token || !editingSlot || !slotEditForm.date || !slotEditForm.startTime || !slotEditForm.endTime) return;
+    setSubmitting(true); setError(null);
+    try {
+      const res = await fetch(`/api/shop/delivery-slots/${editingSlot}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          startAt: toVietnamIso(slotEditForm.date, slotEditForm.startTime),
+          endAt: toVietnamIso(slotEditForm.date, slotEditForm.endTime),
+          note: slotEditForm.note,
+          active: slotEditForm.active,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed to save slot");
+      setEditingSlot(null);
+      await fetchSlots();
+    } catch (err) { setError(err instanceof Error ? err.message : "Failed to save slot"); }
+    setSubmitting(false);
   };
 
   /* --- BANNERS & BEST SELLERS CONFIG --- */
@@ -420,15 +477,37 @@ export default function AdminPage() {
               <h2 className="font-semibold text-lg">Active Slots (Vietnam Time)</h2>
               {slotsLoading && <p className="text-slate-500 text-sm">Loading slots...</p>}
               {slots.map((s) => (
-                <div key={s._id} className={"flex items-center justify-between border border-slate-800 bg-slate-950 p-4 rounded-lg " + (s.active ? "" : "opacity-50")}>
-                  <div className={s.active ? "" : "line-through"}>
-                    <p className="font-medium text-sm">{formatSlotRange(s)}</p>
-                    {s.note && <p className="text-xs text-slate-400 mt-1">{s.note}</p>}
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => void toggleSlot(s._id, !s.active)} className={"p-2 rounded " + (s.active ? "text-amber-400 bg-slate-900" : "text-green-400 bg-slate-900")} title={s.active ? "Deactivate" : "Activate"}><RefreshCcw className="h-4 w-4" /></button>
-                    <button onClick={() => void deleteSlot(s._id)} className="p-2 text-red-400 bg-slate-900 rounded"><Trash2 className="h-4 w-4" /></button>
-                  </div>
+                <div key={s._id} className={"border border-slate-800 bg-slate-950 p-4 rounded-lg transition-all " + (s.active ? "" : "opacity-60")}>
+                  {editingSlot === s._id ? (
+                    <div className="space-y-3 animate-fade-in">
+                      <div className="grid gap-2 md:grid-cols-3">
+                        <input type="date" value={slotEditForm.date} onChange={(e) => setSlotEditForm((p) => ({ ...p, date: e.target.value }))} className="rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none" />
+                        <input type="time" value={slotEditForm.startTime} onChange={(e) => setSlotEditForm((p) => ({ ...p, startTime: e.target.value }))} className="rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none" />
+                        <input type="time" value={slotEditForm.endTime} onChange={(e) => setSlotEditForm((p) => ({ ...p, endTime: e.target.value }))} className="rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none" />
+                      </div>
+                      <input placeholder="Note (optional)" value={slotEditForm.note} onChange={(e) => setSlotEditForm((p) => ({ ...p, note: e.target.value }))} className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none" />
+                      <label className="flex items-center gap-2 text-sm text-slate-300">
+                        <input type="checkbox" checked={slotEditForm.active} onChange={(e) => setSlotEditForm((p) => ({ ...p, active: e.target.checked }))} />
+                        Active
+                      </label>
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => void saveSlotEdit()} disabled={submitting} className="rounded bg-blue-600 px-4 py-2 text-xs font-semibold disabled:opacity-50">Save</button>
+                        <button type="button" onClick={() => setEditingSlot(null)} className="rounded bg-slate-800 px-4 py-2 text-xs">Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between gap-3">
+                      <div className={s.active ? "" : "line-through"}>
+                        <p className="font-medium text-sm">{formatSlotRange(s)}</p>
+                        {s.note && <p className="text-xs text-slate-400 mt-1">{s.note}</p>}
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => startEditSlot(s)} className="p-2 text-blue-400 bg-slate-900 rounded" title="Edit"><Edit2 className="h-4 w-4" /></button>
+                        <button onClick={() => void toggleSlot(s._id, !s.active)} className={"p-2 rounded " + (s.active ? "text-amber-400 bg-slate-900" : "text-green-400 bg-slate-900")} title={s.active ? "Deactivate" : "Activate"}><RefreshCcw className="h-4 w-4" /></button>
+                        <button onClick={() => void deleteSlot(s._id)} className="p-2 text-red-400 bg-slate-900 rounded" title="Delete"><Trash2 className="h-4 w-4" /></button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -503,5 +582,7 @@ export default function AdminPage() {
     </div>
   );
 }
+
+
 
 

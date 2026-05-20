@@ -1,12 +1,12 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useMemo } from "react";
 import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
-import { ALL_TIMEZONES, detectUserTimezone, filterTimezones, getTimezonesGroupedByCountry, type CountryGroup } from "@/lib/timezones";
+import { ALL_TIMEZONES, detectUserTimezone, filterTimezones, formatPrice, getTimezoneInfo, getTimezonesGroupedByCountry, type CountryGroup } from "@/lib/timezones";
 import {
-  Search, ShoppingCart, Package, X, Minus, Plus, User, MapPin,
-  CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ArrowLeft
+  Search, ShoppingCart, Package, X, Minus, Plus, Loader2, User, MapPin,
+  CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Gamepad2, ArrowLeft
 } from "lucide-react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
@@ -31,8 +31,6 @@ interface Purchase { username: string; productName: string; quantity?: number; p
 interface TicketResult { channelId: string; guildId?: string; url?: string }
 
 type Step = "shop" | "roblox" | "delivery" | "ticket";
-
-const BEST_SELLERS_PER_PAGE = 4;
 
 function DogLoader() {
   return (
@@ -107,7 +105,6 @@ export default function ShopPage() {
   const [modalQty, setModalQty] = useState<string | number>(1);
   const [modalOpen, setModalOpen] = useState(false);
   const [robloxSearchResult, setRobloxSearchResult] = useState<null | { userId: string; username: string; displayName: string; avatar: string }>(null);
-  const [bestSellerPage, setBestSellerPage] = useState(0);
 
   // Load cart from localStorage on mount
   useEffect(() => {
@@ -181,7 +178,7 @@ export default function ShopPage() {
       .map((group) => ({ ...group, zones: group.zones.filter((zone) => optionsByValue.has(zone.value)) }))
       .filter((group) => group.zones.length > 0);
     const detected = timezoneOptions.find((tz) => tz.country === "Your device");
-    return detected ? [{ country: detected.country, flag: "ðŸŒ", zones: [detected] }, ...groups] : groups;
+    return detected ? [{ country: detected.country, flag: "🌐", zones: [detected] }, ...groups] : groups;
   }, [timezoneOptions]);
 
   const selectedTimezoneLabel = useMemo(() => {
@@ -390,8 +387,8 @@ export default function ShopPage() {
           <div className="relative w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
             <button onClick={() => setModalOpen(false)} className="absolute right-4 top-4 rounded-lg bg-slate-800 p-2 hover:bg-slate-700"><X className="h-5 w-5" /></button>
             <div className="flex gap-4 mb-4">
-              <div className="w-32 aspect-square flex-shrink-0 overflow-hidden rounded-xl bg-slate-950">
-                {selectedProduct.image ? <img src={imgUrl(selectedProduct.image)} alt="" className="h-full w-full object-contain" /> : <Package className="h-full w-full p-6 text-slate-700" />}
+              <div className="h-32 w-32 flex-shrink-0 overflow-hidden rounded-xl bg-slate-950">
+                {selectedProduct.image ? <img src={imgUrl(selectedProduct.image)} alt="" className="h-full w-full object-cover" /> : <Package className="h-full w-full p-6 text-slate-700" />}
               </div>
               <div className="flex-1">
                 <h3 className="text-xl font-bold">{selectedProduct.name}</h3>
@@ -572,7 +569,7 @@ export default function ShopPage() {
                               <div className="flex items-center justify-between gap-3">
                                 <span className="text-sm font-medium text-slate-100">{group.flag} {group.country}</span>
                                 {hasMultiple ? (
-                                  <span className="text-xs text-slate-500">{group.zones.length} zones {isExpanded ? "â–²" : "â–¼"}</span>
+                                  <span className="text-xs text-slate-500">{group.zones.length} zones {isExpanded ? "▲" : "▼"}</span>
                                 ) : (
                                   <span className="text-xs text-slate-500">{group.zones[0].value.split("/").pop()?.replaceAll("_", " ")}</span>
                                 )}
@@ -669,52 +666,24 @@ export default function ShopPage() {
 
             {bestSellers.length > 0 && !showAll && !selectedGame && !searchQuery && (
               <div className="animate-section-enter">
-                <div className="mb-4 flex items-center justify-between gap-4">
-                  <h2 className="text-xl font-semibold text-amber-400">Best Sellers</h2>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setBestSellerPage((page) => Math.max(0, page - 1))}
-                      disabled={bestSellerPage === 0}
-                      className="rounded-lg border border-slate-800 bg-slate-900 p-2 text-slate-200 hover:border-sky-500/40 hover:bg-slate-800 disabled:opacity-40"
-                    >
-                      <ChevronLeft className="h-5 w-5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setBestSellerPage((page) => Math.min(Math.max(0, Math.ceil(bestSellers.length / BEST_SELLERS_PER_PAGE) - 1), page + 1))}
-                      disabled={bestSellerPage >= Math.ceil(bestSellers.length / BEST_SELLERS_PER_PAGE) - 1}
-                      className="rounded-lg border border-slate-800 bg-slate-900 p-2 text-slate-200 hover:border-sky-500/40 hover:bg-slate-800 disabled:opacity-40"
-                    >
-                      <ChevronRight className="h-5 w-5" />
-                    </button>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-                  {bestSellers
-                    .slice(bestSellerPage * BEST_SELLERS_PER_PAGE, (bestSellerPage + 1) * BEST_SELLERS_PER_PAGE)
-                    .map((p) => (
-                      <div
-                        key={p._id}
-                        onClick={() => openProductModal(p)}
-                        className="group cursor-pointer overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 transition-all duration-200 hover:-translate-y-1 hover:border-sky-500/40 hover:shadow-[0_20px_50px_rgba(14,165,233,0.14)]"
-                      >
-                        <div className="aspect-square bg-slate-950 overflow-hidden">
-                          {p.image ? (
-                            <img src={imgUrl(p.image)} alt={p.name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
-                          ) : (
-                            <div className="flex h-full items-center justify-center"><Package className="h-10 w-10 text-slate-700" /></div>
-                          )}
-                        </div>
-                        <div className="p-3">
-                          <p className="truncate text-sm font-medium">{p.name}</p>
-                          <div className="mt-2 flex items-center justify-between">
-                            <span className="text-sm font-semibold text-emerald-300">${p.price.toFixed(2)}</span>
-                            <span className="text-xs text-sky-400">View</span>
-                          </div>
+                <h2 className="mb-4 text-xl font-semibold text-amber-400">🔥 Best Sellers</h2>
+                <div className="overflow-hidden">
+                  <div className="flex w-max gap-4 animate-[bestSellerScroll_28s_linear_infinite]">
+                    {[...bestSellers, ...bestSellers].map((p, index) => (
+                    <div key={`${p._id}-${index}`} onClick={() => openProductModal(p)} className="group w-[calc((100vw-48px)/2)] max-w-[220px] shrink-0 cursor-pointer overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 transition-all hover:border-blue-500/40 hover:-translate-y-1 md:w-[220px]">
+                      <div className="h-32 bg-slate-950">
+                        {p.image ? <img src={imgUrl(p.image)} alt={p.name} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center"><Package className="h-8 w-8 text-slate-700" /></div>}
+                      </div>
+                      <div className="p-3">
+                        <p className="truncate text-sm font-medium">{p.name}</p>
+                        <div className="mt-2 flex items-center justify-between">
+                          <span className="text-sm font-semibold text-emerald-300">${p.price.toFixed(2)}</span>
+                          <span className="text-xs text-blue-400">View</span>
                         </div>
                       </div>
-                    ))}
+                    </div>
+                  ))}
+                  </div>
                 </div>
               </div>
             )}
@@ -732,8 +701,8 @@ export default function ShopPage() {
               <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
                 {(showAll ? filtered : filtered.slice(0, 8)).map((p) => (
                   <div key={p._id} onClick={() => openProductModal(p)} className="group cursor-pointer overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 transition-all duration-200 hover:border-blue-500/40 hover:-translate-y-1">
-                    <div className="aspect-square bg-slate-950 overflow-hidden">
-                      {p.image ? <img src={imgUrl(p.image)} alt={p.name} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" /> : <div className="flex h-full items-center justify-center"><Package className="h-10 w-10 text-slate-700" /></div>}
+                    <div className="h-40 bg-slate-950">
+                      {p.image ? <img src={imgUrl(p.image)} alt={p.name} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center"><Package className="h-10 w-10 text-slate-700" /></div>}
                     </div>
                     <div className="space-y-2 p-4">
                       <h3 className="truncate text-sm font-medium">{p.name}</h3>
@@ -754,10 +723,6 @@ export default function ShopPage() {
     </div>
   );
 }
-
-
-
-
 
 
 

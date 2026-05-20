@@ -1,8 +1,8 @@
-@import "tailwindcss";
+﻿@import "tailwindcss";
 
 :root {
-  --background: #0f172a;
-  --foreground: #e2e8f0;
+  --background: #050816;
+  --foreground: #eef4ff;
 }
 
 @theme inline {
@@ -13,7 +13,10 @@
 }
 
 body {
-  background: var(--background);
+  background:
+    radial-gradient(circle at top, rgba(59, 130, 246, 0.18), transparent 28%),
+    radial-gradient(circle at right, rgba(14, 165, 233, 0.12), transparent 24%),
+    var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
@@ -27,9 +30,9 @@ body * {
 }
 
 ::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: #1e293b; }
-::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #64748b; }
+::-webkit-scrollbar-track { background: #0f172a; }
+::-webkit-scrollbar-thumb { background: #2563eb; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #38bdf8; }
 
 /* Animations */
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -43,7 +46,7 @@ body * {
 @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-6px); } }
 @keyframes page-enter { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes section-enter { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes best-seller-scroll { from { transform: translateX(0); } to { transform: translateX(calc(-50% - 1rem)); } }
+
 
 .animate-spin { animation: spin 1s linear infinite; }
 .animate-fade-in { animation: fade-in 0.3s ease-out forwards; }
@@ -141,3 +144,5 @@ html, body {
     padding-right: max(0px, env(safe-area-inset-right));
   }
 }
+
+

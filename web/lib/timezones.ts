@@ -1,4 +1,4 @@
-export interface TimezoneOption {
+﻿export interface TimezoneOption {
   value: string;
   label: string;
   country: string;
@@ -7,10 +7,74 @@ export interface TimezoneOption {
   currencyCode: string;
 }
 
+// Country population data (in millions) - only show countries with population > 10M
+const COUNTRY_POPULATIONS: Record<string, number> = {
+  Vietnam: 98,
+  Japan: 125,
+  "South Korea": 52,
+  Pakistan: 240,
+  Bangladesh: 173,
+  Nigeria: 223,
+  Ethiopia: 126,
+  Iran: 89,
+  "Saudi Arabia": 36,
+  Argentina: 46,
+  Colombia: 52,
+  Ukraine: 37,
+  Kenya: 55,
+  Myanmar: 55,
+  Tanzania: 67,
+  Algeria: 45,
+  Morocco: 37,
+  Peru: 34,
+  Uzbekistan: 36,
+  Iraq: 45,
+  Thailand: 71,
+  Indonesia: 277,
+  Philippines: 120,
+  Malaysia: 34,
+  China: 1412,
+  Taiwan: 23,
+  India: 1428,
+  "United States": 339,
+  Canada: 39,
+  Brazil: 215,
+  Mexico: 128,
+  "United Kingdom": 68,
+  France: 68,
+  Germany: 84,
+  Italy: 58,
+  Spain: 48,
+  Netherlands: 17,
+  Russia: 144,
+  Turkey: 86,
+  Poland: 37,
+  Australia: 26,
+  Egypt: 104,
+  "South Africa": 60,
+};
+
 const COUNTRY_CURRENCY_MAP: Record<string, { currency: string; symbol: string }> = {
   Vietnam:       { currency: "VND", symbol: "₫" },
   Japan:         { currency: "JPY", symbol: "¥" },
   "South Korea": { currency: "KRW", symbol: "₩" },
+  Pakistan:      { currency: "PKR", symbol: "Rs" },
+  Bangladesh:    { currency: "BDT", symbol: "৳" },
+  Nigeria:       { currency: "NGN", symbol: "₦" },
+  Ethiopia:      { currency: "ETB", symbol: "Br" },
+  Iran:          { currency: "IRR", symbol: "﷼" },
+  "Saudi Arabia": { currency: "SAR", symbol: "SR" },
+  Argentina:     { currency: "ARS", symbol: "$" },
+  Colombia:      { currency: "COP", symbol: "$" },
+  Ukraine:       { currency: "UAH", symbol: "₴" },
+  Kenya:         { currency: "KES", symbol: "KSh" },
+  Myanmar:       { currency: "MMK", symbol: "K" },
+  Tanzania:      { currency: "TZS", symbol: "TSh" },
+  Algeria:       { currency: "DZD", symbol: "DA" },
+  Morocco:       { currency: "MAD", symbol: "DH" },
+  Peru:          { currency: "PEN", symbol: "S/" },
+  Uzbekistan:    { currency: "UZS", symbol: "so'm" },
+  Iraq:          { currency: "IQD", symbol: "ID" },
   Singapore:     { currency: "SGD", symbol: "S$" },
   Thailand:      { currency: "THB", symbol: "฿" },
   Indonesia:     { currency: "IDR", symbol: "Rp" },
@@ -68,6 +132,23 @@ const USD_RATES: Record<string, number> = {
   EGP: 30.9,
   ZAR: 18.8,
   ISK: 138,
+  PKR: 278,
+  BDT: 117,
+  NGN: 1540,
+  ETB: 57,
+  IRR: 42000,
+  SAR: 3.75,
+  ARS: 890,
+  COP: 3900,
+  UAH: 40,
+  KES: 129,
+  MMK: 2100,
+  TZS: 2550,
+  DZD: 134,
+  MAD: 10,
+  PEN: 3.7,
+  UZS: 12600,
+  IQD: 1310,
 };
 
 export interface TimezoneWithCurrency extends TimezoneOption {
@@ -80,6 +161,23 @@ export const ALL_TIMEZONES: TimezoneOption[] = [
   { value: "Asia/Ho_Chi_Minh", label: "Vietnam (ICT)", country: "Vietnam", currency: "VND", currencySymbol: "₫", currencyCode: "VND" },
   { value: "Asia/Tokyo", label: "Japan (JST)", country: "Japan", currency: "JPY", currencySymbol: "¥", currencyCode: "JPY" },
   { value: "Asia/Seoul", label: "Korea (KST)", country: "South Korea", currency: "KRW", currencySymbol: "₩", currencyCode: "KRW" },
+  { value: "Asia/Karachi", label: "Pakistan (PKT)", country: "Pakistan", currency: "PKR", currencySymbol: "Rs", currencyCode: "PKR" },
+  { value: "Asia/Dhaka", label: "Bangladesh (BST)", country: "Bangladesh", currency: "BDT", currencySymbol: "৳", currencyCode: "BDT" },
+  { value: "Africa/Lagos", label: "Nigeria (WAT)", country: "Nigeria", currency: "NGN", currencySymbol: "₦", currencyCode: "NGN" },
+  { value: "Africa/Addis_Ababa", label: "Ethiopia (EAT)", country: "Ethiopia", currency: "ETB", currencySymbol: "Br", currencyCode: "ETB" },
+  { value: "Asia/Tehran", label: "Iran (IRST)", country: "Iran", currency: "IRR", currencySymbol: "﷼", currencyCode: "IRR" },
+  { value: "Asia/Riyadh", label: "Saudi Arabia (AST)", country: "Saudi Arabia", currency: "SAR", currencySymbol: "SR", currencyCode: "SAR" },
+  { value: "America/Argentina/Buenos_Aires", label: "Argentina (ART)", country: "Argentina", currency: "ARS", currencySymbol: "$", currencyCode: "ARS" },
+  { value: "America/Bogota", label: "Colombia (COT)", country: "Colombia", currency: "COP", currencySymbol: "$", currencyCode: "COP" },
+  { value: "Europe/Kyiv", label: "Ukraine (EET)", country: "Ukraine", currency: "UAH", currencySymbol: "₴", currencyCode: "UAH" },
+  { value: "Africa/Nairobi", label: "Kenya (EAT)", country: "Kenya", currency: "KES", currencySymbol: "KSh", currencyCode: "KES" },
+  { value: "Asia/Yangon", label: "Myanmar (MMT)", country: "Myanmar", currency: "MMK", currencySymbol: "K", currencyCode: "MMK" },
+  { value: "Africa/Dar_es_Salaam", label: "Tanzania (EAT)", country: "Tanzania", currency: "TZS", currencySymbol: "TSh", currencyCode: "TZS" },
+  { value: "Africa/Algiers", label: "Algeria (CET)", country: "Algeria", currency: "DZD", currencySymbol: "DA", currencyCode: "DZD" },
+  { value: "Africa/Casablanca", label: "Morocco (WET)", country: "Morocco", currency: "MAD", currencySymbol: "DH", currencyCode: "MAD" },
+  { value: "America/Lima", label: "Peru (PET)", country: "Peru", currency: "PEN", currencySymbol: "S/", currencyCode: "PEN" },
+  { value: "Asia/Tashkent", label: "Uzbekistan (UZT)", country: "Uzbekistan", currency: "UZS", currencySymbol: "so'm", currencyCode: "UZS" },
+  { value: "Asia/Baghdad", label: "Iraq (AST)", country: "Iraq", currency: "IQD", currencySymbol: "ID", currencyCode: "IQD" },
   { value: "Asia/Singapore", label: "Singapore (SGT)", country: "Singapore", currency: "SGD", currencySymbol: "S$", currencyCode: "SGD" },
   { value: "Asia/Bangkok", label: "Thailand (ICT)", country: "Thailand", currency: "THB", currencySymbol: "฿", currencyCode: "THB" },
   { value: "Asia/Jakarta", label: "Indonesia (WIB)", country: "Indonesia", currency: "IDR", currencySymbol: "Rp", currencyCode: "IDR" },
@@ -140,14 +238,21 @@ export function getTimezoneInfo(tzValue: string): TimezoneOption {
 }
 
 export function filterTimezones(query: string): TimezoneOption[] {
-  if (!query.trim()) return ALL_TIMEZONES;
+  if (!query.trim()) {
+    // Filter by population > 10M when no search query
+    return ALL_TIMEZONES.filter((tz) => {
+      const pop = COUNTRY_POPULATIONS[tz.country] || 0;
+      return pop > 10;
+    });
+  }
   const q = query.toLowerCase();
   return ALL_TIMEZONES.filter(
     (t) =>
-      t.label.toLowerCase().includes(q) ||
+      (t.label.toLowerCase().includes(q) ||
       t.country.toLowerCase().includes(q) ||
       t.value.toLowerCase().includes(q) ||
-      t.currency.toLowerCase().includes(q)
+      t.currency.toLowerCase().includes(q)) &&
+      (COUNTRY_POPULATIONS[t.country] || 0) > 10
   );
 }
 
@@ -182,13 +287,22 @@ export interface CountryGroup {
 
 export function getTimezonesGroupedByCountry(): CountryGroup[] {
   const map = new Map<string, TimezoneOption[]>();
+  
+  // Only include countries with population > 10M
   for (const tz of ALL_TIMEZONES) {
+    const pop = COUNTRY_POPULATIONS[tz.country] || 0;
+    if (pop <= 10) continue;
+    
     const existing = map.get(tz.country) || [];
     existing.push(tz);
     map.set(tz.country, existing);
   }
+  
   const flags: Record<string, string> = {
-    Vietnam: "🇻🇳", Japan: "🇯🇵", "South Korea": "🇰🇷", Singapore: "🇸🇬",
+    Vietnam: "🇻🇳", Japan: "🇯🇵", "South Korea": "🇰🇷", Pakistan: "🇵🇰", Bangladesh: "🇧🇩",
+    Nigeria: "🇳🇬", Ethiopia: "🇪🇹", Iran: "🇮🇷", "Saudi Arabia": "🇸🇦", Argentina: "🇦🇷",
+    Colombia: "🇨🇴", Ukraine: "🇺🇦", Kenya: "🇰🇪", Myanmar: "🇲🇲", Tanzania: "🇹🇿",
+    Algeria: "🇩🇿", Morocco: "🇲🇦", Peru: "🇵🇪", Uzbekistan: "🇺🇿", Iraq: "🇮🇶", Singapore: "🇸🇬",
     Thailand: "🇹🇭", Indonesia: "🇮🇩", Philippines: "🇵🇭", Malaysia: "🇲🇾",
     China: "🇨🇳", "Hong Kong": "🇭🇰", Taiwan: "🇹🇼", India: "🇮🇳", UAE: "🇦🇪",
     "United States": "🇺🇸", Canada: "🇨🇦", Brazil: "🇧🇷", Mexico: "🇲🇽",
@@ -203,3 +317,4 @@ export function getTimezonesGroupedByCountry(): CountryGroup[] {
   }
   return result;
 }
+

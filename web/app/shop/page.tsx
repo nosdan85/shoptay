@@ -51,23 +51,27 @@ function LogoLoader() {
   return (
     <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-slate-950/95 backdrop-blur-sm">
       <style>{`
-        @keyframes progress {
-          0%, 100% { width: 8%; opacity: 0.55; }
-          50% { width: 96%; opacity: 1; }
+        @keyframes barFill {
+          0% { width: 0%; }
+          50% { width: 100%; }
+          100% { width: 0%; }
         }
-        @keyframes logo-roll {
-          0% { transform: translateX(-32px) rotate(0deg); }
-          100% { transform: translateX(320px) rotate(360deg); }
+        @keyframes logoSync {
+          0% { left: 0%; transform: translate(-50%, -50%) rotate(0deg); }
+          50% { left: 100%; transform: translate(-50%, -50%) rotate(360deg); }
+          100% { left: 0%; transform: translate(-50%, -50%) rotate(720deg); }
         }
       `}</style>
 
-      <div className="relative mb-4 w-80 max-w-[80vw]">
+      <div className="relative mb-6 w-80 max-w-[80vw]">
+        {/* Bar */}
         <div className="h-3 overflow-hidden rounded-full border border-sky-500/30 bg-slate-900">
-          <div className="h-full rounded-full bg-gradient-to-r from-sky-400 via-blue-500 to-sky-400 animate-[progress_1.8s_ease-in-out_infinite]" />
+          <div className="h-full rounded-full bg-gradient-to-r from-sky-400 via-blue-500 to-indigo-500 animate-[barFill_2.5s_ease-in-out_infinite]" />
         </div>
 
-        <div className="pointer-events-none absolute left-0 top-1/2 h-9 w-9 -translate-y-1/2 animate-[logo-roll_1.8s_linear_infinite]">
-          <img src="/site-logo.png" alt="Loading" className="h-full w-full object-contain" />
+        {/* Rolling Logo */}
+        <div className="pointer-events-none absolute top-1/2 h-10 w-10 animate-[logoSync_2.5s_ease-in-out_infinite]">
+          <img src="/pictures/logo.png" alt="Loading" className="h-full w-full object-contain" />
         </div>
       </div>
 

@@ -5,7 +5,21 @@ import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
 import { ALL_TIMEZONES, detectUserTimezone, filterTimezones, getTimezonesGroupedByCountry, type CountryGroup } from "@/lib/timezones";
 import {
-  Search, ShoppingCart, Package, X, Minus, Plus, User, MapPin,`n  Loader2, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ArrowLeft, ChevronDown
+  Search,
+  ShoppingCart,
+  Package,
+  X,
+  Minus,
+  Plus,
+  User,
+  MapPin,
+  Loader2,
+  CalendarDays,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  ArrowLeft,
+  ChevronDown,
 } from "lucide-react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";

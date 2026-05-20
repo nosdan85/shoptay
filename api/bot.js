@@ -1601,7 +1601,7 @@ const createWalletDeliveryTicket = async (order) => {
             channelId,
             content: buildOrderMention(order.discordId),
             embed
-        });`n        // Send Roblox username separately after embed`n        if (order.robloxUsername) {`n            await sendTicketMessage({ channelId, content: "**Roblox Account:** " + order.robloxUsername + (order.robloxUserId ? " (" + order.robloxUserId + ")" : "") });`n        }
+        });
         await sendRobloxAccountMessage({ channelId, order });
     } catch (error) {
         console.error('Wallet delivery ticket message error:', error?.message || error);

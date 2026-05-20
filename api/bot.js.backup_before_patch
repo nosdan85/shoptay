@@ -123,7 +123,7 @@ const getLtcPayAddress = () => normalizeEnvValue(process.env.LTC_PAY_ADDRESS) ||
 const getBotToken = () => normalizeEnvValue(process.env.DISCORD_BOT_TOKEN);
 const getGuildId = () => normalizeEnvValue(process.env.DISCORD_GUILD_ID);
 const getOwnerRoleId = () => normalizeEnvValue(process.env.DISCORD_OWNER_ROLE_ID);
-const getTicketCategoryId = () => normalizeEnvValue(process.env.DISCORD_TICKET_CATEGORY_ID) || '1467122339194863759';
+const getTicketCategoryId = () => normalizeEnvValue(process.env.DISCORD_TICKET_CATEGORY_ID);
 const getOwnerId = () => normalizeEnvValue(process.env.DISCORD_OWNER_ID);
 const getVouchChannelId = () => normalizeEnvValue(process.env.DISCORD_VOUCH_CHANNEL_ID);
 const getWalletNotifyChannelId = () => (
@@ -1144,7 +1144,7 @@ const buildPermissionOverwrites = ({ customerId, includeOwnerRole, botSelfId }) 
         ...privilegedUserIds.map((id) => ({ id, type: 1, allow: PERM_TICKET_CHAT }))
     ];
 
-    if (includeOwnerRole && isSnowflake(ownerRoleId) && !overwrites.some(o => o.id === ownerRoleId)) {
+    if (includeOwnerRole && isSnowflake(ownerRoleId)) {
         overwrites.push({ id: ownerRoleId, type: 0, allow: PERM_TICKET_CHAT });
     }
 
@@ -1163,7 +1163,7 @@ const buildCreateChannelPayloads = async ({ channelName, customerId }) => {
     const hasOwnerRole = isSnowflake(ownerRoleId);
     const botSelfId = await getBotSelfId().catch(() => '');
 
-    const payload = {
+    const primaryPayload = {
         name: safeName,
         type: 0,
         permission_overwrites: buildPermissionOverwrites({
@@ -1173,7 +1173,7 @@ const buildCreateChannelPayloads = async ({ channelName, customerId }) => {
         })
     };
     if (hasCategory) {
-        payload.parent_id = categoryId;
+        primaryPayload.parent_id = categoryId;
     }
 
     const fallbackPayload = {
@@ -1186,8 +1186,8 @@ const buildCreateChannelPayloads = async ({ channelName, customerId }) => {
         })
     };
 
-    const samePayload = JSON.stringify(payload) === JSON.stringify(fallbackPayload);
-    return samePayload ? [payload] : [payload, fallbackPayload];
+    const samePayload = JSON.stringify(primaryPayload) === JSON.stringify(fallbackPayload);
+    return samePayload ? [primaryPayload] : [primaryPayload, fallbackPayload];
 };
 
 const createTicketChannel = async ({ channelName, customerId }) => {
@@ -1374,25 +1374,21 @@ const buildPaymentTicketFields = ({ order, paymentLine, note, orderTotalAmount =
 };
 
 const buildDeliveryTicketFields = (order) => [
+    { name: 'Roblox Account', value: `${order.robloxUsername || '-'}${order.robloxUserId ? ` (${order.robloxUserId})` : ''}`, inline: true },
     { name: 'Discord Account', value: order.discordId ? `<@${order.discordId}>` : (order.discordUsername || '-Normalized'), inline: true },
     { name: 'Order Total', value: formatUsdAmount(order.totalAmount || order.total || 0), inline: true },
     { name: 'Items (Qty + Price)', value: formatOrderItemsWithPrice(order.items), inline: false },
     {
-        name: 'Delivery Time',
+        name: 'Owner Delivery Time (Vietnam Time)',
+        value: `${formatDateInTimezone(order.deliveryOwnerStartAt, 'Asia/Ho_Chi_Minh')} - ${formatDateInTimezone(order.deliveryOwnerEndAt, 'Asia/Ho_Chi_Minh')} (Vietnam Time)`,
+        inline: false
+    },
+    {
+        name: 'Customer Selected Time',
         value: `${formatDateInTimezone(order.deliveryCustomerStartAt, order.deliveryCustomerTimezone)} - ${formatDateInTimezone(order.deliveryCustomerEndAt, order.deliveryCustomerTimezone)} (${order.deliveryCustomerTimezone || 'UTC'})`,
         inline: false
     }
 ];
-
-const sendRobloxAccountMessage = async ({ channelId, order }) => {
-    const username = String(order?.robloxUsername || '').trim();
-    if (!username) return;
-    const userId = String(order?.robloxUserId || '').trim();
-    await sendTicketMessage({
-        channelId,
-        content: `**Roblox Account:** ${username}${userId ? ` (${userId})` : ''}`
-    });
-};
 
 const buildCopyButtons = (buttonConfigs = []) => {
     const usableConfigs = (Array.isArray(buttonConfigs) ? buttonConfigs : [])
@@ -1499,7 +1495,6 @@ const createPayPalFFTicket = async (order, paypalSeq) => {
             content: buildOrderMention(order.discordId),
             embed
         });
-        await sendRobloxAccountMessage({ channelId, order });
     } catch (error) {
         console.error('PayPal F&F ticket message error:', error?.message || error);
     }
@@ -1531,7 +1526,6 @@ const createLTCTicket = async (order, ltcSeq) => {
             content: buildOrderMention(order.discordId),
             embed
         });
-        await sendRobloxAccountMessage({ channelId, order });
     } catch (error) {
         console.error('LTC ticket message error:', error?.message || error);
     }
@@ -1561,7 +1555,6 @@ const createOrderTicket = async (order) => {
             content: buildOrderMention(order.discordId),
             embed
         });
-        await sendRobloxAccountMessage({ channelId, order });
     } catch (error) {
         console.error('Order ticket message error:', error?.message || error);
     }
@@ -1601,8 +1594,7 @@ const createWalletDeliveryTicket = async (order) => {
             channelId,
             content: buildOrderMention(order.discordId),
             embed
-        });`n        // Send Roblox username separately after embed`n        if (order.robloxUsername) {`n            await sendTicketMessage({ channelId, content: "**Roblox Account:** " + order.robloxUsername + (order.robloxUserId ? " (" + order.robloxUserId + ")" : "") });`n        }
-        await sendRobloxAccountMessage({ channelId, order });
+        });
     } catch (error) {
         console.error('Wallet delivery ticket message error:', error?.message || error);
     }
@@ -1911,7 +1903,7 @@ client.on('messageCreate', async (message) => {
     if (imageAttachments.length === 0) return;
 
     try {
-        const canSendVouch = ['1146730730060271736', '1005326332001009784'].includes(String(message.author.id || ''));
+        const canSendVouch = await isStaffUser(message.author.id);
         if (!canSendVouch) {
             console.warn(`Auto-vouch denied for user ${message.author.id} in channel ${channelId}`);
             return;

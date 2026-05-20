@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useMemo } from "react";
 import Navbar from "../components/Navbar";
@@ -197,7 +197,7 @@ export default function ShopPage() {
       .map((group) => ({ ...group, zones: group.zones.filter((zone) => optionsByValue.has(zone.value)) }))
       .filter((group) => group.zones.length > 0);
     const detected = timezoneOptions.find((tz) => tz.country === "Your device");
-    return detected ? [{ country: detected.country, flag: "🌐", zones: [detected] }, ...groups] : groups;
+    return detected ? [{ country: detected.country, flag: "ðŸŒ", zones: [detected] }, ...groups] : groups;
   }, [timezoneOptions]);
 
   const selectedTimezoneLabel = useMemo(() => {
@@ -751,6 +751,7 @@ export default function ShopPage() {
                         </div>
                         <div className="p-3">
                           <p className="truncate text-sm font-medium">{p.name}</p>
+{p.desc && <p className="text-xs text-slate-400 mt-1 line-clamp-2">{p.desc}</p>}
                           <div className="mt-2 flex items-center justify-between">
                             <span className="text-sm font-semibold text-emerald-300">${p.price.toFixed(2)}</span>
                             <span className="text-xs text-sky-400">View</span>

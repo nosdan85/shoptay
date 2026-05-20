@@ -16,6 +16,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "NosMarket - Gaming Marketplace",
   description: "Buy and sell gaming items securely with instant delivery",
+  icons: {
+    icon: "/pictures/logo.png",
+    shortcut: "/pictures/logo.png",
+    apple: "/pictures/logo.png",
+  },
 };
 
 export default function RootLayout({

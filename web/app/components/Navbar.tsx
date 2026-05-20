@@ -36,7 +36,7 @@ export default function Navbar({ cartCount = 0, showCart = false }: NavbarProps)
     <nav className="border-b border-slate-700 bg-slate-900/80 backdrop-blur-md sticky top-0 z-50 transition-all duration-200 h-[64px]">
       <div className="max-w-7xl mx-auto px-4 h-full flex items-center justify-between">
         <Link href="/shop" className="flex items-center gap-2 text-2xl font-bold text-white hover:text-blue-400 transition-all duration-200">
-          <img src="/site-logo.png" alt="NosMarket" className="h-8 w-auto object-contain animate-float" />
+          <img src="/pictures/site-logo.png" alt="NosMarket" className="h-8 w-auto object-contain animate-float" />
           <span>NosMarket</span>
         </Link>
 

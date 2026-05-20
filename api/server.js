@@ -110,6 +110,7 @@ app.use('/api/shop/paypal/ipn', require('./routes/paypalIpnRoutes'));
 app.use('/api', apiLimiter);
 app.use('/api/shop', require('./routes/shopRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
+app.use('/api/admin/analytics', require('./routes/analyticsRoutes'));
 
 // Product image static serve
 const path = require('path');

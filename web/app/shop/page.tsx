@@ -1,12 +1,11 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useMemo } from "react";
 import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
 import { ALL_TIMEZONES, detectUserTimezone, filterTimezones, getTimezonesGroupedByCountry, type CountryGroup } from "@/lib/timezones";
 import {
-  Search, ShoppingCart, Package, X, Minus, Plus, User, MapPin,
-  CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ArrowLeft, ChevronDown
+  Search, ShoppingCart, Package, X, Minus, Plus, User, MapPin,`n  Loader2, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ArrowLeft, ChevronDown
 } from "lucide-react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
@@ -184,7 +183,7 @@ export default function ShopPage() {
       .map((group) => ({ ...group, zones: group.zones.filter((zone) => optionsByValue.has(zone.value)) }))
       .filter((group) => group.zones.length > 0);
     const detected = timezoneOptions.find((tz) => tz.country === "Your device");
-    return detected ? [{ country: detected.country, flag: "ðŸŒ", zones: [detected] }, ...groups] : groups;
+    return detected ? [{ country: detected.country, flag: "🌐", zones: [detected] }, ...groups] : groups;
   }, [timezoneOptions]);
 
   const selectedTimezoneLabel = useMemo(() => {
@@ -784,6 +783,7 @@ export default function ShopPage() {
     </div>
   );
 }
+
 
 
 

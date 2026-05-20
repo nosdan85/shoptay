@@ -6,7 +6,8 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const page = url.searchParams.get("page") || "1";
-    const res = await fetch(`${API_BASE_URL}/api/shop/proofs?page=${page}`, {
+    const limit = url.searchParams.get("limit") || "12";
+    const res = await fetch(`${API_BASE_URL}/api/shop/proofs?page=${page}&limit=${limit}`, {
       headers: { "Content-Type": "application/json" },
       cache: "no-store"
     });

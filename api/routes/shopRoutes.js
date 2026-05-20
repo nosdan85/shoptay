@@ -1,4 +1,4 @@
-ï»¿const express = require('express');
+const express = require('express');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const qs = require('qs');
@@ -1483,13 +1483,11 @@ router.get('/proofs', async (req, res) => {
             hasMore,
             items: pageItems.map((proof) => ({
                 id: String(proof?._id || ''),
-                orderId: String(proof?.orderId || ''),
-                discordUsername: String(proof?.discordUsername || ''),
+                robloxUsername: String(proof?.robloxUsername || ''),
                 totalAmount: Number(proof?.totalAmount || 0),
                 items: Array.isArray(proof?.items) ? proof.items : [],
                 imageUrls: (Array.isArray(proof?.imageUrls) ? proof.imageUrls : [])
                     .map((_, index) => `${apiOrigin}/api/shop/proofs/${encodeURIComponent(String(proof?._id || ''))}/images/${index}`),
-                createdAt: proof?.createdAt || null
             }))
         });
     } catch (error) {
@@ -1533,14 +1531,12 @@ router.get('/proofs/:proofId/images/:imageIndex', async (req, res) => {
                     { proofId, position: imageIndex },
                     {
                         $set: {
-                            orderId: String(proof.orderId || ''),
                             contentType: image.contentType,
                             data: image.buffer,
                             sourceUrl: candidate,
                             updatedAt: new Date()
                         },
                         $setOnInsert: {
-                            createdAt: new Date()
                         }
                     },
                     { upsert: true }
@@ -1590,6 +1586,64 @@ router.delete('/proofs/:proofId', authRequired, async (req, res) => {
     }
 });
 
+router.patch('/proofs/:proofId', authRequired, async (req, res) => {
+    try {
+        const discordId = String(req.user?.discordId || '').trim();
+        if (!discordId) {
+            return res.status(401).json({ error: 'Authentication required' });
+        }
+
+        const canEdit = await canAccessOwnerEndpoints(discordId);
+        if (!canEdit) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        const proofId = String(req.params?.proofId || '').trim();
+        if (!OBJECT_ID_PATTERN.test(proofId)) {
+            return res.status(400).json({ error: 'Invalid proof id' });
+        }
+
+        const items = Array.isArray(req.body?.items) ? req.body.items : [];
+        const cleanItems = items
+            .slice(0, 50)
+            .map((item) => ({
+                name: String(item?.name || '').trim().slice(0, 120),
+                packQuantity: Math.max(0, Number(item?.packQuantity || 0)),
+                deliveredLabel: String(item?.deliveredLabel || '').trim().slice(0, 40),
+                lineTotal: Math.max(0, Number(item?.lineTotal || 0))
+            }))
+            .filter((item) => item.name);
+
+        if (cleanItems.length === 0) {
+            return res.status(400).json({ error: 'At least one proof item is required' });
+        }
+
+        const totalAmount = cleanItems.reduce((sum, item) => sum + item.lineTotal, 0);
+        const updated = await Proof.findByIdAndUpdate(
+            proofId,
+            { $set: { items: cleanItems, totalAmount } },
+            { new: true }
+        ).lean();
+
+        if (!updated) {
+            return res.status(404).json({ error: 'Proof not found' });
+        }
+
+        return res.json({
+            success: true,
+            proof: {
+                id: String(updated._id || ''),
+                robloxUsername: String(proof?.robloxUsername || ''),
+                totalAmount: Number(updated.totalAmount || 0),
+                items: Array.isArray(updated.items) ? updated.items : []
+            }
+        });
+    } catch (error) {
+        console.error('Edit proof error:', error);
+        return res.status(500).json({ error: 'Failed to edit proof' });
+    }
+});
+
 router.post('/coupon/preview', async (req, res) => {
     try {
         const cartItems = Array.isArray(req.body?.cartItems) ? req.body.cartItems : [];
@@ -1626,7 +1680,6 @@ router.get('/wallet', authRequired, async (req, res) => {
         if (!dbUser) return res.status(401).json({ error: 'Discord account not linked' });
 
         const transactions = await WalletTransaction.find({ discordId })
-            .sort({ createdAt: -1 })
             .limit(80)
             .lean();
 
@@ -1836,11 +1889,9 @@ router.get('/wallet/admin', authRequired, async (req, res) => {
 
         const [pendingTopups, transactions] = await Promise.all([
             WalletTransaction.find({ type: 'topup', status: 'pending' })
-                .sort({ createdAt: 1 })
                 .limit(100)
                 .lean(),
             WalletTransaction.find({})
-                .sort({ createdAt: -1 })
                 .limit(150)
                 .lean()
         ]);
@@ -2121,6 +2172,7 @@ router.get('/order-payment-info', async (req, res) => {
         return res.json({
             orderId: order.orderId,
             customerEmail: order.customerEmail || '',
+                robloxUsername: String(proof?.robloxUsername || ''),
             subtotalAmount: Number(order.subtotalAmount || order.totalAmount || 0),
             discountAmount: Number(order.discountAmount || 0),
             discountPercent: Number(order.discountPercent || 0),
@@ -3352,7 +3404,6 @@ router.get('/orders', authRequired, async (req, res) => {
         const isOwner = await canAccessOwnerEndpoints(discordId);
         if (!isOwner) return res.status(403).json({ error: 'Forbidden' });
 
-        const orders = await Order.find({}).sort({ createdAt: -1 }).limit(100);
         return res.json(orders.map((order) => ({
             orderId: order.orderId,
             customerEmail: order.customerEmail || '',
@@ -3368,7 +3419,6 @@ router.get('/orders', authRequired, async (req, res) => {
             channelId: order.channelId || '',
             isPaid: order.status === 'Completed' || order.paymentStatus === 'paid',
             items: order.items,
-            createdAt: order.createdAt
         })));
     } catch (err) {
         console.error('Orders error:', err);
@@ -3590,7 +3640,6 @@ router.get('/delivery-slots/manage', authRequired, async (req, res) => {
                 ...toDeliverySlotPayload(slot, slot.ownerTimezone),
                 _id: String(slot._id),
                 active: Boolean(slot.active),
-                createdAt: slot.createdAt || null,
                 updatedAt: slot.updatedAt || null
             }))
         });
@@ -3695,7 +3744,7 @@ const maskUsername = (username) => {
 
 // --- PUBLIC SHOP ENDPOINTS ----------------------------------------------------
 
-// GET /api/shop/games â€” list active games
+// GET /api/shop/games — list active games
 router.get('/games', async (req, res) => {
     try {
         const games = await Game.find({ active: true }).sort({ name: 1 }).lean();
@@ -3706,7 +3755,7 @@ router.get('/games', async (req, res) => {
     }
 });
 
-// GET /api/shop/config â€” banners + best sellers
+// GET /api/shop/config — banners + best sellers
 router.get('/config', async (req, res) => {
     try {
         const config = await ShopConfig.getConfig();
@@ -3721,7 +3770,7 @@ router.get('/config', async (req, res) => {
     }
 });
 
-// GET /api/shop/recent-purchases â€” public feed of confirmed orders (masked usernames)
+// GET /api/shop/recent-purchases — public feed of confirmed orders (masked usernames)
 router.get('/recent-purchases', async (req, res) => {
     try {
         const limit = Math.min(Number(req.query?.limit) || 20, 50);
@@ -3843,7 +3892,7 @@ router.post('/owner/config/banners/upload', authRequired, bannerUpload.single('b
     }
 });
 
-// PUT /api/shop/owner/config/banners â€” body: { bannerUrl }
+// PUT /api/shop/owner/config/banners — body: { bannerUrl }
 router.put('/owner/config/banners', authRequired, async (req, res) => {
     try {
         const discordId = String(req.user?.discordId || '').trim();
@@ -3867,7 +3916,7 @@ router.put('/owner/config/banners', authRequired, async (req, res) => {
     }
 });
 
-// DELETE /api/shop/owner/config/banners â€” body: { bannerUrl }
+// DELETE /api/shop/owner/config/banners — body: { bannerUrl }
 router.delete('/owner/config/banners', authRequired, async (req, res) => {
     try {
         const discordId = String(req.user?.discordId || '').trim();

@@ -11,6 +11,7 @@ const proofSchema = new mongoose.Schema({
     orderId: { type: String, default: '' },
     discordId: { type: String, default: '' },
     discordUsername: { type: String, default: '' },
+    robloxUsername: { type: String, default: '' },
     totalAmount: { type: Number, default: 0 },
     items: { type: [proofItemSchema], default: [] },
     imageUrls: { type: [String], default: [] },
@@ -24,3 +25,4 @@ proofSchema.index({ createdAt: -1 });
 proofSchema.index({ orderId: 1 });
 
 module.exports = mongoose.model('Proof', proofSchema);
+

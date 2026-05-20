@@ -1,4 +1,4 @@
-﻿const {
+const {
     Client,
     GatewayIntentBits,
     EmbedBuilder,
@@ -569,17 +569,17 @@ const formatPurchasedItemsForDm = (items) => {
 const buildPurchaseThankYouDm = (order) => {
     const purchasedItems = formatPurchasedItemsForDm(order?.items);
     return [
-        '**âœ¨ Thank You for Your Purchase âœ¨**',
+        '**✨ Thank You for Your Purchase ✨**',
         '',
         'We sincerely appreciate your order and the trust you have placed in our service. It was a pleasure serving you, and we hope that you are completely satisfied with your purchase.',
         '',
-        `**ðŸ“¦ Purchased Item:** [${purchasedItems}]`,
+        `**📦 Purchased Item:** [${purchasedItems}]`,
         '',
         'If you require any additional items in the future, please feel free to contact us at any time. We would be delighted to assist you again and continue providing you with reliable service.',
         '',
-        '**ðŸ’Ž Thank you once again for your support and trust.**',
+        '**💎 Thank you once again for your support and trust.**',
         '',
-        '**â€” Nos Team**'
+        '**— Nos Team**'
     ].join('\n');
 };
 
@@ -904,6 +904,7 @@ const saveProofRecord = async ({ order, imageUrls, imageBuffers = [], vouchMessa
         orderId: String(order?.orderId || ''),
         discordId: String(order?.discordId || ''),
         discordUsername: String(order?.discordUsername || ''),
+        robloxUsername: String(order?.robloxUsername || ''),
         totalAmount: Number(order?.totalAmount || 0),
         items: buildProofItems(order?.items),
         imageUrls: images,

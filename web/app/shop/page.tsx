@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useMemo } from "react";
 import Navbar from "../components/Navbar";
@@ -47,48 +47,31 @@ type Step = "shop" | "roblox" | "delivery" | "ticket";
 
 const BEST_SELLERS_PER_PAGE = 4;
 
-function DogLoader() {
+function LogoLoader() {
   return (
     <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-slate-950/95 backdrop-blur-sm">
       <style>{`
-        @keyframes progress { 0%, 100% { width: 8%; opacity: 0.5; } 50% { width: 92%; opacity: 1; } }
+        @keyframes progress {
+          0%, 100% { width: 8%; opacity: 0.55; }
+          50% { width: 96%; opacity: 1; }
+        }
+        @keyframes logo-roll {
+          0% { transform: translateX(-32px) rotate(0deg); }
+          100% { transform: translateX(320px) rotate(360deg); }
+        }
       `}</style>
 
-      {/* Running Dog on Loading Bar */}
-      <div className="relative w-72 mb-4">
-        {/* Bar */}
-        <div className="h-3 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
-          <div className="h-full bg-gradient-to-r from-blue-600 via-cyan-500 to-emerald-500 rounded-full animate-[progress_2s_ease-in-out_infinite]"/>
+      <div className="relative mb-4 w-80 max-w-[80vw]">
+        <div className="h-3 overflow-hidden rounded-full border border-sky-500/30 bg-slate-900">
+          <div className="h-full rounded-full bg-gradient-to-r from-sky-400 via-blue-500 to-sky-400 animate-[progress_1.8s_ease-in-out_infinite]" />
         </div>
 
-        {/* Dog running across bar */}
-        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-8 h-8 animate-[run_0.6s_ease-in-out_infinite]">
-          <svg viewBox="0 0 64 64" width="32" height="32">
-            {/* Body */}
-            <ellipse cx="32" cy="36" rx="16" ry="10" fill="#C17A2A"/>
-            {/* Head */}
-            <circle cx="44" cy="28" r="10" fill="#C17A2A"/>
-            {/* Eyes */}
-            <circle cx="46" cy="26" r="3" fill="#222"/>
-            <circle cx="47" cy="25" r="1" fill="white"/>
-            {/* Ears */}
-            <ellipse cx="40" cy="20" rx="5" ry="7" fill="#8B4513" transform="rotate(-20 40 20)"/>
-            {/* Legs animation */}
-            <rect x="22" y="42" width="5" height="10" rx="2" fill="#C17A2A" className="leg-a"/>
-            <rect x="30" y="42" width="5" height="10" rx="2" fill="#C17A2A" className="leg-b"/>
-            {/* Tail */}
-            <path d="M16 34 Q10 28 8 30" stroke="#C17A2A" strokeWidth="3" fill="none" strokeLinecap="round"/>
-            <style>{`
-              @keyframes run { 0%, 100% { transform: translateX(0) translateY(0); } 25% { transform: translateX(6px) translateY(-3px); } 75% { transform: translateX(6px) translateY(2px); } }
-              .leg-a { animation: leg 0.3s ease-in-out infinite alternate; transform-origin: 24px 42px; }
-              .leg-b { animation: leg 0.3s ease-in-out infinite alternate-reverse; transform-origin: 32px 42px; }
-              @keyframes leg { from { transform: rotate(-20deg); } to { transform: rotate(20deg); } }
-            `}</style>
-          </svg>
+        <div className="pointer-events-none absolute left-0 top-1/2 h-9 w-9 -translate-y-1/2 animate-[logo-roll_1.8s_linear_infinite]">
+          <img src="/site-logo.png" alt="Loading" className="h-full w-full object-contain" />
         </div>
       </div>
 
-      <p className="text-slate-400 text-sm font-medium">Loading shop...</p>
+      <p className="text-sm font-medium text-sky-100">Loading shop...</p>
     </div>
   );
 }
@@ -197,7 +180,7 @@ export default function ShopPage() {
       .map((group) => ({ ...group, zones: group.zones.filter((zone) => optionsByValue.has(zone.value)) }))
       .filter((group) => group.zones.length > 0);
     const detected = timezoneOptions.find((tz) => tz.country === "Your device");
-    return detected ? [{ country: detected.country, flag: "ðŸŒ", zones: [detected] }, ...groups] : groups;
+    return detected ? [{ country: detected.country, flag: "🌐", zones: [detected] }, ...groups] : groups;
   }, [timezoneOptions]);
 
   const selectedTimezoneLabel = useMemo(() => {
@@ -368,7 +351,7 @@ export default function ShopPage() {
     finally { setSubmitting(false); }
   };
 
-  if (loading) return <div className="min-h-screen bg-slate-950"><Navbar /><DogLoader /></div>;
+  if (loading) return <div className="min-h-screen bg-slate-950"><Navbar /><LogoLoader /></div>;
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">

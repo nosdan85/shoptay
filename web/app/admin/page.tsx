@@ -59,6 +59,7 @@ export default function AdminPage() {
   const [ranges, setRanges] = useState([{ startTime: "", endTime: "", note: "" }]);
   const [editingSlot, setEditingSlot] = useState<string | null>(null);
   const [slotEditForm, setSlotEditForm] = useState({ date: "", startTime: "", endTime: "", note: "", active: true });
+  const [slotFilter, setSlotFilter] = useState<string>("");
 
   /* --- banners & best sellers state --- */
   const [banners, setBanners] = useState<string[]>([]);
@@ -243,6 +244,14 @@ export default function AdminPage() {
     },
     []
   );
+
+  const filteredSlots = useMemo(() => {
+    if (!slotFilter) return slots;
+    return slots.filter((s) => {
+      const slotDateValue = new Date(s.startAt).toISOString().slice(0, 7);
+      return slotDateValue === slotFilter;
+    });
+  }, [slots, slotFilter]);
 
   const toggleSlot = async (id: string, active: boolean) => {
     if (!token) return;
@@ -475,8 +484,23 @@ export default function AdminPage() {
             </div>
             <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-3">
               <h2 className="font-semibold text-lg">Active Slots (Vietnam Time)</h2>
+              <div className="mb-4 flex items-center gap-3">
+                <label className="text-sm text-slate-400" htmlFor="slot-filter">Filter by month:</label>
+                <input
+                  id="slot-filter"
+                  type="month"
+                  value={slotFilter}
+                  onChange={(e) => setSlotFilter(e.target.value)}
+                  className="rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none"
+                />
+                {slotFilter && (
+                  <button type="button" onClick={() => setSlotFilter("")} className="text-xs text-slate-500 hover:text-white">
+                    Clear filter
+                  </button>
+                )}
+              </div>
               {slotsLoading && <p className="text-slate-500 text-sm">Loading slots...</p>}
-              {slots.map((s) => (
+              {filteredSlots.map((s) => (
                 <div key={s._id} className={"border border-slate-800 bg-slate-950 p-4 rounded-lg transition-all " + (s.active ? "" : "opacity-60")}>
                   {editingSlot === s._id ? (
                     <div className="space-y-3 animate-fade-in">

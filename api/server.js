@@ -128,6 +128,31 @@ app.use('/api/banners', express.static(BANNER_DIR));
 
 app.get('/', (req, res) => res.status(200).json({ status: 'ok', service: 'gaming-shop' }));
 
+// Prometheus metrics endpoint
+const { getMetrics, getContentType } = require('./metrics');
+app.get('/metrics', async (req, res) => {
+  try {
+    res.set('Content-Type', getContentType());
+    res.end(await getMetrics());
+  } catch (err) {
+    res.status(500).end(err.message);
+  }
+});
+
+// Health check endpoint
+const redisCache = require('./cache/redis');
+const ticketQueue = require('./queue/ticketQueue');
+redisCache.getRedis();
+ticketQueue.getQueue();
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    redis: redisCache.isAvailable() ? 'connected' : 'unavailable',
+    queue: ticketQueue.isAvailable() ? 'ready' : 'unavailable',
+  });
+});
+
 app.use((err, req, res, next) => {
     if (err?.message === 'CORS_NOT_ALLOWED') {
         return res.status(403).json({ error: 'Origin is not allowed by CORS policy' });
@@ -207,3 +232,4 @@ const bootstrap = async () => {
 void bootstrap();
 
 module.exports = app;
+

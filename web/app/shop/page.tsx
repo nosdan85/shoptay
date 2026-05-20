@@ -6,7 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { ALL_TIMEZONES, detectUserTimezone, filterTimezones, getTimezonesGroupedByCountry, type CountryGroup } from "@/lib/timezones";
 import {
   Search, ShoppingCart, Package, X, Minus, Plus, User, MapPin,
-  CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ArrowLeft
+  CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ArrowLeft, ChevronDown
 } from "lucide-react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
@@ -91,8 +91,10 @@ export default function ShopPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
+  const [cartClosing, setCartClosing] = useState(false);
   const [step, setStep] = useState<Step>("shop");
   const [submitting, setSubmitting] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [robloxUsernameInput, setRobloxUsernameInput] = useState("");
@@ -106,6 +108,7 @@ export default function ShopPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [modalQty, setModalQty] = useState<string | number>(1);
   const [modalOpen, setModalOpen] = useState(false);
+  const [modalClosing, setModalClosing] = useState(false);
   const [robloxSearchResult, setRobloxSearchResult] = useState<null | { userId: string; username: string; displayName: string; avatar: string }>(null);
   const [bestSellerPage, setBestSellerPage] = useState(0);
 
@@ -206,7 +209,25 @@ export default function ShopPage() {
   const openProductModal = (p: Product) => {
     setSelectedProduct(p);
     setModalQty(1);
+    setModalClosing(false);
     setModalOpen(true);
+  };
+
+  const closeProductModal = () => {
+    setModalClosing(true);
+    setTimeout(() => {
+      setModalOpen(false);
+      setSelectedProduct(null);
+      setModalClosing(false);
+    }, 250);
+  };
+
+  const closeCart = () => {
+    setCartClosing(true);
+    setTimeout(() => {
+      setCartOpen(false);
+      setCartClosing(false);
+    }, 250);
   };
 
   const addToCartFromModal = () => {
@@ -220,8 +241,7 @@ export default function ShopPage() {
       updatedCart.push({ ...selectedProduct, quantity: finalQty });
     }
     saveCart(updatedCart);
-    setModalOpen(false);
-    setSelectedProduct(null);
+    closeProductModal();
   };
 
   const updateQty = (id: string, d: number) => {
@@ -244,7 +264,7 @@ export default function ShopPage() {
   const doCheckout = async () => {
     if (!user || !token) { setError("Login first"); return; }
     if (cart.length === 0) return;
-    setSubmitting(true); setError(null);
+    setSubmitting(true); setCheckoutLoading(true); setError(null);
     try {
       const res = await fetch("/api/shop/checkout", {
         method: "POST",
@@ -256,7 +276,7 @@ export default function ShopPage() {
       setOrderId(data.orderId);
       setStep("roblox");
     } catch (e) { setError(e instanceof Error ? e.message : "Checkout failed"); }
-    finally { setSubmitting(false); }
+    finally { setSubmitting(false); setCheckoutLoading(false); }
   };
 
   const lookupRobloxUsername = async () => {
@@ -341,18 +361,27 @@ export default function ShopPage() {
     <div className="min-h-screen bg-slate-950 text-white">
       <Navbar />
 
+      {checkoutLoading && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in">
+          <div className="flex flex-col items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900/95 px-6 py-5 shadow-2xl animate-bounce-in">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
+            <p className="text-sm font-medium text-white">Processing checkout...</p>
+          </div>
+        </div>
+      )}
+
       {step === "shop" && cartCount > 0 && (
-        <button onClick={() => setCartOpen(true)} className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full bg-blue-600 px-5 py-3 font-medium shadow-2xl transition-transform hover:scale-105 active:scale-95">
+        <button onClick={() => { setCartClosing(false); setCartOpen(true); }} className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full bg-blue-600 px-5 py-3 font-medium shadow-2xl transition-transform hover:scale-105 active:scale-95">
           <ShoppingCart className="h-5 w-5" /> Cart ({cartCount})
         </button>
       )}
 
-      {cartOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={() => setCartOpen(false)}>
-          <div className="absolute right-0 top-0 h-full w-full max-w-md bg-slate-900 border-l border-slate-800 flex flex-col" onClick={(e) => e.stopPropagation()}>
+      {(cartOpen || cartClosing) && (
+        <div className={"fixed inset-0 z-50 bg-black/60 backdrop-blur-sm " + (cartClosing ? "animate-fade-out" : "animate-fade-in")} onClick={closeCart}>
+          <div className={"absolute right-0 top-0 h-full w-full max-w-md bg-slate-900 border-l border-slate-800 flex flex-col " + (cartClosing ? "animate-cart-slide-out" : "animate-cart-slide-in")} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-slate-800 p-4">
               <h2 className="text-lg font-semibold">Cart ({cartCount})</h2>
-              <button onClick={() => setCartOpen(false)}><X className="h-5 w-5" /></button>
+              <button onClick={closeCart}><X className="h-5 w-5" /></button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {cart.map((item) => (
@@ -378,17 +407,17 @@ export default function ShopPage() {
             {cart.length > 0 && (
               <div className="border-t border-slate-800 p-4 space-y-3">
                 <div className="flex justify-between text-lg font-semibold"><span>Total</span><span className="text-emerald-300">${cartTotal.toFixed(2)}</span></div>
-                <button onClick={() => { setCartOpen(false); void doCheckout(); }} disabled={submitting} className="w-full rounded-lg bg-blue-600 py-3 font-medium transition-all hover:bg-blue-500 disabled:opacity-50">{submitting ? "Processing..." : "Checkout"}</button>
+                <button onClick={() => { closeCart(); void doCheckout(); }} disabled={submitting} className="w-full rounded-lg bg-blue-600 py-3 font-medium transition-all hover:bg-blue-500 disabled:opacity-50">{submitting ? "Processing..." : "Checkout"}</button>
               </div>
             )}
           </div>
         </div>
       )}
 
-      {modalOpen && selectedProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="relative w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
-            <button onClick={() => setModalOpen(false)} className="absolute right-4 top-4 rounded-lg bg-slate-800 p-2 hover:bg-slate-700"><X className="h-5 w-5" /></button>
+      {(modalOpen || modalClosing) && selectedProduct && (
+        <div className={"fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 " + (modalClosing ? "animate-fade-out" : "animate-fade-in")}>
+          <div className={"relative w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl " + (modalClosing ? "animate-fade-out" : "animate-modal-zoom-in")}>
+            <button onClick={closeProductModal} className="absolute right-4 top-4 rounded-lg bg-slate-800 p-2 hover:bg-slate-700"><X className="h-5 w-5" /></button>
             <div className="flex gap-4 mb-4">
               <div className="w-32 aspect-square flex-shrink-0 overflow-hidden rounded-xl bg-slate-950">
                 {selectedProduct.image ? <img src={imgUrl(selectedProduct.image)} alt="" className="h-full w-full object-contain" /> : <Package className="h-full w-full p-6 text-slate-700" />}
@@ -572,7 +601,7 @@ export default function ShopPage() {
                               <div className="flex items-center justify-between gap-3">
                                 <span className="text-sm font-medium text-slate-100">{group.flag} {group.country}</span>
                                 {hasMultiple ? (
-                                  <span className="text-xs text-slate-500">{group.zones.length} zones {isExpanded ? "â–²" : "â–¼"}</span>
+                                  <span className="inline-flex items-center gap-1 text-xs text-slate-500"><span>{group.zones.length} zones</span><ChevronDown className={"h-3 w-3 transition-transform " + (isExpanded ? "rotate-180" : "")} /></span>
                                 ) : (
                                   <span className="text-xs text-slate-500">{group.zones[0].value.split("/").pop()?.replaceAll("_", " ")}</span>
                                 )}
@@ -693,11 +722,12 @@ export default function ShopPage() {
                 <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                   {bestSellers
                     .slice(bestSellerPage * BEST_SELLERS_PER_PAGE, (bestSellerPage + 1) * BEST_SELLERS_PER_PAGE)
-                    .map((p) => (
+                    .map((p, idx) => (
                       <div
                         key={p._id}
                         onClick={() => openProductModal(p)}
-                        className="group cursor-pointer overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 transition-all duration-200 hover:-translate-y-1 hover:border-sky-500/40 hover:shadow-[0_20px_50px_rgba(14,165,233,0.14)]"
+                        className="group cursor-pointer overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 transition-all duration-200 hover:-translate-y-1 hover:border-sky-500/40 hover:shadow-[0_20px_50px_rgba(14,165,233,0.14)] animate-card-in"
+                        style={{ animationDelay: `${idx * 0.05}s` }}
                       >
                         <div className="aspect-square bg-slate-950 overflow-hidden">
                           {p.image ? (
@@ -730,8 +760,8 @@ export default function ShopPage() {
                   <button onClick={() => setShowAll(false)} className="flex items-center gap-2 rounded-lg bg-slate-700 px-4 py-2 text-sm transition-colors hover:bg-slate-600"><ArrowLeft className="h-4 w-4" /> Back</button>
                 )}
               <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
-                {(showAll ? filtered : filtered.slice(0, 8)).map((p) => (
-                  <div key={p._id} onClick={() => openProductModal(p)} className="group cursor-pointer overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 transition-all duration-200 hover:border-blue-500/40 hover:-translate-y-1">
+                {(showAll ? filtered : filtered.slice(0, 8)).map((p, idx) => (
+                  <div key={p._id} onClick={() => openProductModal(p)} className="group cursor-pointer overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 transition-all duration-200 hover:border-blue-500/40 hover:-translate-y-1 animate-card-in" style={{ animationDelay: `${idx * 0.05}s` }}>
                     <div className="aspect-square bg-slate-950 overflow-hidden">
                       {p.image ? <img src={imgUrl(p.image)} alt={p.name} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" /> : <div className="flex h-full items-center justify-center"><Package className="h-10 w-10 text-slate-700" /></div>}
                     </div>
@@ -754,6 +784,12 @@ export default function ShopPage() {
     </div>
   );
 }
+
+
+
+
+
+
 
 
 

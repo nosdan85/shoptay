@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const qs = require('qs');
@@ -49,6 +49,11 @@ const path = require('path');
 const fs = require('fs');
 const { uploadToImgbb } = require('../utils/imgbbService');
 const { log } = require('../utils/loggingService');
+
+// Redis cache + Bull queue
+const { cacheGet, cacheSet, cacheDel } = require('../cache/redis');
+const { addTicketJob } = require('../queue/ticketQueue');
+const metrics = require('../metrics');
 
 const PRODUCT_IMAGE_DIR = path.resolve(process.env.PRODUCT_IMAGE_DIR || './uploads/product-images');
 try { fs.mkdirSync(PRODUCT_IMAGE_DIR, { recursive: true }); } catch (_) {}
@@ -2912,7 +2917,14 @@ router.post('/create-ticket-paypal-ff', authRequired, async (req, res) => {
         );
         const paypalSeq = counter.seq;
         const channelName = `paypal_${paypalSeq}`;
-        const channelId = await Promise.resolve(createPayPalFFTicket(lockedOrder, paypalSeq));
+        const channelId = await Promise.resolve(addTicketJob({
+          orderId: lockedOrder._id,
+          discordId: lockedOrder.discordId,
+          orderData: lockedOrder,
+          seq: paypalSeq,
+          type: 'paypal'
+        }).then(r => r ? r.channelId : createPayPalFFTicket(lockedOrder, paypalSeq))
+        .catch(() => createPayPalFFTicket(lockedOrder, paypalSeq)));
         if (!channelId) {
             throw new DiscordBotError('Could not create PayPal ticket channel', {
                 status: 503,
@@ -3362,7 +3374,7 @@ router.get('/orders', authRequired, async (req, res) => {
     }
 });
 
-// ─── Product image library ────────────────────────────────────────────────────
+// --- Product image library ----------------------------------------------------
 router.get('/owner/product-images', authRequired, async (req, res) => {
     try {
         const discordId = String(req.user?.discordId || '').trim();
@@ -3408,7 +3420,7 @@ router.post('/owner/product-images/upload', authRequired, uploadProductImage.sin
     }
 });
 
-// ─── Owner product CRUD ───────────────────────────────────────────────────────
+// --- Owner product CRUD -------------------------------------------------------
 router.get('/owner/products', authRequired, async (req, res) => {
     try {
         const discordId = String(req.user?.discordId || '').trim();
@@ -3518,7 +3530,7 @@ router.delete('/owner/products/:id', authRequired, async (req, res) => {
     }
 });
 
-// ─── Bulk delivery slots ──────────────────────────────────────────────────────
+// --- Bulk delivery slots ------------------------------------------------------
 router.post('/delivery-slots/bulk', authRequired, async (req, res) => {
     try {
         const ownerDiscordId = String(req.user?.discordId || '').trim();
@@ -3640,10 +3652,7 @@ router.delete('/delivery-slots/:id', authRequired, async (req, res) => {
         const slot = await DeliverySlot.findById(id);
         if (!slot) return res.status(404).json({ error: 'Delivery slot not found.' });
 
-        // Only allow deletion if no orders are linked to this slot
-        const hasOrders = await Order.findOne({ deliverySlotId: slot._id });
-        if (hasOrders) return res.status(409).json({ error: 'Cannot delete a slot with linked orders. Deactivate it instead.' });
-
+        // Allow deletion even when linked to orders.
         await DeliverySlot.findByIdAndDelete(id);
         return res.json({ success: true });
     } catch (error) {
@@ -3654,7 +3663,7 @@ router.delete('/delivery-slots/:id', authRequired, async (req, res) => {
 
 module.exports = router;
 
-// ─── BANNER IMAGE CONFIG ───────────────────────────────────────────────────────
+// --- BANNER IMAGE CONFIG -------------------------------------------------------
 const BANNER_DIR = path.resolve(process.env.BANNER_IMAGE_DIR || './uploads/banners');
 try { fs.mkdirSync(BANNER_DIR, { recursive: true }); } catch (_) {}
 const bannerStorage = multer.diskStorage({
@@ -3675,16 +3684,16 @@ const bannerUpload = multer({
     limits: { fileSize: 5 * 1024 * 1024 }
 });
 
-// ─── MASKED USERNAME HELPER ────────────────────────────────────────────────────
+// --- MASKED USERNAME HELPER ----------------------------------------------------
 const maskUsername = (username) => {
     const raw = String(username || '').trim();
     if (!raw || raw.length <= 2) return raw + '***';
     return raw[0] + '*'.repeat(Math.min(raw.length - 1, 4));
 };
 
-// ─── PUBLIC SHOP ENDPOINTS ────────────────────────────────────────────────────
+// --- PUBLIC SHOP ENDPOINTS ----------------------------------------------------
 
-// GET /api/shop/games — list active games
+// GET /api/shop/games � list active games
 router.get('/games', async (req, res) => {
     try {
         const games = await Game.find({ active: true }).sort({ name: 1 }).lean();
@@ -3695,7 +3704,7 @@ router.get('/games', async (req, res) => {
     }
 });
 
-// GET /api/shop/config — banners + best sellers
+// GET /api/shop/config � banners + best sellers
 router.get('/config', async (req, res) => {
     try {
         const config = await ShopConfig.getConfig();
@@ -3710,7 +3719,7 @@ router.get('/config', async (req, res) => {
     }
 });
 
-// GET /api/shop/recent-purchases — public feed of confirmed orders (masked usernames)
+// GET /api/shop/recent-purchases � public feed of confirmed orders (masked usernames)
 router.get('/recent-purchases', async (req, res) => {
     try {
         const limit = Math.min(Number(req.query?.limit) || 20, 50);
@@ -3726,7 +3735,7 @@ router.get('/recent-purchases', async (req, res) => {
     }
 });
 
-// ─── ADMIN SHOP ENDPOINTS ──────────────────────────────────────────────────────
+// --- ADMIN SHOP ENDPOINTS ------------------------------------------------------
 
 // GET /api/shop/owner/games
 router.get('/owner/games', authRequired, async (req, res) => {
@@ -3832,7 +3841,7 @@ router.post('/owner/config/banners/upload', authRequired, bannerUpload.single('b
     }
 });
 
-// PUT /api/shop/owner/config/banners — body: { bannerUrl }
+// PUT /api/shop/owner/config/banners � body: { bannerUrl }
 router.put('/owner/config/banners', authRequired, async (req, res) => {
     try {
         const discordId = String(req.user?.discordId || '').trim();
@@ -3856,7 +3865,7 @@ router.put('/owner/config/banners', authRequired, async (req, res) => {
     }
 });
 
-// DELETE /api/shop/owner/config/banners — body: { bannerUrl }
+// DELETE /api/shop/owner/config/banners � body: { bannerUrl }
 router.delete('/owner/config/banners', authRequired, async (req, res) => {
     try {
         const discordId = String(req.user?.discordId || '').trim();
@@ -3920,6 +3929,7 @@ router.put('/owner/config/featured', authRequired, async (req, res) => {
         return res.status(500).json({ error: 'Could not update featured products.' });
     }
 });
+
 
 
 

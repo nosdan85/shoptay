@@ -419,57 +419,43 @@ export default function ShopPage() {
 
       {(modalOpen || modalClosing) && selectedProduct && (
         <div className={"fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-0 " + (modalClosing ? "animate-fade-out" : "animate-fade-in")} onClick={closeProductModal}>
-          <div className={"relative mx-4 w-full max-w-[420px] max-h-[85vh] overflow-hidden rounded-[24px] border border-[#1E1E1E] bg-[#0A0A0A] shadow-2xl " + (modalClosing ? "animate-modal-zoom-out" : "animate-modal-zoom-in")} onClick={(e) => e.stopPropagation()}>
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#1E1E1E] bg-[#0A0A0A]/95 px-4 py-3 backdrop-blur-sm">
-              <h3 className="text-base font-semibold">Product Details</h3>
-              <button onClick={closeProductModal} className="rounded-full bg-[#1E1E1E] p-2 active:scale-90"><X className="h-5 w-5" /></button>
+          <div className={"relative mx-3 w-full max-w-[340px] max-h-[82dvh] overflow-hidden rounded-[20px] border border-[#1E1E1E] bg-[#0A0A0A] shadow-2xl " + (modalClosing ? "animate-modal-zoom-out" : "animate-modal-zoom-in")} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-[#1E1E1E] bg-[#0A0A0A] px-4 py-2.5">
+              <h3 className="text-sm font-semibold text-white">Product Details</h3>
+              <button onClick={closeProductModal} className="rounded-full bg-[#1E1E1E] p-2 active:scale-90"><X className="h-4 w-4" /></button>
             </div>
-            <div className="max-h-[calc(85vh-60px)] overflow-y-auto px-4 py-4">
-            <div className="space-y-4">
-              <div className="mx-auto aspect-square w-full max-w-[280px] overflow-hidden rounded-[20px] bg-[#050505]">
-                {selectedProduct.image ? <img src={imgUrl(selectedProduct.image)} alt="" className="h-full w-full object-contain" /> : <Package className="h-full w-full p-6 text-[#B5B5B5]/50" />}
+            <div className="max-h-[calc(82dvh-96px)] overflow-y-auto px-4 py-3">
+            <div className="space-y-3">
+              <div className="mx-auto aspect-square w-full max-w-[120px] overflow-hidden rounded-[14px] bg-[#050505]">
+                {selectedProduct.image ? <img src={imgUrl(selectedProduct.image)} alt="" className="h-full w-full object-contain" /> : <Package className="h-full w-full p-8 text-[#B5B5B5]/50" />}
               </div>
-              <div className="space-y-3">
-                <h2 className="text-xl font-bold leading-tight">{selectedProduct.name}</h2>
-                {<p className="text-sm text-[#2F9BE6] mt-1">Qty: x{selectedProduct.packQuantity || 1}</p>}
-                <p className="text-sm text-[#B5B5B5]">{selectedProduct.category}</p>
-                <div className="flex items-baseline gap-2"><span className="text-3xl font-bold text-[#3DDC84]">${selectedProduct.price.toFixed(2)}</span><span className="text-sm text-[#B5B5B5]">USD</span></div>
+              <div className="space-y-1.5">
+                <h2 className="text-base font-bold leading-tight">{selectedProduct.name}</h2>
+                {<p className="text-xs text-[#2F9BE6]">Pack: {selectedProduct.packQuantity || 1} items</p>}
+                
+                <div className="flex items-baseline gap-1.5"><span className="text-xl font-bold text-[#3DDC84]">${selectedProduct.price.toFixed(2)}</span><span className="text-[10px] text-[#B5B5B5]">USD</span></div>
                 {selectedProduct.bulkPrice && (
-                  <p className="text-xs text-[#2F9BE6]">Bulk price: ${selectedProduct.bulkPrice.toFixed(2)} (when applicable)</p>
+                  <p className="text-[10px] leading-4 text-[#2F9BE6]">Bulk: ${selectedProduct.bulkPrice?.toFixed(2)}</p>
                 )}
               </div>
             </div>
             {selectedProduct.desc && (
-              <div className="rounded-[16px] bg-[#050505] p-4">
-                <p className="text-sm text-[#B5B5B5] whitespace-pre-wrap">{selectedProduct.desc}</p>
+              <div className="mt-2 rounded-[12px] bg-[#0D0D0D] p-3">
+                <p className="whitespace-pre-wrap text-[11px] leading-4 text-[#9A9A9A]">{selectedProduct.desc}</p>
               </div>
             )}
-            <div className="space-y-3">
-              <label className="block text-sm font-semibold text-[#B5B5B5]">Quantity</label>
+            <div className="mt-2">
+              
               <div className="flex items-center justify-center gap-4">
-                <button onClick={() => setModalQty(Math.max(1, (typeof modalQty === "number" ? modalQty : parseInt(modalQty) || 1) - 1))} className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1E1E1E] active:scale-90"><Minus className="h-5 w-5" /></button>
-                <input
-                  type="text"
-                  value={modalQty}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (val === "") {
-                      setModalQty("");
-                    } else {
-                      const parsed = parseInt(val);
-                      if (!isNaN(parsed)) {
-                        setModalQty(Math.max(1, parsed));
-                      }
-                    }
-                  }}
-                  className="w-20 rounded-[16px] border-2 border-[#1E1E1E] bg-[#050505] py-3 text-center text-xl font-bold outline-none focus:border-[#2F9BE6]"
+                <button onClick={() => setModalQty(Math.max(1, (typeof modalQty === "number" ? modalQty : parseInt(modalQty) || 1) - 1))} className="flex h-9 w-9 items-center justify-center rounded-full bg-[#1A1A1A] border border-[#2A2A2A] active:scale-90"><Minus className="h-3.5 w-3.5" /></button>
+                <input type="text" value={modalQty} onChange={(e) => { const val = e.target.value; if (val === "") { setModalQty(""); } else { const parsed = parseInt(val); if (!isNaN(parsed)) { setModalQty(Math.max(1, parsed)); } } }} className="w-14 rounded-[14px] border-2 border-[#2A2A2A] bg-[#0A0A0A] py-1.5 text-center text-base font-bold outline-none focus:border-[#2F9BE6]"
                 />
-                <button onClick={() => setModalQty((typeof modalQty === "number" ? modalQty : parseInt(modalQty) || 1) + 1)} className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1E1E1E] active:scale-90"><Plus className="h-5 w-5" /></button>
+                <button onClick={() => setModalQty((typeof modalQty === "number" ? modalQty : parseInt(modalQty) || 1) + 1)} className="flex h-9 w-9 items-center justify-center rounded-full bg-[#1A1A1A] border border-[#2A2A2A] active:scale-90"><Plus className="h-3.5 w-3.5" /></button>
               </div>
             </div>
             </div>
-            <div className="sticky bottom-0 border-t border-[#1E1E1E] bg-[#0A0A0A]/95 px-4 py-4 backdrop-blur-sm">
-              <button onClick={addToCartFromModal} className="w-full rounded-full bg-gradient-to-r from-[#2F9BE6] to-[#49B6FF] py-4 text-base font-semibold text-white shadow-lg active:scale-95">Add to Cart</button>
+            <div className="border-t border-[#1E1E1E] bg-[#0A0A0A] px-4 py-3">
+              <button onClick={addToCartFromModal} className="w-full rounded-full bg-gradient-to-r from-[#2F9BE6] to-[#49B6FF] py-3.5 text-sm font-semibold text-white active:scale-95">Add to Cart</button>
             </div>
           </div>
         </div>

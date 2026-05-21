@@ -149,4 +149,35 @@ router.get('/top-products', async (req, res) => {
     }
 });
 
+
+router.get("/proof-stats", async (req, res) => {
+    try {
+        const { weekStart } = getPeriodStarts();
+        const [totalProofs, weekProofs, recentProofs] = await Promise.all([
+            Proof.countDocuments(),
+            Proof.countDocuments({ createdAt: { $gte: weekStart } }),
+            Proof.find({})
+                .sort({ createdAt: -1 })
+                .limit(6)
+                .select("orderId robloxUsername totalAmount imageUrls createdAt")
+                .lean()
+        ]);
+
+        return res.json({
+            totalProofs,
+            weekProofs,
+            recentProofs: recentProofs.map(p => ({
+                id: p._id,
+                orderId: p.orderId,
+                robloxUsername: p.robloxUsername,
+                totalAmount: p.totalAmount,
+                imageUrls: p.imageUrls || []
+            }))
+        });
+    } catch (err) {
+        return res.status(500).json({ message: "Failed to load proof stats" });
+    }
+});
+
+
 module.exports = router;

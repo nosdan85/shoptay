@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -61,7 +61,7 @@ const PAYMENT_METHODS: PaymentMethod[] = [
 
 function LoadingScreen() {
   return (
-    <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center">
+    <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center">
       <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
     </div>
   );
@@ -159,12 +159,12 @@ function PayContent() {
 
   if (!orderId) {
     return (
-      <main className="min-h-screen bg-slate-900 text-white flex items-center justify-center p-4">
+      <main className="min-h-screen bg-[#050505] text-white flex items-center justify-center p-4">
         <div className="text-center max-w-md">
-          <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
+          <AlertCircle className="h-12 w-12 text-[#FF4D4F] mx-auto mb-4" />
           <h1 className="text-2xl font-bold mb-2">No Order ID</h1>
-          <p className="text-slate-400 mb-6">Open this page from checkout so your order can be loaded.</p>
-          <a href="/shop" className="inline-block bg-blue-600 hover:bg-blue-500 px-6 py-3 rounded-lg font-medium transition-colors">Go to Shop</a>
+          <p className="text-[#B5B5B5]/80 mb-6">Open this page from checkout so your order can be loaded.</p>
+          <a href="/shop" className="inline-block bg-[#2F9BE6] hover:bg-[#49B6FF] px-6 py-3 rounded-[14px] font-medium transition-colors">Go to Shop</a>
         </div>
       </main>
     );
@@ -172,12 +172,12 @@ function PayContent() {
 
   if (errorParam) {
     return (
-      <main className="min-h-screen bg-slate-900 text-white flex items-center justify-center p-4">
+      <main className="min-h-screen bg-[#050505] text-white flex items-center justify-center p-4">
         <div className="text-center max-w-md">
-          <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
+          <AlertCircle className="h-12 w-12 text-[#FF4D4F] mx-auto mb-4" />
           <h1 className="text-2xl font-bold mb-2">Payment Error</h1>
-          <p className="text-slate-400 mb-6">{errorParam}</p>
-          <a href="/shop" className="inline-block bg-slate-700 hover:bg-slate-600 px-6 py-3 rounded-lg font-medium transition-colors">Back to Shop</a>
+          <p className="text-[#B5B5B5]/80 mb-6">{errorParam}</p>
+          <a href="/shop" className="inline-block bg-[#1E1E1E] hover:bg-[#1E1E1E] px-6 py-3 rounded-[14px] font-medium transition-colors">Back to Shop</a>
         </div>
       </main>
     );
@@ -185,12 +185,12 @@ function PayContent() {
 
   if (order?.error) {
     return (
-      <main className="min-h-screen bg-slate-900 text-white flex items-center justify-center p-4">
+      <main className="min-h-screen bg-[#050505] text-white flex items-center justify-center p-4">
         <div className="text-center max-w-md">
-          <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
+          <AlertCircle className="h-12 w-12 text-[#FF4D4F] mx-auto mb-4" />
           <h1 className="text-2xl font-bold mb-2">Order Error</h1>
-          <p className="text-slate-400 mb-6">{order.error}</p>
-          <a href="/shop" className="inline-block bg-slate-700 hover:bg-slate-600 px-6 py-3 rounded-lg font-medium transition-colors">Back to Shop</a>
+          <p className="text-[#B5B5B5]/80 mb-6">{order.error}</p>
+          <a href="/shop" className="inline-block bg-[#1E1E1E] hover:bg-[#1E1E1E] px-6 py-3 rounded-[14px] font-medium transition-colors">Back to Shop</a>
         </div>
       </main>
     );
@@ -198,13 +198,13 @@ function PayContent() {
 
   if (isPaidRedirect || order?.isPaid) {
     return (
-      <main className="min-h-screen bg-slate-900 text-white flex items-center justify-center p-4">
+      <main className="min-h-screen bg-[#050505] text-white flex items-center justify-center p-4">
         <div className="text-center max-w-md">
-          <CheckCircle2 className="h-16 w-16 text-green-400 mx-auto mb-4" />
+          <CheckCircle2 className="h-16 w-16 text-[#3DDC84] mx-auto mb-4" />
           <h1 className="text-3xl font-bold mb-2">Payment Complete</h1>
-          <p className="text-slate-300 mb-2">Order <span className="font-mono">{orderId}</span></p>
-          <p className="text-slate-400 mb-6">Thank you for your purchase.</p>
-          <a href="/shop" className="inline-block bg-blue-600 hover:bg-blue-500 px-6 py-3 rounded-lg font-medium transition-colors">Continue Shopping</a>
+          <p className="text-[#B5B5B5] mb-2">Order <span className="font-mono">{orderId}</span></p>
+          <p className="text-[#B5B5B5]/80 mb-6">Thank you for your purchase.</p>
+          <a href="/shop" className="inline-block bg-[#2F9BE6] hover:bg-[#49B6FF] px-6 py-3 rounded-[14px] font-medium transition-colors">Continue Shopping</a>
         </div>
       </main>
     );
@@ -229,14 +229,14 @@ function PayContent() {
         <section className="space-y-6">
           <div>
             <h1 className="text-3xl font-bold">Complete Payment</h1>
-            <p className="text-slate-400 mt-2">Order: <span className="text-white font-mono">{orderId}</span></p>
+            <p className="text-[#B5B5B5]/80 mt-2">Order: <span className="text-white font-mono">{orderId}</span></p>
           </div>
 
-          <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 space-y-4">
+          <div className="bg-[#111111] border border-[#1E1E1E] rounded-[16px] p-6 space-y-4">
             <div className="flex items-center justify-between gap-4 flex-wrap">
               <div>
                 <h2 className="text-lg font-semibold">Payment Method</h2>
-                <p className="text-sm text-slate-400">Select a method to generate payment instructions.</p>
+                <p className="text-sm text-[#B5B5B5]/80">Select a method to generate payment instructions.</p>
               </div>
               {paymentLoading && (
                 <div className="flex items-center gap-2 text-sm text-blue-300">
@@ -251,7 +251,7 @@ function PayContent() {
                 <button
                   key={paymentMethod.value}
                   onClick={() => selectPaymentMethod(paymentMethod.value)}
-                  className={"px-4 py-2 rounded-lg border text-sm font-medium transition-all " + (selectedMethod === paymentMethod.value ? "bg-blue-600 border-blue-500 text-white shadow-lg" : "bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-700")}
+                  className={"px-4 py-2 rounded-[14px] border text-sm font-medium transition-all " + (selectedMethod === paymentMethod.value ? "bg-[#2F9BE6] border-blue-500 text-white shadow-lg" : "bg-[#050505] border-[#1E1E1E] text-[#B5B5B5] hover:bg-[#1E1E1E]")}
                 >
                   {paymentMethod.label}
                 </button>
@@ -259,30 +259,30 @@ function PayContent() {
             </div>
 
             {paymentError && (
-              <div className="rounded-lg border border-red-500/40 bg-red-950/30 p-3 text-sm text-red-200">
+              <div className="rounded-[14px] border border-[#FF4D4F]/40 bg-red-950/30 p-3 text-sm text-red-200">
                 {paymentError}
               </div>
             )}
           </div>
 
-          <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 space-y-5">
+          <div className="bg-[#111111] border border-[#1E1E1E] rounded-[16px] p-6 space-y-5">
             <div className="flex items-center gap-3">
               {selectedMethod === "ltc" ? <QrCode className="w-5 h-5 text-blue-400" /> : <CreditCard className="w-5 h-5 text-blue-400" />}
               <h2 className="text-lg font-semibold">{currentMethodLabel}</h2>
             </div>
 
             <div>
-              <p className="text-sm text-slate-400 mb-1">Amount to Pay</p>
+              <p className="text-sm text-[#B5B5B5]/80 mb-1">Amount to Pay</p>
               <p className="text-4xl font-bold">{amount}</p>
             </div>
 
             {selectedMethod === "paypal_ff" && (
               <div className="space-y-5">
                 <CopyRow label="PayPal Email" value={paypalEmail} copied={copied} onCopy={copyValue} />
-                <div className="rounded-lg border border-slate-700 bg-slate-900/60 p-4 text-sm text-slate-300 space-y-1">
+                <div className="rounded-[14px] border border-[#1E1E1E] bg-[#050505]/60 p-4 text-sm text-[#B5B5B5] space-y-1">
                   <p className="font-medium text-white">Instructions:</p>
                   <p>1. Send as <strong>Friends &amp; Family</strong> only.</p>
-                  <p>2. Include Order ID in note: <code className="bg-slate-700 px-2 py-0.5 rounded">{memoExpected}</code></p>
+                  <p>2. Include Order ID in note: <code className="bg-[#1E1E1E] px-2 py-0.5 rounded">{memoExpected}</code></p>
                   <p>3. Send exact amount: <strong>{amount}</strong></p>
                 </div>
               </div>
@@ -291,10 +291,10 @@ function PayContent() {
             {selectedMethod === "cashapp" && (
               <div className="space-y-5">
                 <CopyRow label="Cash App" value={cashAppTag} copied={copied} onCopy={copyValue} />
-                <div className="rounded-lg border border-slate-700 bg-slate-900/60 p-4 text-sm text-slate-300 space-y-1">
+                <div className="rounded-[14px] border border-[#1E1E1E] bg-[#050505]/60 p-4 text-sm text-[#B5B5B5] space-y-1">
                   <p className="font-medium text-white">Instructions:</p>
                   <p>1. Send payment to <strong>{cashAppTag}</strong>.</p>
-                  <p>2. Include Order ID: <code className="bg-slate-700 px-2 py-0.5 rounded">{memoExpected}</code></p>
+                  <p>2. Include Order ID: <code className="bg-[#1E1E1E] px-2 py-0.5 rounded">{memoExpected}</code></p>
                   <p>3. Send exact amount: <strong>{amount}</strong></p>
                 </div>
               </div>
@@ -304,12 +304,12 @@ function PayContent() {
               <div className="space-y-5">
                 <CopyRow label="Litecoin Address" value={ltcAddress} placeholder="Select Litecoin to load address" copied={copied} onCopy={copyValue} />
                 {ltcQrImageUrl && (
-                  <img src={ltcQrImageUrl} alt="Litecoin payment QR code" className="w-48 h-48 rounded-lg border border-slate-700 bg-white p-2" />
+                  <img src={ltcQrImageUrl} alt="Litecoin payment QR code" className="w-48 h-48 rounded-[14px] border border-[#1E1E1E] bg-white p-2" />
                 )}
-                <div className="rounded-lg border border-slate-700 bg-slate-900/60 p-4 text-sm text-slate-300 space-y-1">
+                <div className="rounded-[14px] border border-[#1E1E1E] bg-[#050505]/60 p-4 text-sm text-[#B5B5B5] space-y-1">
                   <p className="font-medium text-white">Instructions:</p>
                   <p>1. Send only <strong>Litecoin (LTC)</strong> to the address above.</p>
-                  <p>2. Include Order ID where your wallet allows: <code className="bg-slate-700 px-2 py-0.5 rounded">{memoExpected}</code></p>
+                  <p>2. Include Order ID where your wallet allows: <code className="bg-[#1E1E1E] px-2 py-0.5 rounded">{memoExpected}</code></p>
                   <p>3. Wait for network confirmations after sending.</p>
                 </div>
               </div>
@@ -317,55 +317,55 @@ function PayContent() {
           </div>
         </section>
 
-        <aside className="bg-slate-800 border border-slate-700 rounded-xl p-6 h-fit sticky top-24">
+        <aside className="bg-[#111111] border border-[#1E1E1E] rounded-[16px] p-6 h-fit sticky top-24">
           <h2 className="text-xl font-semibold mb-5">Order Summary</h2>
 
           <div className="space-y-3">
-            {items.length === 0 && <p className="text-sm text-slate-400">No order items found.</p>}
+            {items.length === 0 && <p className="text-sm text-[#B5B5B5]/80">No order items found.</p>}
 
             {items.map((item, index) => (
               <div key={item.name + String(index)} className="flex justify-between gap-4 text-sm">
-                <span className="text-slate-400">{item.quantity}x {item.name}</span>
-                <span className="text-slate-200 shrink-0">{formatPrice(item.price * item.quantity, timezoneInfo.currencyCode, timezoneInfo.currencySymbol)}</span>
+                <span className="text-[#B5B5B5]/80">{item.quantity}x {item.name}</span>
+                <span className="text-[#B5B5B5] shrink-0">{formatPrice(item.price * item.quantity, timezoneInfo.currencyCode, timezoneInfo.currencySymbol)}</span>
               </div>
             ))}
 
-            <div className="border-t border-slate-700 pt-4 space-y-2">
+            <div className="border-t border-[#1E1E1E] pt-4 space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-slate-400">Subtotal</span>
-                <span className="text-slate-200">{formatPrice(subtotal, timezoneInfo.currencyCode, timezoneInfo.currencySymbol)}</span>
+                <span className="text-[#B5B5B5]/80">Subtotal</span>
+                <span className="text-[#B5B5B5]">{formatPrice(subtotal, timezoneInfo.currencyCode, timezoneInfo.currencySymbol)}</span>
               </div>
 
               {discount > 0 && (
                 <div className="flex justify-between text-sm">
-                  <span className="text-slate-400">Discount</span>
-                  <span className="text-green-400">-{formatPrice(discount, timezoneInfo.currencyCode, timezoneInfo.currencySymbol)}</span>
+                  <span className="text-[#B5B5B5]/80">Discount</span>
+                  <span className="text-[#3DDC84]">-{formatPrice(discount, timezoneInfo.currencyCode, timezoneInfo.currencySymbol)}</span>
                 </div>
               )}
 
               <div className="flex justify-between text-lg font-semibold pt-2">
                 <span>Total</span>
-                <span className="text-green-400">{amount}</span>
+                <span className="text-[#3DDC84]">{amount}</span>
               </div>
             </div>
           </div>
 
-          <div className="mt-6 pt-6 border-t border-slate-700 space-y-2 text-sm">
+          <div className="mt-6 pt-6 border-t border-[#1E1E1E] space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-slate-400">Status</span>
-              <span className="text-slate-200">{order?.paymentStatus || order?.status || "Pending"}</span>
+              <span className="text-[#B5B5B5]/80">Status</span>
+              <span className="text-[#B5B5B5]">{order?.paymentStatus || order?.status || "Pending"}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">Currency</span>
-              <span className="text-slate-200">{timezoneInfo.currencyCode}</span>
+              <span className="text-[#B5B5B5]/80">Currency</span>
+              <span className="text-[#B5B5B5]">{timezoneInfo.currencyCode}</span>
             </div>
           </div>
 
           {order?.deliveryCustomerStartText && (
-            <div className="mt-6 pt-6 border-t border-slate-700">
-              <h3 className="text-sm font-semibold text-slate-400 mb-2">Delivery Time</h3>
-              <p className="text-sm text-slate-200">{order.deliveryCustomerStartText} - {order.deliveryCustomerEndText}</p>
-              <p className="text-xs text-slate-500 mt-1">{timezoneInfo.label}</p>
+            <div className="mt-6 pt-6 border-t border-[#1E1E1E]">
+              <h3 className="text-sm font-semibold text-[#B5B5B5]/80 mb-2">Delivery Time</h3>
+              <p className="text-sm text-[#B5B5B5]">{order.deliveryCustomerStartText} - {order.deliveryCustomerEndText}</p>
+              <p className="text-xs text-[#B5B5B5]/60 mt-1">{timezoneInfo.label}</p>
             </div>
           )}
         </aside>
@@ -387,17 +387,17 @@ function CopyRow({ label, value, placeholder, copied, onCopy }: CopyRowProps) {
 
   return (
     <div>
-      <p className="text-sm text-slate-400 mb-2">{label}</p>
+      <p className="text-sm text-[#B5B5B5]/80 mb-2">{label}</p>
       <div className="flex gap-3">
-        <div className="flex-1 rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 text-slate-200 break-all font-mono text-sm">
+        <div className="flex-1 rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 text-[#B5B5B5] break-all font-mono text-sm">
           {shownValue}
         </div>
         <button
           onClick={() => onCopy(value)}
           disabled={!value}
-          className={"px-4 py-3 rounded-lg text-white transition-all shrink-0 " + (value ? "bg-slate-700 hover:bg-slate-600" : "bg-slate-800 opacity-40 cursor-not-allowed")}
+          className={"px-4 py-3 rounded-[14px] text-white transition-all shrink-0 " + (value ? "bg-[#1E1E1E] hover:bg-[#1E1E1E]" : "bg-[#111111] opacity-40 cursor-not-allowed")}
         >
-          {copied === value ? <CheckCircle2 className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+          {copied === value ? <CheckCircle2 className="w-4 h-4 text-[#3DDC84]" /> : <Copy className="w-4 h-4" />}
         </button>
       </div>
     </div>
@@ -406,7 +406,7 @@ function CopyRow({ label, value, placeholder, copied, onCopy }: CopyRowProps) {
 
 export default function PayPage() {
   return (
-    <div className="min-h-screen bg-slate-900 text-white">
+    <div className="min-h-screen bg-[#050505] text-white">
       <Navbar />
       <Suspense fallback={<LoadingScreen />}>
         <PayContent />

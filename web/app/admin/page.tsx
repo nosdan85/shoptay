@@ -357,99 +357,99 @@ export default function AdminPage() {
     } catch { /* silent */ }
   };
 
-  if (isLoading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-blue-400" /></div>;
+  if (isLoading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-[#2F9BE6]" /></div>;
 
   if (!user?.isOwner) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-4">
-        <div className="max-w-md w-full rounded-2xl border border-red-500/20 bg-slate-900 p-8 text-center">
-          <AlertCircle className="mx-auto mb-4 h-12 w-12 text-red-400" />
+      <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center p-4">
+        <div className="max-w-md w-full rounded-[18px] border border-red-500/20 bg-[#111111] p-8 text-center">
+          <AlertCircle className="mx-auto mb-4 h-12 w-12 text-[#FF4D4F]" />
           <h1 className="text-xl font-semibold">Access denied</h1>
-          <p className="mt-2 text-slate-400 text-sm">Owner account login required via Discord.</p>
-          <a href={getOAuthUrl()} className="mt-4 inline-block bg-[#5865F2] px-6 py-2.5 rounded-lg text-sm font-medium">Login with Discord</a>
+          <p className="mt-2 text-[#B5B5B5]/80 text-sm">Owner account login required via Discord.</p>
+          <a href={getOAuthUrl()} className="mt-4 inline-block bg-[#5865F2] px-6 py-2.5 rounded-[14px] text-sm font-medium">Login with Discord</a>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white pb-12">
+    <div className="min-h-screen bg-[#050505] text-white pb-12">
       <Navbar />
 
       <main className="mx-auto max-w-7xl px-4 py-8">
         <div className="mb-8 flex flex-wrap gap-4 items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-            <p className="text-slate-400 text-sm">Vietnam Timezone Slots, Games, and Banners configured natively.</p>
+            <p className="text-[#B5B5B5]/80 text-sm">Vietnam Timezone Slots, Games, and Banners configured natively.</p>
           </div>
           <div className="flex gap-3">
-            <a href="/shop" className="flex items-center gap-2 rounded-lg bg-slate-900 border border-slate-800 px-4 py-2 text-sm text-slate-300 hover:text-white hover:border-slate-600 transition-all">← Back to Shop</a>
-            <button onClick={() => void fetchAll()} className="flex items-center gap-2 rounded-lg bg-slate-900 border border-slate-800 px-4 py-2 text-sm"><RefreshCcw className="h-4 w-4" /> Sync All</button>
+            <a href="/shop" className="flex items-center gap-2 rounded-[14px] bg-[#111111] border border-[#1E1E1E] px-4 py-2 text-sm text-[#B5B5B5] hover:text-white hover:border-slate-600 transition-all">← Back to Shop</a>
+            <button onClick={() => void fetchAll()} className="flex items-center gap-2 rounded-[14px] bg-[#111111] border border-[#1E1E1E] px-4 py-2 text-sm"><RefreshCcw className="h-4 w-4" /> Sync All</button>
           </div>
         </div>
 
-        <div className="mb-6 flex gap-2 border-b border-slate-800 pb-3">
+        <div className="mb-6 flex gap-2 border-b border-[#1E1E1E] pb-3">
           {(["products", "slots", "games", "config"] as const).map((t) => (
-            <button key={t} onClick={() => setTab(t)} className={"rounded-lg px-4 py-2 text-sm font-medium capitalize " + (tab === t ? "bg-blue-600 text-white" : "bg-slate-900 text-slate-400 hover:text-slate-300")}>
+            <button key={t} onClick={() => setTab(t)} className={"rounded-[14px] px-4 py-2 text-sm font-medium capitalize " + (tab === t ? "bg-[#2F9BE6] text-white" : "bg-[#111111] text-[#B5B5B5]/80 hover:text-[#B5B5B5]")}>
               {t}
             </button>
           ))}
         </div>
 
-        {error && <div className="mb-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div>}
+        {error && <div className="mb-4 rounded-[16px] border border-red-500/20 bg-[#FF4D4F]/10 px-4 py-3 text-sm text-red-200">{error}</div>}
 
         {/* ─── TAB: PRODUCTS ─── */}
         {tab === "products" && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between border border-slate-800 bg-slate-900 p-4 rounded-xl">
-              <div><h2 className="font-semibold text-lg">Product Items</h2><p className="text-xs text-slate-400">Add, edit, or delete store items directly.</p></div>
-              <button onClick={() => { setProductForm({ name: "", price: "", bulkPrice: "", image: "", desc: "", category: "", gameId: "" }); setEditingProduct(null); setShowProductForm(true); }} className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium"><Plus className="h-4 w-4" /> Add Item</button>
+            <div className="flex items-center justify-between border border-[#1E1E1E] bg-[#111111] p-4 rounded-[16px]">
+              <div><h2 className="font-semibold text-lg">Product Items</h2><p className="text-xs text-[#B5B5B5]/80">Add, edit, or delete store items directly.</p></div>
+              <button onClick={() => { setProductForm({ name: "", price: "", bulkPrice: "", image: "", desc: "", category: "", gameId: "" }); setEditingProduct(null); setShowProductForm(true); }} className="flex items-center gap-2 rounded-[14px] bg-[#2F9BE6] px-4 py-2 text-sm font-medium"><Plus className="h-4 w-4" /> Add Item</button>
             </div>
 
             {showProductForm && (
-              <form onSubmit={submitProduct} className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4">
+              <form onSubmit={submitProduct} className="rounded-[16px] border border-[#1E1E1E] bg-[#111111] p-5 space-y-4">
                 <h3 className="font-medium">{editingProduct ? "Edit Item" : "Create Item"}</h3>
                 <div className="grid gap-4 md:grid-cols-2">
-                  <input required value={productForm.name} onChange={(e) => setProductForm((p) => ({ ...p, name: e.target.value }))} placeholder="Item name" className="rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none" />
-                  <input required value={productForm.category} onChange={(e) => setProductForm((p) => ({ ...p, category: e.target.value }))} placeholder="Category" className="rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none" />
-                  <input required type="number" step="0.01" value={productForm.price} onChange={(e) => setProductForm((p) => ({ ...p, price: e.target.value }))} placeholder="Price" className="rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none" />
-                  <input type="number" step="0.01" value={productForm.bulkPrice} onChange={(e) => setProductForm((p) => ({ ...p, bulkPrice: e.target.value }))} placeholder="Bulk price (optional)" className="rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none" />
-                  <select value={productForm.gameId} onChange={(e) => setProductForm((p) => ({ ...p, gameId: e.target.value }))} className="rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none">
+                  <input required value={productForm.name} onChange={(e) => setProductForm((p) => ({ ...p, name: e.target.value }))} placeholder="Item name" className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
+                  <input required value={productForm.category} onChange={(e) => setProductForm((p) => ({ ...p, category: e.target.value }))} placeholder="Category" className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
+                  <input required type="number" step="0.01" value={productForm.price} onChange={(e) => setProductForm((p) => ({ ...p, price: e.target.value }))} placeholder="Price" className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
+                  <input type="number" step="0.01" value={productForm.bulkPrice} onChange={(e) => setProductForm((p) => ({ ...p, bulkPrice: e.target.value }))} placeholder="Bulk price (optional)" className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
+                  <select value={productForm.gameId} onChange={(e) => setProductForm((p) => ({ ...p, gameId: e.target.value }))} className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none">
                     <option value="">Select Game</option>
                     {games.map((g) => <option key={g._id} value={g._id}>{g.name}</option>)}
                   </select>
                 </div>
-                <textarea value={productForm.desc} onChange={(e) => setProductForm((p) => ({ ...p, desc: e.target.value }))} placeholder="Description details..." rows={3} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none" />
+                <textarea value={productForm.desc} onChange={(e) => setProductForm((p) => ({ ...p, desc: e.target.value }))} placeholder="Description details..." rows={3} className="w-full rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
                 <div className="space-y-2">
-                  <label className="text-xs text-slate-400">Product Image URL</label>
-                  <input value={productForm.image} onChange={(e) => setProductForm((p) => ({ ...p, image: e.target.value }))} placeholder="Paste image URL" className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-2 outline-none" />
-                  {productForm.image && <img src={imgUrl(productForm.image)} alt="preview" className="mt-2 h-20 w-20 rounded border border-slate-800 object-cover" />}
+                  <label className="text-xs text-[#B5B5B5]/80">Product Image URL</label>
+                  <input value={productForm.image} onChange={(e) => setProductForm((p) => ({ ...p, image: e.target.value }))} placeholder="Paste image URL" className="w-full rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-2 outline-none" />
+                  {productForm.image && <img src={imgUrl(productForm.image)} alt="preview" className="mt-2 h-20 w-20 rounded border border-[#1E1E1E] object-cover" />}
                 </div>
                 <div className="flex gap-2">
-                  <button type="submit" disabled={submitting} className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium disabled:opacity-50">Save Item</button>
-                  <button type="button" onClick={() => setShowProductForm(false)} className="rounded-lg bg-slate-800 px-5 py-2.5 text-sm">Cancel</button>
+                  <button type="submit" disabled={submitting} className="rounded-[14px] bg-[#2F9BE6] px-5 py-2.5 text-sm font-medium disabled:opacity-50">Save Item</button>
+                  <button type="button" onClick={() => setShowProductForm(false)} className="rounded-[14px] bg-slate-800 px-5 py-2.5 text-sm">Cancel</button>
                 </div>
               </form>
             )}
 
             <div className="grid gap-3">
-              {productsLoading && <p className="text-slate-500 text-sm">Loading items...</p>}
+              {productsLoading && <p className="text-[#B5B5B5]/60 text-sm">Loading items...</p>}
               {products.map((p) => (
-                <div key={p._id} className="flex gap-4 items-center justify-between border border-slate-800 bg-slate-900 p-4 rounded-xl">
+                <div key={p._id} className="flex gap-4 items-center justify-between border border-[#1E1E1E] bg-[#111111] p-4 rounded-[16px]">
                   <div className="flex gap-3 items-center min-w-0">
-                    <img src={imgUrl(p.image)} alt="" className="h-12 w-12 rounded-lg object-cover bg-slate-950" />
+                    <img src={imgUrl(p.image)} alt="" className="h-12 w-12 rounded-[14px] object-cover bg-[#050505]" />
                     <div className="min-w-0">
                       <p className="font-medium truncate text-sm">{p.name}</p>
-                      <p className="text-xs text-slate-400">{p.category} • ${p.price.toFixed(2)}</p>
+                      <p className="text-xs text-[#B5B5B5]/80">{p.category} • ${p.price.toFixed(2)}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => void toggleBestSeller(p._id)} className={"rounded px-3 py-1.5 text-xs font-semibold " + (bestSellers.includes(p._id) ? "bg-amber-600 text-white" : "bg-slate-800 text-slate-400")}>Best Seller</button>
+                    <button onClick={() => void toggleBestSeller(p._id)} className={"rounded px-3 py-1.5 text-xs font-semibold " + (bestSellers.includes(p._id) ? "bg-[#2F9BE6] text-white" : "bg-slate-800 text-[#B5B5B5]/80")}>Best Seller</button>
                     <button onClick={() => {
                       setProductForm({ name: p.name, price: String(p.price), bulkPrice: p.bulkPrice ? String(p.bulkPrice) : "", image: p.image, desc: p.desc || "", category: p.category, gameId: p.gameId || "" });
                       setEditingProduct(p._id); setShowProductForm(true);
-                    }} className="p-2 text-blue-400 bg-slate-800/50 rounded-lg"><Edit2 className="h-4 w-4" /></button>
-                    <button onClick={() => void deleteProduct(p._id)} className="p-2 text-red-400 bg-slate-800/50 rounded-lg"><Trash2 className="h-4 w-4" /></button>
+                    }} className="p-2 text-[#2F9BE6] bg-[#161616]/50 rounded-[14px]"><Edit2 className="h-4 w-4" /></button>
+                    <button onClick={() => void deleteProduct(p._id)} className="p-2 text-[#FF4D4F] bg-[#161616]/50 rounded-[14px]"><Trash2 className="h-4 w-4" /></button>
                   </div>
                 </div>
               ))}
@@ -460,62 +460,62 @@ export default function AdminPage() {
         {/* ─── TAB: SLOTS ─── */}
         {tab === "slots" && (
           <div className="grid gap-6 lg:grid-cols-[400px_1fr]">
-            <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4 h-fit">
-              <div><h2 className="font-semibold text-lg">Vietnam Time Slots</h2><p className="text-xs text-slate-400">All slots are saved relative to your Vietnam time (`Asia/Ho_Chi_Minh`). Conversion for customers is automatic.</p></div>
+            <div className="rounded-[16px] border border-[#1E1E1E] bg-[#111111] p-5 space-y-4 h-fit">
+              <div><h2 className="font-semibold text-lg">Vietnam Time Slots</h2><p className="text-xs text-[#B5B5B5]/80">All slots are saved relative to your Vietnam time (`Asia/Ho_Chi_Minh`). Conversion for customers is automatic.</p></div>
               <form onSubmit={createSlots} className="space-y-4">
-                <input type="date" value={slotDate} onChange={(e) => setSlotDate(e.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none" />
+                <input type="date" value={slotDate} onChange={(e) => setSlotDate(e.target.value)} className="w-full rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
                 {ranges.map((row, idx) => (
-                  <div key={idx} className="p-3 border border-slate-800 bg-slate-950 rounded-lg space-y-2">
+                  <div key={idx} className="p-3 border border-[#1E1E1E] bg-[#050505] rounded-[14px] space-y-2">
                     <div className="flex gap-2">
-                      <input type="time" required value={row.startTime} onChange={(e) => setRanges((p) => p.map((r, i) => (i === idx ? { ...r, startTime: e.target.value } : r)))} className="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm outline-none" />
-                      <input type="time" required value={row.endTime} onChange={(e) => setRanges((p) => p.map((r, i) => (i === idx ? { ...r, endTime: e.target.value } : r)))} className="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm outline-none" />
+                      <input type="time" required value={row.startTime} onChange={(e) => setRanges((p) => p.map((r, i) => (i === idx ? { ...r, startTime: e.target.value } : r)))} className="flex-1 rounded border border-[#1E1E1E] bg-[#111111] px-2 py-1 text-sm outline-none" />
+                      <input type="time" required value={row.endTime} onChange={(e) => setRanges((p) => p.map((r, i) => (i === idx ? { ...r, endTime: e.target.value } : r)))} className="flex-1 rounded border border-[#1E1E1E] bg-[#111111] px-2 py-1 text-sm outline-none" />
                     </div>
                     <div className="flex gap-2">
-                      <input placeholder="Note (optional)" value={row.note} onChange={(e) => setRanges((p) => p.map((r, i) => (i === idx ? { ...r, note: e.target.value } : r)))} className="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs outline-none" />
-                      {ranges.length > 1 && <button type="button" onClick={() => setRanges((p) => p.filter((_, i) => i !== idx))} className="text-red-400 text-xs hover:underline">Delete</button>}
+                      <input placeholder="Note (optional)" value={row.note} onChange={(e) => setRanges((p) => p.map((r, i) => (i === idx ? { ...r, note: e.target.value } : r)))} className="flex-1 rounded border border-[#1E1E1E] bg-[#111111] px-2 py-1 text-xs outline-none" />
+                      {ranges.length > 1 && <button type="button" onClick={() => setRanges((p) => p.filter((_, i) => i !== idx))} className="text-[#FF4D4F] text-xs hover:underline">Delete</button>}
                     </div>
                   </div>
                 ))}
                 <div className="flex gap-2">
                   <button type="button" onClick={() => setRanges((p) => [...p, { startTime: "", endTime: "", note: "" }])} className="rounded bg-slate-800 px-4 py-2 text-xs">Add Range</button>
-                  <button type="submit" disabled={submitting} className="rounded bg-blue-600 px-4 py-2 text-xs font-semibold disabled:opacity-50">Create Slots</button>
+                  <button type="submit" disabled={submitting} className="rounded bg-[#2F9BE6] px-4 py-2 text-xs font-semibold disabled:opacity-50">Create Slots</button>
                 </div>
               </form>
             </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-3">
+            <div className="rounded-[16px] border border-[#1E1E1E] bg-[#111111] p-5 space-y-3">
               <h2 className="font-semibold text-lg">Active Slots (Vietnam Time)</h2>
               <div className="mb-4 flex items-center gap-3">
-                <label className="text-sm text-slate-400" htmlFor="slot-filter">Filter by month:</label>
+                <label className="text-sm text-[#B5B5B5]/80" htmlFor="slot-filter">Filter by month:</label>
                 <input
                   id="slot-filter"
                   type="month"
                   value={slotFilter}
                   onChange={(e) => setSlotFilter(e.target.value)}
-                  className="rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none"
+                  className="rounded border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm outline-none"
                 />
                 {slotFilter && (
-                  <button type="button" onClick={() => setSlotFilter("")} className="text-xs text-slate-500 hover:text-white">
+                  <button type="button" onClick={() => setSlotFilter("")} className="text-xs text-[#B5B5B5]/60 hover:text-white">
                     Clear filter
                   </button>
                 )}
               </div>
-              {slotsLoading && <p className="text-slate-500 text-sm">Loading slots...</p>}
+              {slotsLoading && <p className="text-[#B5B5B5]/60 text-sm">Loading slots...</p>}
               {filteredSlots.map((s) => (
-                <div key={s._id} className={"border border-slate-800 bg-slate-950 p-4 rounded-lg transition-all " + (s.active ? "" : "opacity-60")}>
+                <div key={s._id} className={"border border-[#1E1E1E] bg-[#050505] p-4 rounded-[14px] transition-all " + (s.active ? "" : "opacity-60")}>
                   {editingSlot === s._id ? (
                     <div className="space-y-3 animate-fade-in">
                       <div className="grid gap-2 md:grid-cols-3">
-                        <input type="date" value={slotEditForm.date} onChange={(e) => setSlotEditForm((p) => ({ ...p, date: e.target.value }))} className="rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none" />
-                        <input type="time" value={slotEditForm.startTime} onChange={(e) => setSlotEditForm((p) => ({ ...p, startTime: e.target.value }))} className="rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none" />
-                        <input type="time" value={slotEditForm.endTime} onChange={(e) => setSlotEditForm((p) => ({ ...p, endTime: e.target.value }))} className="rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none" />
+                        <input type="date" value={slotEditForm.date} onChange={(e) => setSlotEditForm((p) => ({ ...p, date: e.target.value }))} className="rounded border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm outline-none" />
+                        <input type="time" value={slotEditForm.startTime} onChange={(e) => setSlotEditForm((p) => ({ ...p, startTime: e.target.value }))} className="rounded border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm outline-none" />
+                        <input type="time" value={slotEditForm.endTime} onChange={(e) => setSlotEditForm((p) => ({ ...p, endTime: e.target.value }))} className="rounded border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm outline-none" />
                       </div>
-                      <input placeholder="Note (optional)" value={slotEditForm.note} onChange={(e) => setSlotEditForm((p) => ({ ...p, note: e.target.value }))} className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none" />
-                      <label className="flex items-center gap-2 text-sm text-slate-300">
+                      <input placeholder="Note (optional)" value={slotEditForm.note} onChange={(e) => setSlotEditForm((p) => ({ ...p, note: e.target.value }))} className="w-full rounded border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm outline-none" />
+                      <label className="flex items-center gap-2 text-sm text-[#B5B5B5]">
                         <input type="checkbox" checked={slotEditForm.active} onChange={(e) => setSlotEditForm((p) => ({ ...p, active: e.target.checked }))} />
                         Active
                       </label>
                       <div className="flex gap-2">
-                        <button type="button" onClick={() => void saveSlotEdit()} disabled={submitting} className="rounded bg-blue-600 px-4 py-2 text-xs font-semibold disabled:opacity-50">Save</button>
+                        <button type="button" onClick={() => void saveSlotEdit()} disabled={submitting} className="rounded bg-[#2F9BE6] px-4 py-2 text-xs font-semibold disabled:opacity-50">Save</button>
                         <button type="button" onClick={() => setEditingSlot(null)} className="rounded bg-slate-800 px-4 py-2 text-xs">Cancel</button>
                       </div>
                     </div>
@@ -523,12 +523,12 @@ export default function AdminPage() {
                     <div className="flex items-center justify-between gap-3">
                       <div className={s.active ? "" : "line-through"}>
                         <p className="font-medium text-sm">{formatSlotRange(s)}</p>
-                        {s.note && <p className="text-xs text-slate-400 mt-1">{s.note}</p>}
+                        {s.note && <p className="text-xs text-[#B5B5B5]/80 mt-1">{s.note}</p>}
                       </div>
                       <div className="flex gap-2">
-                        <button onClick={() => startEditSlot(s)} className="p-2 text-blue-400 bg-slate-900 rounded" title="Edit"><Edit2 className="h-4 w-4" /></button>
-                        <button onClick={() => void toggleSlot(s._id, !s.active)} className={"p-2 rounded " + (s.active ? "text-amber-400 bg-slate-900" : "text-green-400 bg-slate-900")} title={s.active ? "Deactivate" : "Activate"}><RefreshCcw className="h-4 w-4" /></button>
-                        <button onClick={() => void deleteSlot(s._id)} className="p-2 text-red-400 bg-slate-900 rounded" title="Delete"><Trash2 className="h-4 w-4" /></button>
+                        <button onClick={() => startEditSlot(s)} className="p-2 text-[#2F9BE6] bg-[#111111] rounded" title="Edit"><Edit2 className="h-4 w-4" /></button>
+                        <button onClick={() => void toggleSlot(s._id, !s.active)} className={"p-2 rounded " + (s.active ? "text-[#2F9BE6] bg-[#111111]" : "text-[#3DDC84] bg-[#111111]")} title={s.active ? "Deactivate" : "Activate"}><RefreshCcw className="h-4 w-4" /></button>
+                        <button onClick={() => void deleteSlot(s._id)} className="p-2 text-[#FF4D4F] bg-[#111111] rounded" title="Delete"><Trash2 className="h-4 w-4" /></button>
                       </div>
                     </div>
                   )}
@@ -541,37 +541,37 @@ export default function AdminPage() {
         {/* ─── TAB: GAMES ─── */}
         {tab === "games" && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between border border-slate-800 bg-slate-900 p-4 rounded-xl">
-              <div><h2 className="font-semibold text-lg">Game Catalog</h2><p className="text-xs text-slate-400">Configure separate games with unique tags.</p></div>
-              <button onClick={() => { setEditingGame(null); setGameForm({ name: "", slug: "", image: "", active: true }); setShowGameForm(true); }} className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium"><Plus className="h-4 w-4" /> Add Game</button>
+            <div className="flex items-center justify-between border border-[#1E1E1E] bg-[#111111] p-4 rounded-[16px]">
+              <div><h2 className="font-semibold text-lg">Game Catalog</h2><p className="text-xs text-[#B5B5B5]/80">Configure separate games with unique tags.</p></div>
+              <button onClick={() => { setEditingGame(null); setGameForm({ name: "", slug: "", image: "", active: true }); setShowGameForm(true); }} className="flex items-center gap-2 rounded-[14px] bg-[#2F9BE6] px-4 py-2 text-sm font-medium"><Plus className="h-4 w-4" /> Add Game</button>
             </div>
 
             {showGameForm && (
-              <form onSubmit={submitGame} className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4">
+              <form onSubmit={submitGame} className="rounded-[16px] border border-[#1E1E1E] bg-[#111111] p-5 space-y-4">
                 <h3 className="font-medium">{editingGame ? "Edit Game" : "New Game"}</h3>
                 <div className="grid gap-4 md:grid-cols-2">
-                  <input required value={gameForm.name} onChange={(e) => setGameForm((p) => ({ ...p, name: e.target.value }))} placeholder="Game name" className="rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none" />
-                  <input required value={gameForm.slug} onChange={(e) => setGameForm((p) => ({ ...p, slug: e.target.value }))} placeholder="Game slug" className="rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none" />
-                  <input value={gameForm.image} onChange={(e) => setGameForm((p) => ({ ...p, image: e.target.value }))} placeholder="Image URL (optional)" className="rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none" />
+                  <input required value={gameForm.name} onChange={(e) => setGameForm((p) => ({ ...p, name: e.target.value }))} placeholder="Game name" className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
+                  <input required value={gameForm.slug} onChange={(e) => setGameForm((p) => ({ ...p, slug: e.target.value }))} placeholder="Game slug" className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
+                  <input value={gameForm.image} onChange={(e) => setGameForm((p) => ({ ...p, image: e.target.value }))} placeholder="Image URL (optional)" className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
                 </div>
                 <div className="flex gap-2">
-                  <button type="submit" disabled={submitting} className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium disabled:opacity-50">Save Game</button>
-                  <button type="button" onClick={() => setShowGameForm(false)} className="rounded-lg bg-slate-800 px-5 py-2.5 text-sm">Cancel</button>
+                  <button type="submit" disabled={submitting} className="rounded-[14px] bg-[#2F9BE6] px-5 py-2.5 text-sm font-medium disabled:opacity-50">Save Game</button>
+                  <button type="button" onClick={() => setShowGameForm(false)} className="rounded-[14px] bg-slate-800 px-5 py-2.5 text-sm">Cancel</button>
                 </div>
               </form>
             )}
 
             <div className="grid gap-3">
-              {gamesLoading && <p className="text-slate-500 text-sm">Loading games...</p>}
+              {gamesLoading && <p className="text-[#B5B5B5]/60 text-sm">Loading games...</p>}
               {games.map((g) => (
-                <div key={g._id} className="flex items-center justify-between border border-slate-800 bg-slate-900 p-4 rounded-xl">
+                <div key={g._id} className="flex items-center justify-between border border-[#1E1E1E] bg-[#111111] p-4 rounded-[16px]">
                   <div className="flex items-center gap-3">
                     {g.image && <img src={imgUrl(g.image)} alt="" className="h-10 w-10 rounded object-cover" />}
-                    <p className="font-medium text-sm">{g.name} <span className="text-xs text-slate-500">({g.slug})</span></p>
+                    <p className="font-medium text-sm">{g.name} <span className="text-xs text-[#B5B5B5]/60">({g.slug})</span></p>
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => { setGameForm({ name: g.name, slug: g.slug, image: g.image || "", active: g.active }); setEditingGame(g._id); setShowGameForm(true); }} className="p-2 text-blue-400 bg-slate-800/50 rounded-lg"><Edit2 className="h-4 w-4" /></button>
-                    <button onClick={() => void deleteGame(g._id)} className="p-2 text-red-400 bg-slate-800/50 rounded-lg"><Trash2 className="h-4 w-4" /></button>
+                    <button onClick={() => { setGameForm({ name: g.name, slug: g.slug, image: g.image || "", active: g.active }); setEditingGame(g._id); setShowGameForm(true); }} className="p-2 text-[#2F9BE6] bg-[#161616]/50 rounded-[14px]"><Edit2 className="h-4 w-4" /></button>
+                    <button onClick={() => void deleteGame(g._id)} className="p-2 text-[#FF4D4F] bg-[#161616]/50 rounded-[14px]"><Trash2 className="h-4 w-4" /></button>
                   </div>
                 </div>
               ))}
@@ -581,24 +581,24 @@ export default function AdminPage() {
 
         {/* ─── TAB: CONFIG (BANNERS) ─── */}
         {tab === "config" && (
-          <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-6">
-            <div><h2 className="font-semibold text-lg">Shop Banner</h2><p className="text-xs text-slate-400">Only one banner is active. Paste a Cloudinary image URL to replace the current banner.</p></div>
+          <div className="rounded-[16px] border border-[#1E1E1E] bg-[#111111] p-5 space-y-6">
+            <div><h2 className="font-semibold text-lg">Shop Banner</h2><p className="text-xs text-[#B5B5B5]/80">Only one banner is active. Paste a Cloudinary image URL to replace the current banner.</p></div>
             <div className="flex items-center gap-3 flex-wrap">
               <input
                 value={newBannerUrl}
                 onChange={(e) => setNewBannerUrl(e.target.value)}
                 placeholder="Paste banner image URL"
-                className="min-w-[280px] flex-1 rounded border border-slate-700 bg-slate-950 p-2 text-sm outline-none"
+                className="min-w-[280px] flex-1 rounded border border-[#1E1E1E] bg-[#050505] p-2 text-sm outline-none"
               />
-              <button onClick={() => void handleBannerSave()} disabled={submitting || !newBannerUrl.trim()} className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold disabled:opacity-50">Save / Replace Banner</button>
+              <button onClick={() => void handleBannerSave()} disabled={submitting || !newBannerUrl.trim()} className="rounded bg-[#2F9BE6] px-4 py-2 text-sm font-semibold disabled:opacity-50">Save / Replace Banner</button>
             </div>
             {banners[0] ? (
-              <div className="relative group overflow-hidden rounded-lg border border-slate-800">
+              <div className="relative group overflow-hidden rounded-[14px] border border-[#1E1E1E]">
                 <img src={imgUrl(banners[0])} alt="" className="w-full object-cover" style={{ maxHeight: "360px" }} />
                 <button onClick={() => void deleteBanner(banners[0])} className="absolute top-2 right-2 bg-red-600 text-white rounded p-1.5 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="h-4 w-4" /></button>
               </div>
             ) : (
-              <div className="rounded-lg border border-dashed border-slate-700 bg-slate-950 p-8 text-center text-sm text-slate-500">No banner uploaded.</div>
+              <div className="rounded-[14px] border border-dashed border-[#1E1E1E] bg-[#050505] p-8 text-center text-sm text-[#B5B5B5]/60">No banner uploaded.</div>
             )}
           </div>
         )}

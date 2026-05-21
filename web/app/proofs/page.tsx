@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import Navbar from "../components/Navbar"
@@ -187,7 +187,7 @@ export default function ProofsPage() {
   }
 
   const deleteProof = async (proofId: string) => {
-    if (!adminToken || !confirm("Xóa proof này?")) return
+    if (!adminToken || !confirm("XÃ³a proof nÃ y?")) return
     try {
       const res = await fetch(`/api/shop/proofs/${proofId}`, {
         method: "DELETE",
@@ -225,7 +225,7 @@ export default function ProofsPage() {
   const pageLabel = useMemo(() => `Trang ${page}`, [page])
 
   return (
-    <div className="min-h-screen bg-slate-900">
+    <div className="min-h-screen bg-[#050505]">
       <Navbar />
 
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -233,14 +233,14 @@ export default function ProofsPage() {
           <div className="flex items-center gap-4">
             <a
               href="/"
-              className="flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2 transition-colors hover:bg-slate-700"
+              className="flex items-center gap-2 rounded-[14px] bg-[#111111] px-4 py-2 transition-colors hover:bg-[#1E1E1E]"
             >
               <Home className="h-5 w-5" />
               <span className="font-medium">Home</span>
             </a>
 
             <h1 className="flex items-center gap-3 text-3xl font-bold text-white">
-              <ShieldCheck className="h-8 w-8 text-green-400" />
+              <ShieldCheck className="h-8 w-8 text-[#3DDC84]" />
               Proofs
             </h1>
           </div>
@@ -249,7 +249,7 @@ export default function ProofsPage() {
             href="https://discord.com/channels/1398984938111369256/1399154220434853969"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white transition-colors hover:bg-indigo-700"
+            className="flex items-center gap-2 rounded-[14px] bg-[#2F9BE6] px-4 py-2 font-medium text-white transition-colors hover:bg-[#49B6FF]"
           >
             <ExternalLink className="h-5 w-5" />
             Vouch Channel
@@ -258,14 +258,14 @@ export default function ProofsPage() {
 
         {loading && proofs.length === 0 && (
           <div className="flex items-center justify-center py-20 animate-fade-in">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
+            <Loader2 className="h-8 w-8 animate-spin text-[#2F9BE6]" />
           </div>
         )}
 
         {!loading && proofs.length === 0 && (
           <div className="animate-fade-in py-20 text-center">
-            <ImageIcon className="mx-auto mb-4 h-16 w-16 text-slate-600" />
-            <p className="text-xl text-slate-400">No proofs yet</p>
+            <ImageIcon className="mx-auto mb-4 h-16 w-16 text-[#B5B5B5]/50" />
+            <p className="text-xl text-[#B5B5B5]/80">No proofs yet</p>
           </div>
         )}
 
@@ -282,18 +282,18 @@ export default function ProofsPage() {
                 return (
                   <div
                     key={proof.id}
-                    className="animate-vouch-entrance rounded-xl border border-slate-700/50 bg-slate-800/50 p-5 backdrop-blur-sm transition-all hover:border-slate-600/50"
+                    className="animate-vouch-entrance rounded-[16px] border border-[#1E1E1E]/60 bg-[#111111]/80 p-5 backdrop-blur-sm transition-all hover:border-[#1E1E1E]/50"
                     style={{ animationDelay: `${idx * 80}ms` }}
                   >
                     {proof.robloxUsername && (
-                      <div className="mb-4 flex items-center gap-2 rounded-lg border border-sky-500/20 bg-sky-500/10 px-3 py-2">
-                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-sky-100">
+                      <div className="mb-4 flex items-center gap-2 rounded-[14px] border border-[#2F9BE6]/20 bg-[#2F9BE6]/10 px-3 py-2">
+                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-white">
                           {proof.robloxUsername}
                         </span>
                         <button
                           type="button"
                           onClick={() => void copyRobloxName(proof.id, proof.robloxUsername)}
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-sky-500/20 text-sky-100 hover:bg-sky-500/30"
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-[14px] bg-[#2F9BE6]/20 text-white hover:bg-[#2F9BE6]/30"
                           title="Copy Roblox username"
                         >
                           {copiedProofId === proof.id ? (
@@ -312,7 +312,7 @@ export default function ProofsPage() {
                             key={imageIndex}
                             type="button"
                             onClick={() => openLightbox(idx, imageIndex)}
-                            className={`group relative overflow-hidden rounded-lg bg-slate-700/40 ${getImageSpanClass(proof.imageUrls.length, imageIndex)}`}
+                            className={`group relative overflow-hidden rounded-[14px] bg-[#161616]/60 ${getImageSpanClass(proof.imageUrls.length, imageIndex)}`}
                           >
                             <img
                               src={url}
@@ -324,8 +324,8 @@ export default function ProofsPage() {
                         ))}
                       </div>
                     ) : (
-                      <div className="mb-4 flex h-32 w-full items-center justify-center rounded-lg bg-slate-700/50">
-                        <ImageIcon className="h-8 w-8 text-slate-500" />
+                      <div className="mb-4 flex h-32 w-full items-center justify-center rounded-[14px] bg-[#161616]/80">
+                        <ImageIcon className="h-8 w-8 text-[#B5B5B5]/60" />
                       </div>
                     )}
 
@@ -334,12 +334,12 @@ export default function ProofsPage() {
                         isEditing ? (
                           <div
                             key={itemIndex}
-                            className="space-y-2 rounded-lg border border-slate-700 bg-slate-900/60 p-2"
+                            className="space-y-2 rounded-[14px] border border-[#1E1E1E] bg-[#050505]/60 p-2"
                           >
                             <input
                               value={item.name}
                               onChange={(e) => updateEditingItem(itemIndex, "name", e.target.value)}
-                              className="w-full rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-white outline-none"
+                              className="w-full rounded border border-[#1E1E1E] bg-[#111111] px-2 py-1 text-sm text-white outline-none"
                             />
                             <input
                               type="number"
@@ -348,20 +348,20 @@ export default function ProofsPage() {
                               onChange={(e) =>
                                 updateEditingItem(itemIndex, "lineTotal", Number(e.target.value || 0))
                               }
-                              className="w-full rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-white outline-none"
+                              className="w-full rounded border border-[#1E1E1E] bg-[#111111] px-2 py-1 text-sm text-white outline-none"
                             />
                           </div>
                         ) : (
                           <div key={itemIndex} className="flex justify-between text-sm">
-                            <span className="text-slate-300">{item.name}</span>
-                            <span className="text-slate-400">{formatPrice(item.lineTotal, "USD")}</span>
+                            <span className="text-[#B5B5B5]">{item.name}</span>
+                            <span className="text-[#B5B5B5]/80">{formatPrice(item.lineTotal, "USD")}</span>
                           </div>
                         )
                       )}
                     </div>
 
-                    <div className="flex items-center justify-between border-t border-slate-700 pt-3">
-                      <span className="text-lg font-bold text-green-400">
+                    <div className="flex items-center justify-between border-t border-[#1E1E1E] pt-3">
+                      <span className="text-lg font-bold text-[#3DDC84]">
                         {formatPrice(currentTotal, "USD")}
                       </span>
 
@@ -373,16 +373,16 @@ export default function ProofsPage() {
                                 type="button"
                                 onClick={() => void saveEdit(proof.id)}
                                 disabled={saving}
-                                className="rounded bg-green-600 p-1.5 text-white transition-colors hover:bg-green-700 disabled:opacity-50"
-                                title="Lưu"
+                                className="rounded bg-[#3DDC84] p-1.5 text-white transition-colors hover:bg-[#3DDC84]/90 disabled:opacity-50"
+                                title="LÆ°u"
                               >
                                 <Check className="h-4 w-4" />
                               </button>
                               <button
                                 type="button"
                                 onClick={cancelEdit}
-                                className="rounded bg-slate-700 p-1.5 text-white transition-colors hover:bg-slate-600"
-                                title="Hủy"
+                                className="rounded bg-[#1E1E1E] p-1.5 text-white transition-colors hover:bg-[#1E1E1E]"
+                                title="Há»§y"
                               >
                                 <X className="h-4 w-4" />
                               </button>
@@ -392,16 +392,16 @@ export default function ProofsPage() {
                               <button
                                 type="button"
                                 onClick={() => startEdit(proof)}
-                                className="rounded bg-slate-700 p-1.5 text-white transition-colors hover:bg-blue-600"
-                                title="Sửa"
+                                className="rounded bg-[#1E1E1E] p-1.5 text-white transition-colors hover:bg-blue-600"
+                                title="Sá»­a"
                               >
                                 <Edit2 className="h-4 w-4" />
                               </button>
                               <button
                                 type="button"
                                 onClick={() => void deleteProof(proof.id)}
-                                className="rounded bg-slate-700 p-1.5 text-white transition-colors hover:bg-red-600"
-                                title="Xóa"
+                                className="rounded bg-[#1E1E1E] p-1.5 text-white transition-colors hover:bg-red-600"
+                                title="XÃ³a"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </button>
@@ -419,18 +419,18 @@ export default function ProofsPage() {
               <button
                 onClick={handlePrevPage}
                 disabled={page === 1 || loading}
-                className="flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2 font-medium text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center gap-2 rounded-[14px] bg-[#111111] px-4 py-2 font-medium text-white transition-colors hover:bg-[#1E1E1E] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <ChevronLeft className="h-5 w-5" />
                 Previous
               </button>
 
-              <span className="font-medium text-slate-400">{pageLabel}</span>
+              <span className="font-medium text-[#B5B5B5]/80">{pageLabel}</span>
 
               <button
                 onClick={handleNextPage}
                 disabled={!hasMore || loading}
-                className="flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2 font-medium text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center gap-2 rounded-[14px] bg-[#111111] px-4 py-2 font-medium text-white transition-colors hover:bg-[#1E1E1E] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Next
                 <ChevronRight className="h-5 w-5" />
@@ -449,7 +449,7 @@ export default function ProofsPage() {
           onClick={closeLightbox}
         >
           <button
-            className="absolute right-4 top-4 rounded-lg bg-slate-800 p-2 transition-colors hover:bg-slate-700"
+            className="absolute right-4 top-4 rounded-[14px] bg-[#111111] p-2 transition-colors hover:bg-[#1E1E1E]"
             onClick={closeLightbox}
           >
             <X className="h-6 w-6 text-white" />
@@ -457,7 +457,7 @@ export default function ProofsPage() {
 
           {activeImages.length > 1 && (
             <button
-              className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-slate-800/80 p-3"
+              className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-[#111111]/80 p-3"
               onClick={(e) => {
                 e.stopPropagation()
                 prevImage()
@@ -471,7 +471,7 @@ export default function ProofsPage() {
             src={activeImages[activeIndex]}
             alt={`Proof ${activeIndex + 1}`}
             className={
-              "max-h-[90vh] max-w-[90vw] rounded-lg object-contain " +
+              "max-h-[90vh] max-w-[90vw] rounded-[14px] object-contain " +
               (closing ? "animate-modal-zoom-out" : "animate-modal-zoom-in")
             }
             onClick={(e) => e.stopPropagation()}
@@ -479,7 +479,7 @@ export default function ProofsPage() {
 
           {activeImages.length > 1 && (
             <button
-              className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-slate-800/80 p-3"
+              className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-[#111111]/80 p-3"
               onClick={(e) => {
                 e.stopPropagation()
                 nextImage()
@@ -490,7 +490,7 @@ export default function ProofsPage() {
           )}
 
           {activeImages.length > 1 && (
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-slate-800/80 px-4 py-2 text-sm font-medium text-white">
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-[#111111]/80 px-4 py-2 text-sm font-medium text-white">
               {activeIndex + 1} / {activeImages.length}
             </div>
           )}

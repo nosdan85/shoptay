@@ -126,7 +126,7 @@ export default function ShopPage() {
     try {
       const [pRes, gRes, cRes, rRes] = await Promise.all([
         fetch("/api/shop/products", { cache: "no-store" }),
-        fetch("/api/shop/games", { cache: "no-store" }),
+        fetch("/api/shop/games?nocache=" + Date.now(), { cache: "no-store" }),
         fetch("/api/shop/config", { cache: "no-store" }),
         fetch("/api/shop/recent-purchases", { cache: "no-store" }),
       ]);
@@ -156,10 +156,14 @@ export default function ShopPage() {
 
   const filtered = useMemo(() => {
     let list = products;
+    // Auto-remove filter if selected game no longer exists
+    if (selectedGame && !games.some((g) => g._id === selectedGame)) {
+      setSelectedGame(null);
+    }
     if (selectedGame) list = list.filter((p) => p.gameId === selectedGame);
     if (searchQuery) list = list.filter((p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
     return list;
-  }, [products, selectedGame, searchQuery]);
+  }, [products, selectedGame, searchQuery, games]);
 
   const bestSellers = useMemo(() => {
     if (bestSellerIds.length === 0) return [];

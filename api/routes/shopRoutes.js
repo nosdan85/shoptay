@@ -3901,6 +3901,8 @@ router.delete('/owner/games/:id', authRequired, async (req, res) => {
         const { id } = req.params;
         if (!OBJECT_ID_PATTERN.test(id)) return res.status(400).json({ error: 'Invalid game ID.' });
         await Game.findByIdAndDelete(id);
+        // Nullify gameId on products that referenced this game
+        await Product.updateMany({ gameId: id }, { $set: { gameId: null } });
         return res.json({ success: true });
     } catch (error) {
         console.error('Delete game error:', error);

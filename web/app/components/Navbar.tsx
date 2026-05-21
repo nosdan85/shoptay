@@ -183,10 +183,24 @@ export default function Navbar({ cartCount = 0, showCart = false }: NavbarProps)
         </div>
       </div>
 
-      {/* Mobile Drawer Menu */}
+      {/* Mobile Fullscreen Drawer */}
       {mobileMenuOpen && (
-        <div className="md:hidden absolute left-0 right-0 top-full bg-[#050505]/95 backdrop-blur-xl border-b border-[#1E1E1E] shadow-[0_20px_50px_rgba(0,0,0,0.5)] animate-fade-in z-40">
-          <div className="px-4 py-5 flex flex-col gap-1">
+        <div className="md:hidden fixed inset-0 z-[60] bg-[#050505]/98 backdrop-blur-xl animate-fade-in">
+          <div className="h-full flex flex-col">
+            {/* Mobile Header */}
+            <div className="flex items-center justify-between px-4 h-[68px] border-b border-[#1E1E1E]">
+              <Link href="/shop" className="flex items-center gap-3" onClick={() => setMobileMenuOpen(false)}>
+                <img src="/pictures/site-logo.png" alt="NOS" className="h-9 w-auto object-contain" />
+                <span className="text-base font-bold text-white tracking-tight">
+                  NOS<span className="text-[#2F9BE6]">Market</span>
+                </span>
+              </Link>
+              <button onClick={() => setMobileMenuOpen(false)} className="p-2 text-white">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            {/* Menu Content */}
+            <div className="flex-1 overflow-y-auto px-4 py-6 flex flex-col gap-2">
             <Link
               href="/shop"
               onClick={() => setMobileMenuOpen(false)}
@@ -211,8 +225,8 @@ export default function Navbar({ cartCount = 0, showCart = false }: NavbarProps)
               </Link>
             )}
 
-            {/* Mobile Auth Section */}
-            <div className="border-t border-[#1E1E1E] pt-4 mt-3">
+              {/* Mobile Auth Section */}
+              <div className="border-t border-[#1E1E1E] pt-4 mt-auto">
               {isLoading ? (
                 <div className="flex items-center justify-center py-3 text-[#B5B5B5] gap-2">
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -250,6 +264,7 @@ export default function Navbar({ cartCount = 0, showCart = false }: NavbarProps)
                   Login with Discord
                 </a>
               )}
+              </div>
             </div>
           </div>
         </div>

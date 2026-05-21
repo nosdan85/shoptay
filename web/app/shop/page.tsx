@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useMemo } from "react";
 import Navbar from "../components/Navbar";
@@ -92,6 +92,7 @@ export default function ShopPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [cartClosing, setCartClosing] = useState(false);
+  const [cartPulse, setCartPulse] = useState(false);
   const [step, setStep] = useState<Step>("shop");
   const [submitting, setSubmitting] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
@@ -240,6 +241,8 @@ export default function ShopPage() {
       updatedCart.push({ ...selectedProduct, quantity: finalQty });
     }
     saveCart(updatedCart);
+    setCartPulse(true);
+    setTimeout(() => setCartPulse(false), 300);
     closeProductModal();
   };
 
@@ -376,20 +379,21 @@ export default function ShopPage() {
       )}
 
       {(cartOpen || cartClosing) && (
-        <div className={"fixed inset-0 z-50 flex bg-black/60 backdrop-blur-sm " + (cartClosing ? "animate-fade-out" : "animate-fade-in")} onClick={closeCart}>
-          <div className={"ml-auto h-full w-full max-w-md bg-[#111111] border-l border-[#1E1E1E] flex flex-col " + (cartClosing ? "animate-cart-slide-out" : "animate-cart-slide-in")} onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between border-b border-[#1E1E1E] p-4">
-              <h2 className="text-lg font-semibold">Cart ({cartCount})</h2>
-              <button onClick={closeCart}><X className="h-5 w-5" /></button>
+        <div className={"fixed inset-0 z-[70] flex items-end sm:items-stretch bg-black/60 backdrop-blur-sm " + (cartClosing ? "animate-fade-out" : "animate-fade-in")} onClick={closeCart}>
+          <div className={"w-full sm:ml-auto sm:h-full sm:max-w-md max-h-[80vh] bg-[#111111] border-t sm:border-l border-[#1E1E1E] flex flex-col rounded-t-[24px] sm:rounded-none " + (cartClosing ? "animate-cart-slide-out" : "animate-cart-slide-in")} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-[#1E1E1E] px-4 py-4 sticky top-0 bg-[#111111] z-10">
+              <div className="mx-auto h-1.5 w-12 rounded-full bg-[#2A2A2A] absolute top-2 left-1/2 -translate-x-1/2 sm:hidden" />
+              <h2 className="text-base sm:text-lg font-semibold">Cart ({cartCount})</h2>
+              <button onClick={closeCart} className="rounded-full bg-[#161616] p-2"><X className="h-5 w-5" /></button>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
               {cart.map((item) => (
-                <div key={item._id} className="flex gap-3 rounded-[16px] border border-[#1E1E1E] bg-[#050505] p-3">
-                  <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-[14px] bg-[#111111]">
+                <div key={item._id} className="flex gap-3 rounded-[16px] border border-[#1E1E1E] bg-[#050505] p-3 sm:p-3">
+                  <div className="h-12 w-12 sm:h-14 sm:w-14 flex-shrink-0 overflow-hidden rounded-[12px] sm:rounded-[14px] bg-[#111111]">
                     {item.image ? <img src={imgUrl(item.image)} alt="" className="h-full w-full object-cover" /> : <Package className="h-full w-full p-3 text-[#B5B5B5]/60" />}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="truncate text-sm font-medium">{item.name}</p>
+                    <p className="truncate text-sm font-medium leading-5">{item.name}</p>
                     <div className="mt-1 flex items-center gap-2">
                       <button onClick={() => updateQty(item._id, -1)} className="rounded bg-[#161616] p-1"><Minus className="h-3 w-3" /></button>
                       <span className="text-sm">{item.quantity}</span>
@@ -404,7 +408,7 @@ export default function ShopPage() {
               ))}
             </div>
             {cart.length > 0 && (
-              <div className="border-t border-[#1E1E1E] p-4 space-y-3">
+              <div className="border-t border-[#1E1E1E] px-4 py-4 space-y-3 sticky bottom-0 bg-[#111111]">
                 <div className="flex justify-between text-lg font-semibold"><span>Total</span><span className="text-[#3DDC84]">${cartTotal.toFixed(2)}</span></div>
                 <button onClick={() => { closeCart(); void doCheckout(); }} disabled={submitting} className="w-full rounded-[14px] bg-[#2F9BE6] py-3 font-medium transition-all hover:bg-[#49B6FF] disabled:opacity-50">{submitting ? "Processing..." : "Checkout"}</button>
               </div>
@@ -414,18 +418,18 @@ export default function ShopPage() {
       )}
 
       {(modalOpen || modalClosing) && selectedProduct && (
-        <div className={"fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto " + (modalClosing ? "animate-fade-out" : "animate-fade-in")} onClick={closeProductModal}>
-          <div className={"relative w-full max-w-lg rounded-[18px] border border-[#1E1E1E] bg-[#111111] p-6 shadow-2xl my-auto " + (modalClosing ? "animate-fade-out" : "animate-modal-zoom-in")} onClick={(e) => e.stopPropagation()}>
+        <div className={"fixed inset-0 z-50 bg-black/70 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto " + (modalClosing ? "animate-fade-out" : "animate-fade-in")} onClick={closeProductModal}>
+          <div className={"fixed left-1/2 top-1/2 w-[min(92vw,420px)] max-w-lg max-h-[90vh] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-[20px] border border-[#1E1E1E] bg-[#111111] p-4 sm:p-6 shadow-2xl product-modal " + (modalClosing ? "animate-fade-out" : "animate-modal-zoom-in")} onClick={(e) => e.stopPropagation()}>
             <button onClick={closeProductModal} className="absolute right-4 top-4 rounded-[14px] bg-[#161616] p-2 hover:bg-[#1E1E1E]"><X className="h-5 w-5" /></button>
-            <div className="flex gap-4 mb-4">
-              <div className="w-32 aspect-square flex-shrink-0 overflow-hidden rounded-[16px] bg-[#050505]">
+            <div className="mb-4 flex flex-col gap-4 sm:flex-row">
+              <div className="mx-auto w-28 sm:mx-0 sm:w-32 aspect-square flex-shrink-0 overflow-hidden rounded-[16px] bg-[#050505]">
                 {selectedProduct.image ? <img src={imgUrl(selectedProduct.image)} alt="" className="h-full w-full object-contain" /> : <Package className="h-full w-full p-6 text-[#B5B5B5]/50" />}
               </div>
               <div className="flex-1">
-                <h3 className="text-xl font-bold">{selectedProduct.name}</h3>
+                <h3 className="text-lg sm:text-xl font-bold leading-tight">{selectedProduct.name}</h3>
                 {<p className="text-sm text-[#2F9BE6] mt-1">Qty: x{selectedProduct.packQuantity || 1}</p>}
                 <p className="text-sm text-[#B5B5B5]">{selectedProduct.category}</p>
-                <p className="mt-2 text-2xl font-bold text-[#3DDC84]">${selectedProduct.price.toFixed(2)}</p>
+                <p className="mt-2 text-xl sm:text-2xl font-bold text-[#3DDC84]">${selectedProduct.price.toFixed(2)}</p>
                 {selectedProduct.bulkPrice && (
                   <p className="text-xs text-[#2F9BE6]">Bulk price: ${selectedProduct.bulkPrice.toFixed(2)} (when applicable)</p>
                 )}
@@ -454,7 +458,7 @@ export default function ShopPage() {
                       }
                     }
                   }}
-                  className="w-20 rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-3 py-2 text-center text-lg font-semibold outline-none focus:border-[#2F9BE6]"
+                  className="w-16 sm:w-20 rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-2 sm:px-3 py-2 text-center text-base sm:text-lg font-semibold outline-none focus:border-[#2F9BE6]"
                 />
                 <button onClick={() => setModalQty((typeof modalQty === "number" ? modalQty : parseInt(modalQty) || 1) + 1)} className="rounded-[14px] bg-[#161616] p-2 hover:bg-[#1E1E1E]"><Plus className="h-4 w-4" /></button>
               </div>
@@ -464,7 +468,7 @@ export default function ShopPage() {
         </div>
       )}
 
-      <main className="mx-auto max-w-7xl px-4 py-6 animate-page-enter">
+      <main className="mx-auto max-w-7xl px-3 sm:px-4 py-4 sm:py-6 animate-page-enter">
         {error && <div className="mb-4 rounded-[16px] border border-[#FF4D4F]/20 bg-[#FF4D4F]/10 px-4 py-3 text-sm text-[#FF4D4F]">{error}</div>}
 
         {step !== "shop" && (
@@ -676,7 +680,7 @@ export default function ShopPage() {
 
             <div className="relative animate-section-enter">
               <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-[#B5B5B5]" />
-              <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search items..." className="w-full rounded-[16px] border border-[#1E1E1E] bg-[#111111] py-3 pl-10 pr-4 outline-none transition-colors focus:border-[#2F9BE6]" />
+              <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search items..." className="w-full rounded-[16px] border border-[#1E1E1E] bg-[#111111] py-3 pl-10 pr-4 text-sm sm:text-base outline-none transition-colors focus:border-[#2F9BE6]" />
             </div>
 
             <div className="flex flex-wrap gap-2 animate-section-enter">
@@ -693,7 +697,7 @@ export default function ShopPage() {
 
             {banners.length > 0 && (
               <div className="overflow-hidden rounded-[18px] border border-[#1E1E1E] animate-section-enter">
-                <img src={imgUrl(banners[0])} alt="" className="w-full object-cover" style={{ maxHeight: "400px" }} />
+                <img src={imgUrl(banners[0])} alt="" className="w-full max-w-full h-auto object-cover max-h-[220px] sm:max-h-[320px] md:max-h-[400px]" />
               </div>
             )}
 
@@ -720,7 +724,7 @@ export default function ShopPage() {
                     </button>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
                   {bestSellers
                     .slice(bestSellerPage * BEST_SELLERS_PER_PAGE, (bestSellerPage + 1) * BEST_SELLERS_PER_PAGE)
                     .map((p, idx) => (
@@ -762,13 +766,13 @@ export default function ShopPage() {
                 {showAll && (
                   <button onClick={() => setShowAll(false)} className="flex items-center gap-2 rounded-[14px] bg-[#1E1E1E] px-4 py-2 text-sm transition-colors hover:bg-[#1E1E1E]"><ArrowLeft className="h-4 w-4" /> Back</button>
                 )}
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                 {(showAll ? filtered : filtered.slice(0, 8)).map((p, idx) => (
                   <div key={p._id} onClick={() => openProductModal(p)} className="group cursor-pointer overflow-hidden rounded-[18px] border border-[#1E1E1E] bg-[#111111] transition-all duration-200 hover:border-[#2F9BE6]/40 hover:-translate-y-1 animate-card-in" style={{ animationDelay: `${idx * 0.05}s` }}>
                     <div className="aspect-square bg-[#050505] overflow-hidden">
                       {p.image ? <img src={imgUrl(p.image)} alt={p.name} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" /> : <div className="flex h-full items-center justify-center"><Package className="h-10 w-10 text-[#B5B5B5]/50" /></div>}
                     </div>
-                    <div className="space-y-2 p-4">
+                    <div className="space-y-1.5 sm:space-y-2 p-3 sm:p-4">
                       <h3 className="truncate text-sm font-medium">{p.name}</h3>
                       <p className="text-xs text-[#2F9BE6] mt-0.5">Qty: x{p.packQuantity || 1}</p>
                       <p className="text-xs text-[#B5B5B5]/80">{p.category}</p>

@@ -1,4 +1,4 @@
-const express = require('express');
+ï»¿const express = require('express');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const qs = require('qs');
@@ -3744,7 +3744,7 @@ const maskUsername = (username) => {
 
 // --- PUBLIC SHOP ENDPOINTS ----------------------------------------------------
 
-// GET /api/shop/games — list active games
+// GET /api/shop/games â€” list active games
 router.get('/games', async (req, res) => {
     try {
         const games = await Game.find({ active: true }).sort({ name: 1 }).lean();
@@ -3755,7 +3755,7 @@ router.get('/games', async (req, res) => {
     }
 });
 
-// GET /api/shop/config — banners + best sellers
+// GET /api/shop/config â€” banners + best sellers
 router.get('/config', async (req, res) => {
     try {
         const config = await ShopConfig.getConfig();
@@ -3770,7 +3770,7 @@ router.get('/config', async (req, res) => {
     }
 });
 
-// GET /api/shop/recent-purchases — public feed of confirmed orders (masked usernames)
+// GET /api/shop/recent-purchases â€” public feed of confirmed orders (masked usernames)
 router.get('/recent-purchases', async (req, res) => {
     try {
         const limit = Math.min(Number(req.query?.limit) || 20, 50);
@@ -3892,7 +3892,7 @@ router.post('/owner/config/banners/upload', authRequired, bannerUpload.single('b
     }
 });
 
-// PUT /api/shop/owner/config/banners — body: { bannerUrl }
+// PUT /api/shop/owner/config/banners â€” body: { bannerUrl }
 router.put('/owner/config/banners', authRequired, async (req, res) => {
     try {
         const discordId = String(req.user?.discordId || '').trim();
@@ -3916,7 +3916,7 @@ router.put('/owner/config/banners', authRequired, async (req, res) => {
     }
 });
 
-// DELETE /api/shop/owner/config/banners — body: { bannerUrl }
+// DELETE /api/shop/owner/config/banners â€” body: { bannerUrl }
 router.delete('/owner/config/banners', authRequired, async (req, res) => {
     try {
         const discordId = String(req.user?.discordId || '').trim();
@@ -3980,6 +3980,7 @@ router.put('/owner/config/featured', authRequired, async (req, res) => {
         return res.status(500).json({ error: 'Could not update featured products.' });
     }
 });
+
 
 
 

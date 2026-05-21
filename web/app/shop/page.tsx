@@ -36,7 +36,7 @@ function maskName(name: string): string {
 }
 
 
-interface Product { _id: string; name: string; category: string; price: number; bulkPrice?: number; image?: string; desc?: string; gameId?: string }
+interface Product { _id: string; name: string; category: string; price: number; bulkPrice?: number; packQuantity?: number; image?: string; desc?: string; gameId?: string }
 interface CartItem extends Product { quantity: number }
 interface Game { _id: string; name: string; slug: string; image?: string }
 interface Slot { id: string; ownerStartText: string; ownerEndText: string; customerStartText: string; customerEndText: string; startAt: string; endAt: string; note?: string }
@@ -424,6 +424,7 @@ export default function ShopPage() {
               </div>
               <div className="flex-1">
                 <h3 className="text-xl font-bold">{selectedProduct.name}</h3>
+                {selectedProduct.packQuantity && selectedProduct.packQuantity > 1 ? <p className="text-sm text-[#2F9BE6] mt-1">Qty: x{selectedProduct.packQuantity}</p> : null}
                 <p className="text-sm text-[#B5B5B5]">{selectedProduct.category}</p>
                 <p className="mt-2 text-2xl font-bold text-[#3DDC84]">${selectedProduct.price.toFixed(2)}</p>
                 {selectedProduct.bulkPrice && (
@@ -738,6 +739,7 @@ export default function ShopPage() {
                         </div>
                         <div className="p-3">
                           <p className="truncate text-sm font-medium">{p.name}</p>
+                        {p.packQuantity && p.packQuantity > 1 ? <p className="text-xs text-[#2F9BE6]">Qty: x{p.packQuantity}</p> : null}
 {p.desc && <p className="text-xs text-[#B5B5B5] mt-1 line-clamp-2">{p.desc}</p>}
                           <div className="mt-2 flex items-center justify-between">
                             <span className="text-sm font-semibold text-[#3DDC84]">${p.price.toFixed(2)}</span>

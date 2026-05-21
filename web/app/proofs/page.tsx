@@ -352,8 +352,11 @@ export default function ProofsPage() {
                             />
                           </div>
                         ) : (
-                          <div key={itemIndex} className="flex justify-between text-sm">
-                            <span className="text-[#B5B5B5]">{item.name}</span>
+                          <div key={itemIndex} className="flex justify-between gap-3 text-sm">
+                            <div>
+                              <span className="text-[#B5B5B5]">{item.name}</span>
+                              <p className="mt-1 text-xs text-[#2F9BE6]">Qty: {item.deliveredLabel}</p>
+                            </div>
                             <span className="text-[#B5B5B5]/80">{formatPrice(item.lineTotal, "USD")}</span>
                           </div>
                         )

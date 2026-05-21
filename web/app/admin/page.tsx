@@ -28,7 +28,7 @@ function toVietnamIso(date: string, time: string): string {
   return new Date(`${date}T${time}:00+07:00`).toISOString();
 }
 
-interface Product { _id: string; name: string; price: number; bulkPrice?: number; image: string; desc?: string; category: string; gameId?: string }
+interface Product { _id: string; name: string; price: number; bulkPrice?: number; packQuantity?: number; image: string; desc?: string; category: string; gameId?: string }
 interface Game { _id: string; name: string; slug: string; image?: string; active: boolean }
 interface Slot { _id: string; ownerTimezone: string; startAt: string; endAt: string; active: boolean; note?: string }
 
@@ -43,7 +43,7 @@ export default function AdminPage() {
   const [productsLoading, setProductsLoading] = useState(false);
   const [showProductForm, setShowProductForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<string | null>(null);
-  const [productForm, setProductForm] = useState({ name: "", price: "", bulkPrice: "", image: "", desc: "", category: "", gameId: "" });
+  const [productForm, setProductForm] = useState({ name: "", price: "", bulkPrice: "", packQuantity: "", image: "", desc: "", category: "", gameId: "" });
 
   /* --- games state --- */
   const [games, setGames] = useState<Game[]>([]);
@@ -132,6 +132,7 @@ export default function AdminPage() {
         name: productForm.name,
         price: Number(productForm.price),
         bulkPrice: productForm.bulkPrice ? Number(productForm.bulkPrice) : null,
+        packQuantity: productForm.packQuantity ? Number(productForm.packQuantity) : 1,
         image: productForm.image,
         desc: productForm.desc,
         category: productForm.category,
@@ -147,7 +148,7 @@ export default function AdminPage() {
       if (!res.ok) throw new Error("Save failed");
       setShowProductForm(false);
       setEditingProduct(null);
-      setProductForm({ name: "", price: "", bulkPrice: "", image: "", desc: "", category: "", gameId: "" });
+      setProductForm({ name: "", price: "", bulkPrice: "", packQuantity: "", image: "", desc: "", category: "", gameId: "" });
       await fetchProducts();
     } catch (err) { setError("Save failed"); }
     setSubmitting(false);
@@ -403,7 +404,7 @@ export default function AdminPage() {
           <div className="space-y-6">
             <div className="flex items-center justify-between border border-[#1E1E1E] bg-[#111111] p-4 rounded-[16px]">
               <div><h2 className="font-semibold text-lg">Product Items</h2><p className="text-xs text-[#B5B5B5]/80">Add, edit, or delete store items directly.</p></div>
-              <button onClick={() => { setProductForm({ name: "", price: "", bulkPrice: "", image: "", desc: "", category: "", gameId: "" }); setEditingProduct(null); setShowProductForm(true); }} className="flex items-center gap-2 rounded-[14px] bg-[#2F9BE6] px-4 py-2 text-sm font-medium"><Plus className="h-4 w-4" /> Add Item</button>
+              <button onClick={() => { setProductForm({ name: "", price: "", bulkPrice: "", packQuantity: "", image: "", desc: "", category: "", gameId: "" }); setEditingProduct(null); setShowProductForm(true); }} className="flex items-center gap-2 rounded-[14px] bg-[#2F9BE6] px-4 py-2 text-sm font-medium"><Plus className="h-4 w-4" /> Add Item</button>
             </div>
 
             {showProductForm && (
@@ -414,6 +415,8 @@ export default function AdminPage() {
                   <input required value={productForm.category} onChange={(e) => setProductForm((p) => ({ ...p, category: e.target.value }))} placeholder="Category" className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
                   <input required type="number" step="0.01" value={productForm.price} onChange={(e) => setProductForm((p) => ({ ...p, price: e.target.value }))} placeholder="Price" className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
                   <input type="number" step="0.01" value={productForm.bulkPrice} onChange={(e) => setProductForm((p) => ({ ...p, bulkPrice: e.target.value }))} placeholder="Bulk price (optional)" className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
+                  <input type="number" step="1" min="1" value={productForm.packQuantity} onChange={(e) => setProductForm((p) => ({ ...p, packQuantity: e.target.value }))} placeholder="Qty per pack (default: 1)" className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
+                  <input type="number" step="1" min="1" value={productForm.packQuantity} onChange={(e) => setProductForm((p) => ({ ...p, packQuantity: e.target.value }))} placeholder="Quantity (default: 1)" className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
                   <select value={productForm.gameId} onChange={(e) => setProductForm((p) => ({ ...p, gameId: e.target.value }))} className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none">
                     <option value="">Select Game</option>
                     {games.map((g) => <option key={g._id} value={g._id}>{g.name}</option>)}
@@ -440,13 +443,13 @@ export default function AdminPage() {
                     <img src={imgUrl(p.image)} alt="" className="h-12 w-12 rounded-[14px] object-cover bg-[#050505]" />
                     <div className="min-w-0">
                       <p className="font-medium truncate text-sm">{p.name}</p>
-                      <p className="text-xs text-[#B5B5B5]/80">{p.category} • ${p.price.toFixed(2)}</p>
+                      <p className="text-xs text-[#B5B5B5]/80">{p.category} • ${p.price.toFixed(2)}{(p.packQuantity && p.packQuantity > 1) ? <span className="text-[#2F9BE6] ml-2">Qty: x{p.packQuantity}</span> : null}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <button onClick={() => void toggleBestSeller(p._id)} className={"rounded px-3 py-1.5 text-xs font-semibold " + (bestSellers.includes(p._id) ? "bg-[#2F9BE6] text-white" : "bg-slate-800 text-[#B5B5B5]/80")}>Best Seller</button>
                     <button onClick={() => {
-                      setProductForm({ name: p.name, price: String(p.price), bulkPrice: p.bulkPrice ? String(p.bulkPrice) : "", image: p.image, desc: p.desc || "", category: p.category, gameId: p.gameId || "" });
+                      setProductForm({ name: p.name, price: String(p.price), bulkPrice: p.bulkPrice ? String(p.bulkPrice) : "", packQuantity: p.packQuantity ? String(p.packQuantity) : "1", image: p.image, desc: p.desc || "", category: p.category, gameId: p.gameId || "" });
                       setEditingProduct(p._id); setShowProductForm(true);
                     }} className="p-2 text-[#2F9BE6] bg-[#161616]/50 rounded-[14px]"><Edit2 className="h-4 w-4" /></button>
                     <button onClick={() => void deleteProduct(p._id)} className="p-2 text-[#FF4D4F] bg-[#161616]/50 rounded-[14px]"><Trash2 className="h-4 w-4" /></button>

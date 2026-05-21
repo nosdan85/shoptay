@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+﻿const mongoose = require('mongoose');
 
 const productSchema = new mongoose.Schema({
     name: { type: String, required: true },
@@ -6,6 +6,7 @@ const productSchema = new mongoose.Schema({
     originalPriceString: { type: String },
     bulkPrice: { type: Number, default: null },
     bulkPriceString: { type: String, default: '' },
+    packQuantity: { type: Number, default: 1 },
     image: { type: String, required: true },
     desc: { type: String },
     category: { type: String, required: true },

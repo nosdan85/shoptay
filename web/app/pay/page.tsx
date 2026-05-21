@@ -259,7 +259,7 @@ function PayContent() {
             </div>
 
             {paymentError && (
-              <div className="rounded-[14px] border border-[#FF4D4F]/40 bg-red-950/30 p-3 text-sm text-red-200">
+              <div className="rounded-[14px] border border-[#FF4D4F]/40 bg-red-950/30 p-3 text-sm text-[#FF4D4F]">
                 {paymentError}
               </div>
             )}

@@ -282,7 +282,7 @@ export default function ProofsPage() {
                 return (
                   <div
                     key={proof.id}
-                    className="animate-vouch-entrance rounded-[16px] border border-[#1E1E1E]/60 bg-[#111111]/80 p-5 backdrop-blur-sm transition-all hover:border-[#1E1E1E]/50"
+                    className="animate-vouch-entrance rounded-[16px] border border-[#1E1E1E]/60 bg-[#111111]/90 p-5 backdrop-blur-sm transition-all hover:border-[#1E1E1E]/50"
                     style={{ animationDelay: `${idx * 80}ms` }}
                   >
                     {proof.robloxUsername && (
@@ -395,7 +395,7 @@ export default function ProofsPage() {
                               <button
                                 type="button"
                                 onClick={() => startEdit(proof)}
-                                className="rounded bg-[#1E1E1E] p-1.5 text-white transition-colors hover:bg-blue-600"
+                                className="rounded bg-[#1E1E1E] p-1.5 text-white transition-colors hover:bg-[#49B6FF]"
                                 title="Sá»­a"
                               >
                                 <Edit2 className="h-4 w-4" />
@@ -403,7 +403,7 @@ export default function ProofsPage() {
                               <button
                                 type="button"
                                 onClick={() => void deleteProof(proof.id)}
-                                className="rounded bg-[#1E1E1E] p-1.5 text-white transition-colors hover:bg-red-600"
+                                className="rounded bg-[#1E1E1E] p-1.5 text-white transition-colors hover:bg-[#FF4D4F]/90"
                                 title="XÃ³a"
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -460,7 +460,7 @@ export default function ProofsPage() {
 
           {activeImages.length > 1 && (
             <button
-              className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-[#111111]/80 p-3"
+              className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-[#111111]/90 p-3"
               onClick={(e) => {
                 e.stopPropagation()
                 prevImage()
@@ -482,7 +482,7 @@ export default function ProofsPage() {
 
           {activeImages.length > 1 && (
             <button
-              className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-[#111111]/80 p-3"
+              className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-[#111111]/90 p-3"
               onClick={(e) => {
                 e.stopPropagation()
                 nextImage()
@@ -493,7 +493,7 @@ export default function ProofsPage() {
           )}
 
           {activeImages.length > 1 && (
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-[#111111]/80 px-4 py-2 text-sm font-medium text-white">
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-[#111111]/90 px-4 py-2 text-sm font-medium text-white">
               {activeIndex + 1} / {activeImages.length}
             </div>
           )}

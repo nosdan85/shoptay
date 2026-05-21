@@ -28,9 +28,21 @@ function toVietnamIso(date: string, time: string): string {
   return new Date(`${date}T${time}:00+07:00`).toISOString();
 }
 
+function todayInVietnam(): string {
+  return toVietnamDateTimeParts(new Date().toISOString()).date;
+}
+
 interface Product { _id: string; name: string; price: number; bulkPrice?: number; packQuantity?: number; image: string; desc?: string; category: string; gameId?: string }
 interface Game { _id: string; name: string; slug: string; image?: string; active: boolean }
 interface Slot { _id: string; ownerTimezone: string; startAt: string; endAt: string; active: boolean; note?: string }
+interface SlotRangeForm { startTime: string; endTime: string; note: string }
+
+const VIETNAM_SLOT_PRESETS: Array<{ label: string; startTime: string; endTime: string; note: string }> = [
+  { label: "Ca sáng", startTime: "08:00", endTime: "12:00", note: "Ca sáng" },
+  { label: "Ca trưa", startTime: "12:00", endTime: "14:00", note: "Ca trưa" },
+  { label: "Ca chiều", startTime: "14:00", endTime: "18:00", note: "Ca chiều" },
+  { label: "Ca tối", startTime: "19:00", endTime: "22:00", note: "Ca tối" },
+];
 
 export default function AdminPage() {
   const { user, token, isLoading, getOAuthUrl } = useAuth();
@@ -55,8 +67,8 @@ export default function AdminPage() {
   /* --- slots state --- */
   const [slots, setSlots] = useState<Slot[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
-  const [slotDate, setSlotDate] = useState("");
-  const [ranges, setRanges] = useState([{ startTime: "", endTime: "", note: "" }]);
+  const [slotDate, setSlotDate] = useState(todayInVietnam());
+  const [ranges, setRanges] = useState<SlotRangeForm[]>([{ startTime: "", endTime: "", note: "" }]);
   const [editingSlot, setEditingSlot] = useState<string | null>(null);
   const [slotEditForm, setSlotEditForm] = useState({ date: "", startTime: "", endTime: "", note: "", active: true });
   const [slotFilter, setSlotFilter] = useState<string>("");
@@ -65,6 +77,20 @@ export default function AdminPage() {
   const [banners, setBanners] = useState<string[]>([]);
   const [bestSellers, setBestSellers] = useState<string[]>([]);
   const [newBannerUrl, setNewBannerUrl] = useState("");
+
+  const addPresetRange = (preset: SlotRangeForm) => {
+    if (!slotDate) setSlotDate(todayInVietnam());
+    setRanges((prev) => {
+      const first = prev[0];
+      const hasOnlyEmptyRow = prev.length === 1 && !first.startTime && !first.endTime && !first.note;
+      return hasOnlyEmptyRow ? [{ ...preset }] : [...prev, { ...preset }];
+    });
+  };
+
+  const setPresetRanges = (nextRanges: SlotRangeForm[]) => {
+    if (!slotDate) setSlotDate(todayInVietnam());
+    setRanges(nextRanges);
+  };
 
   async function fetchAll() {
     void fetchProducts();
@@ -211,7 +237,7 @@ export default function AdminPage() {
         throw new Error("No valid slots were created. Check start/end times.");
       }
       setRanges([{ startTime: "", endTime: "", note: "" }]);
-      setSlotDate("");
+      setSlotDate(todayInVietnam());
       await fetchSlots();
     } catch (err) { setError(err instanceof Error ? err.message : "Tao khung gio that bai"); }
     setSubmitting(false);
@@ -222,23 +248,26 @@ export default function AdminPage() {
       try {
         const start = new Date(slot.startAt);
         const end = new Date(slot.endAt);
-        const dateText = new Intl.DateTimeFormat("en-US", {
+        const dateText = new Intl.DateTimeFormat("vi-VN", {
           timeZone: slot.ownerTimezone,
+          weekday: "short",
           month: "short",
           day: "numeric",
           year: "numeric",
         }).format(start);
-        const startText = new Intl.DateTimeFormat("en-US", {
+        const startText = new Intl.DateTimeFormat("vi-VN", {
           timeZone: slot.ownerTimezone,
-          hour: "numeric",
+          hour: "2-digit",
           minute: "2-digit",
+          hour12: false,
         }).format(start);
-        const endText = new Intl.DateTimeFormat("en-US", {
+        const endText = new Intl.DateTimeFormat("vi-VN", {
           timeZone: slot.ownerTimezone,
-          hour: "numeric",
+          hour: "2-digit",
           minute: "2-digit",
+          hour12: false,
         }).format(end);
-        return `${dateText} • ${startText} - ${endText} (Vietnam)`;
+        return `${dateText} • ${startText} - ${endText} • Giờ VN (GMT+7)`;
       } catch {
         return `${slot.startAt} - ${slot.endAt}`;
       }
@@ -249,7 +278,7 @@ export default function AdminPage() {
   const filteredSlots = useMemo(() => {
     if (!slotFilter) return slots;
     return slots.filter((s) => {
-      const slotDateValue = new Date(s.startAt).toISOString().slice(0, 7);
+      const slotDateValue = toVietnamDateTimeParts(s.startAt).date.slice(0, 7);
       return slotDateValue === slotFilter;
     });
   }, [slots, slotFilter]);
@@ -384,7 +413,7 @@ export default function AdminPage() {
             <p className="text-[#B5B5B5]/80 text-sm">Quản lý sản phẩm, khung giờ giao hàng, game và banner.</p>
           </div>
           <div className="flex gap-3">
-            <a href="/shop" className="flex items-center gap-2 rounded-[14px] bg-[#111111] border border-[#1E1E1E] px-4 py-2 text-sm text-[#B5B5B5] hover:text-white hover:border-slate-600 transition-all">← Về cửa hàng</a>
+            <a href="/shop" className="flex items-center gap-2 rounded-[14px] bg-[#111111] border border-[#1E1E1E] px-4 py-2 text-sm text-[#B5B5B5] hover:text-white hover:border-[#2F9BE6]/30 transition-all">← Về cửa hàng</a>
             <button onClick={() => void fetchAll()} className="flex items-center gap-2 rounded-[14px] bg-[#111111] border border-[#1E1E1E] px-4 py-2 text-sm"><RefreshCcw className="h-4 w-4" /> Đồng bộ</button>
           </div>
         </div>
@@ -397,7 +426,7 @@ export default function AdminPage() {
           ))}
         </div>
 
-        {error && <div className="mb-4 rounded-[16px] border border-red-500/20 bg-[#FF4D4F]/10 px-4 py-3 text-sm text-red-200">{error}</div>}
+        {error && <div className="mb-4 rounded-[16px] border border-red-500/20 bg-[#FF4D4F]/10 px-4 py-3 text-sm text-[#FF4D4F]">{error}</div>}
 
         {/* ─── TAB: PRODUCTS ─── */}
         {tab === "sản phẩm" && (
@@ -429,7 +458,7 @@ export default function AdminPage() {
                 </div>
                 <div className="flex gap-2">
                   <button type="submit" disabled={submitting} className="rounded-[14px] bg-[#2F9BE6] px-5 py-2.5 text-sm font-medium disabled:opacity-50">Lưu mặt hàng</button>
-                  <button type="button" onClick={() => setShowProductForm(false)} className="rounded-[14px] bg-slate-800 px-5 py-2.5 text-sm">Hủy</button>
+                  <button type="button" onClick={() => setShowProductForm(false)} className="rounded-[14px] bg-[#1E1E1E] px-5 py-2.5 text-sm">Hủy</button>
                 </div>
               </form>
             )}
@@ -442,11 +471,11 @@ export default function AdminPage() {
                     <img src={imgUrl(p.image)} alt="" className="h-12 w-12 rounded-[14px] object-cover bg-[#050505]" />
                     <div className="min-w-0">
                       <p className="font-medium truncate text-sm">{p.name}</p>
-                      <p className="text-xs text-[#B5B5B5]/80">{p.category} • ${p.price.toFixed(2)}{(p.packQuantity && p.packQuantity > 1) ? <span className="text-[#2F9BE6] ml-2">Qty: x{p.packQuantity}</span> : null}</p>
+                      <p className="text-xs text-[#B5B5B5]/80">{p.category} • ${p.price.toFixed(2)}{<span className="text-[#2F9BE6] ml-2">Qty: x{p.packQuantity || 1}</span>}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => void toggleBestSeller(p._id)} className={"rounded px-3 py-1.5 text-xs font-semibold " + (bestSellers.includes(p._id) ? "bg-[#2F9BE6] text-white" : "bg-slate-800 text-[#B5B5B5]/80")}>Bán chạy</button>
+                    <button onClick={() => void toggleBestSeller(p._id)} className={"rounded px-3 py-1.5 text-xs font-semibold " + (bestSellers.includes(p._id) ? "bg-[#2F9BE6] text-white" : "bg-[#1E1E1E] text-[#B5B5B5]/80")}>Bán chạy</button>
                     <button onClick={() => {
                       setProductForm({ name: p.name, price: String(p.price), bulkPrice: p.bulkPrice ? String(p.bulkPrice) : "", packQuantity: p.packQuantity ? String(p.packQuantity) : "1", image: p.image, desc: p.desc || "", category: p.category, gameId: p.gameId || "" });
                       setEditingProduct(p._id); setShowProductForm(true);
@@ -463,23 +492,51 @@ export default function AdminPage() {
         {tab === "khung giờ" && (
           <div className="grid gap-6 lg:grid-cols-[400px_1fr]">
             <div className="rounded-[16px] border border-[#1E1E1E] bg-[#111111] p-5 space-y-4 h-fit">
-              <div><h2 className="font-semibold text-lg">Tạo khung giờ giao hàng</h2><p className="text-xs text-[#B5B5B5]/80">Tất cả khung giờ được lưu theo giờ Việt Nam (Asia/Ho_Chi_Minh). Tự động chuyển cho khách.</p></div>
-              <form onSubmit={createSlots} className="space-y-4">
-                <input type="date" value={slotDate} onChange={(e) => setSlotDate(e.target.value)} className="w-full rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
+              <div>
+                <h2 className="font-semibold text-lg">Tạo khung giờ giao hàng</h2>
+                <p className="text-xs text-[#B5B5B5]/80">Tất cả khung giờ được lưu theo giờ Việt Nam (Asia/Ho_Chi_Minh). Tự động chuyển cho khách.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => { setPresetRanges([{ startTime: "08:00", endTime: "12:00", note: "Ca sáng" }]); }} className="rounded-[14px] border border-[#1E1E1E] bg-[#161616] px-3 py-1.5 text-xs text-[#B5B5B5] hover:text-white hover:border-[#2F9BE6]/40">Ca sáng (08:00-12:00)</button>
+                  <button type="button" onClick={() => { setPresetRanges([{ startTime: "12:00", endTime: "14:00", note: "Ca trưa" }]); }} className="rounded-[14px] border border-[#1E1E1E] bg-[#161616] px-3 py-1.5 text-xs text-[#B5B5B5] hover:text-white hover:border-[#2F9BE6]/40">Ca trưa (12:00-14:00)</button>
+                  <button type="button" onClick={() => { setPresetRanges([{ startTime: "14:00", endTime: "18:00", note: "Ca chiều" }]); }} className="rounded-[14px] border border-[#1E1E1E] bg-[#161616] px-3 py-1.5 text-xs text-[#B5B5B5] hover:text-white hover:border-[#2F9BE6]/40">Ca chiều (14:00-18:00)</button>
+                  <button type="button" onClick={() => { setPresetRanges([{ startTime: "19:00", endTime: "22:00", note: "Ca tối" }]); }} className="rounded-[14px] border border-[#1E1E1E] bg-[#161616] px-3 py-1.5 text-xs text-[#B5B5B5] hover:text-white hover:border-[#2F9BE6]/40">Ca tối (19:00-22:00)</button>
+                  <button type="button" onClick={() => { setPresetRanges([{ startTime: "08:00", endTime: "12:00", note: "Ca sáng" }, { startTime: "12:00", endTime: "14:00", note: "Ca trưa" }, { startTime: "14:00", endTime: "18:00", note: "Ca chiều" }, { startTime: "19:00", endTime: "22:00", note: "Ca tối" }]); }} className="rounded-[14px] border border-[#2F9BE6]/30 bg-[#2F9BE6]/10 px-3 py-1.5 text-xs text-[#B5B5B5] hover:text-white hover:border-[#2F9BE6]/60">Đủ 4 ca</button>
+                </div>
+                <form onSubmit={createSlots} className="space-y-4">
+                <div className="space-y-1"><label className="text-xs text-[#B5B5B5]/60">Ngày giao</label><input type="date" value={slotDate} onChange={(e) => setSlotDate(e.target.value)} className="w-full rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" /></div>
+                <div className="space-y-2 rounded-[14px] border border-[#1E1E1E] bg-[#050505] p-3">
+                  <p className="text-xs font-medium text-[#B5B5B5]">Thêm nhanh theo ca giờ Việt Nam</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {VIETNAM_SLOT_PRESETS.map((preset) => (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => addPresetRange(preset)}
+                        className="rounded-[12px] border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-xs text-[#B5B5B5] hover:border-[#2F9BE6]/40 hover:text-white"
+                      >
+                        {preset.label} ({preset.startTime} - {preset.endTime})
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 {ranges.map((row, idx) => (
                   <div key={idx} className="p-3 border border-[#1E1E1E] bg-[#050505] rounded-[14px] space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-medium text-[#B5B5B5]">Khung giờ {idx + 1}</p>
+                      {ranges.length > 1 && <button type="button" onClick={() => setRanges((p) => p.filter((_, i) => i !== idx))} className="text-[#FF4D4F] text-xs hover:underline">Xóa khung này</button>}
+                    </div>
                     <div className="flex gap-2">
-                      <input type="time" required value={row.startTime} onChange={(e) => setRanges((p) => p.map((r, i) => (i === idx ? { ...r, startTime: e.target.value } : r)))} className="flex-1 rounded border border-[#1E1E1E] bg-[#111111] px-2 py-1 text-sm outline-none" />
-                      <input type="time" required value={row.endTime} onChange={(e) => setRanges((p) => p.map((r, i) => (i === idx ? { ...r, endTime: e.target.value } : r)))} className="flex-1 rounded border border-[#1E1E1E] bg-[#111111] px-2 py-1 text-sm outline-none" />
+                      <div className="space-y-1 flex-1"><label className="text-xs text-[#B5B5B5]/60">Từ</label><input type="time" required value={row.startTime} onChange={(e) => setRanges((p) => p.map((r, i) => (i === idx ? { ...r, startTime: e.target.value } : r)))} className="w-full rounded border border-[#1E1E1E] bg-[#111111] px-2 py-1.5 text-sm outline-none" /></div>
+                      <div className="space-y-1 flex-1"><label className="text-xs text-[#B5B5B5]/60">Đến</label><input type="time" required value={row.endTime} onChange={(e) => setRanges((p) => p.map((r, i) => (i === idx ? { ...r, endTime: e.target.value } : r)))} className="w-full rounded border border-[#1E1E1E] bg-[#111111] px-2 py-1.5 text-sm outline-none" /></div>
                     </div>
                     <div className="flex gap-2">
                       <input placeholder="Ghi chú (tùy chọn)" value={row.note} onChange={(e) => setRanges((p) => p.map((r, i) => (i === idx ? { ...r, note: e.target.value } : r)))} className="flex-1 rounded border border-[#1E1E1E] bg-[#111111] px-2 py-1 text-xs outline-none" />
-                      {ranges.length > 1 && <button type="button" onClick={() => setRanges((p) => p.filter((_, i) => i !== idx))} className="text-[#FF4D4F] text-xs hover:underline">Xóa</button>}
                     </div>
                   </div>
                 ))}
                 <div className="flex gap-2">
-                  <button type="button" onClick={() => setRanges((p) => [...p, { startTime: "", endTime: "", note: "" }])} className="rounded bg-slate-800 px-4 py-2 text-xs">Thêm khung giờ</button>
+                  <button type="button" onClick={() => setRanges((p) => [...p, { startTime: "", endTime: "", note: "" }])} className="rounded bg-[#1E1E1E] px-4 py-2 text-xs">Thêm khung trống</button>
                   <button type="submit" disabled={submitting} className="rounded bg-[#2F9BE6] px-4 py-2 text-xs font-semibold disabled:opacity-50">Tạo khung giờ</button>
                 </div>
               </form>
@@ -507,9 +564,9 @@ export default function AdminPage() {
                   {editingSlot === s._id ? (
                     <div className="space-y-3 animate-fade-in">
                       <div className="grid gap-2 md:grid-cols-3">
-                        <input type="date" value={slotEditForm.date} onChange={(e) => setSlotEditForm((p) => ({ ...p, date: e.target.value }))} className="rounded border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm outline-none" />
-                        <input type="time" value={slotEditForm.startTime} onChange={(e) => setSlotEditForm((p) => ({ ...p, startTime: e.target.value }))} className="rounded border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm outline-none" />
-                        <input type="time" value={slotEditForm.endTime} onChange={(e) => setSlotEditForm((p) => ({ ...p, endTime: e.target.value }))} className="rounded border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm outline-none" />
+                        <div className="space-y-1"><label className="text-xs text-[#B5B5B5]/60">Ngày</label><input type="date" value={slotEditForm.date} onChange={(e) => setSlotEditForm((p) => ({ ...p, date: e.target.value }))} className="w-full rounded border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm outline-none" /></div>
+                        <div className="space-y-1"><label className="text-xs text-[#B5B5B5]/60">Từ giờ</label><input type="time" value={slotEditForm.startTime} onChange={(e) => setSlotEditForm((p) => ({ ...p, startTime: e.target.value }))} className="w-full rounded border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm outline-none" /></div>
+                        <div className="space-y-1"><label className="text-xs text-[#B5B5B5]/60">Đến giờ</label><input type="time" value={slotEditForm.endTime} onChange={(e) => setSlotEditForm((p) => ({ ...p, endTime: e.target.value }))} className="w-full rounded border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm outline-none" /></div>
                       </div>
                       <input placeholder="Ghi chú (tùy chọn)" value={slotEditForm.note} onChange={(e) => setSlotEditForm((p) => ({ ...p, note: e.target.value }))} className="w-full rounded border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm outline-none" />
                       <label className="flex items-center gap-2 text-sm text-[#B5B5B5]">
@@ -518,7 +575,7 @@ export default function AdminPage() {
                       </label>
                       <div className="flex gap-2">
                         <button type="button" onClick={() => void saveSlotEdit()} disabled={submitting} className="rounded bg-[#2F9BE6] px-4 py-2 text-xs font-semibold disabled:opacity-50">Lưu</button>
-                        <button type="button" onClick={() => setEditingSlot(null)} className="rounded bg-slate-800 px-4 py-2 text-xs">Hủy</button>
+                        <button type="button" onClick={() => setEditingSlot(null)} className="rounded bg-[#1E1E1E] px-4 py-2 text-xs">Hủy</button>
                       </div>
                     </div>
                   ) : (
@@ -529,7 +586,7 @@ export default function AdminPage() {
                       </div>
                       <div className="flex gap-2">
                         <button onClick={() => startEditSlot(s)} className="p-2 text-[#2F9BE6] bg-[#111111] rounded" title="Sua"><Edit2 className="h-4 w-4" /></button>
-                        <button onClick={() => void toggleSlot(s._id, !s.active)} className={"p-2 rounded " + (s.active ? "text-[#2F9BE6] bg-[#111111]" : "text-[#3DDC84] bg-[#111111]")} title={s.active ? "Deactivate" : "Activate"}><RefreshCcw className="h-4 w-4" /></button>
+                        <button onClick={() => void toggleSlot(s._id, !s.active)} className={"p-2 rounded " + (s.active ? "text-[#2F9BE6] bg-[#111111]" : "text-[#3DDC84] bg-[#111111]")} title={s.active ? "Tat" : "Bat"}><RefreshCcw className="h-4 w-4" /></button>
                         <button onClick={() => void deleteSlot(s._id)} className="p-2 text-[#FF4D4F] bg-[#111111] rounded" title="Xóa"><Trash2 className="h-4 w-4" /></button>
                       </div>
                     </div>
@@ -558,7 +615,7 @@ export default function AdminPage() {
                 </div>
                 <div className="flex gap-2">
                   <button type="submit" disabled={submitting} className="rounded-[14px] bg-[#2F9BE6] px-5 py-2.5 text-sm font-medium disabled:opacity-50">Lưu game</button>
-                  <button type="button" onClick={() => setShowGameForm(false)} className="rounded-[14px] bg-slate-800 px-5 py-2.5 text-sm">Hủy</button>
+                  <button type="button" onClick={() => setShowGameForm(false)} className="rounded-[14px] bg-[#1E1E1E] px-5 py-2.5 text-sm">Hủy</button>
                 </div>
               </form>
             )}
@@ -597,7 +654,7 @@ export default function AdminPage() {
             {banners[0] ? (
               <div className="relative group overflow-hidden rounded-[14px] border border-[#1E1E1E]">
                 <img src={imgUrl(banners[0])} alt="" className="w-full object-cover" style={{ maxHeight: "360px" }} />
-                <button onClick={() => void deleteBanner(banners[0])} className="absolute top-2 right-2 bg-red-600 text-white rounded p-1.5 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="h-4 w-4" /></button>
+                <button onClick={() => void deleteBanner(banners[0])} className="absolute top-2 right-2 bg-[#FF4D4F] text-white rounded p-1.5 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="h-4 w-4" /></button>
               </div>
             ) : (
               <div className="rounded-[14px] border border-dashed border-[#1E1E1E] bg-[#050505] p-8 text-center text-sm text-[#B5B5B5]/60">Chưa có banner.</div>

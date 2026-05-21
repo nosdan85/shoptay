@@ -68,7 +68,7 @@ export default function Navbar({ cartCount = 0, showCart = false }: NavbarProps)
             alt="NOS" 
             className="h-9 w-auto object-contain transition-transform duration-300 group-hover:scale-105" 
           />
-          <span className="text-xl font-bold text-white tracking-tight hidden sm:block">
+          <span className="text-base font-bold text-white tracking-tight sm:text-xl">
             NOS<span className="text-[#2F9BE6]">Market</span>
           </span>
         </Link>
@@ -77,14 +77,14 @@ export default function Navbar({ cartCount = 0, showCart = false }: NavbarProps)
         <div className="hidden md:flex items-center gap-1">
           <Link 
             href="/shop" 
-            className="relative px-4 py-2 text-[#B5B5B5] hover:text-white transition-colors duration-200 font-medium text-sm group"
+            className="relative px-3 py-2 text-[#B5B5B5] hover:text-white transition-colors duration-200 font-medium text-sm group"
           >
             Shop
             <span className="absolute bottom-0 left-4 right-4 h-0.5 bg-[#2F9BE6] scale-x-0 group-hover:scale-x-100 transition-transform duration-200 origin-left rounded-full" />
           </Link>
           <Link 
             href="/proofs" 
-            className="relative px-4 py-2 text-[#B5B5B5] hover:text-white transition-colors duration-200 font-medium text-sm group"
+            className="relative px-3 py-2 text-[#B5B5B5] hover:text-white transition-colors duration-200 font-medium text-sm group"
           >
             Proofs
             <span className="absolute bottom-0 left-4 right-4 h-0.5 bg-[#2F9BE6] scale-x-0 group-hover:scale-x-100 transition-transform duration-200 origin-left rounded-full" />
@@ -92,7 +92,7 @@ export default function Navbar({ cartCount = 0, showCart = false }: NavbarProps)
           {user?.isOwner && (
             <Link 
               href="/admin" 
-              className="relative px-4 py-2 text-[#B5B5B5] hover:text-white transition-colors duration-200 font-medium text-sm group"
+              className="relative px-3 py-2 text-[#B5B5B5] hover:text-white transition-colors duration-200 font-medium text-sm group"
             >
               Admin
               <span className="absolute bottom-0 left-4 right-4 h-0.5 bg-[#2F9BE6] scale-x-0 group-hover:scale-x-100 transition-transform duration-200 origin-left rounded-full" />

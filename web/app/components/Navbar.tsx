@@ -39,6 +39,17 @@ export default function Navbar({ cartCount = 0, showCart = false, onCartClick }:
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    if (!mobileMenuOpen) {
+      document.body.style.overflow = "";
+      return;
+    }
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileMenuOpen]);
+
   const handleLogout = () => {
     setLoggingOut(true);
     setTimeout(() => {
@@ -187,22 +198,8 @@ export default function Navbar({ cartCount = 0, showCart = false, onCartClick }:
 
       {/* Mobile Fullscreen Drawer */}
       {mobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 z-[9998] bg-[#050505] backdrop-blur-xl animate-fade-in">
-          <div className="h-full flex flex-col">
-            {/* Mobile Header */}
-            <div className="flex items-center justify-between px-4 h-[68px] border-b border-[#1E1E1E]">
-              <Link href="/shop" className="flex items-center gap-3" onClick={() => setMobileMenuOpen(false)}>
-                <img src="/pictures/site-logo.png" alt="NOS" className="h-9 w-auto object-contain" />
-                <span className="text-base font-bold text-white tracking-tight">
-                  NOS<span className="text-[#2F9BE6]">Market</span>
-                </span>
-              </Link>
-              <button onClick={() => setMobileMenuOpen(false)} className="rounded-xl bg-[#111111] p-2 text-white">
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-            {/* Menu Content */}
-            <div className="flex-1 overflow-y-auto px-4 py-6 flex flex-col gap-2">
+        <div className="md:hidden absolute left-0 right-0 top-full z-[9998] border-b border-[#1E1E1E] bg-[#050505]/98 backdrop-blur-xl animate-fade-in">
+          <div className="max-h-[calc(100dvh-68px)] min-h-[calc(100dvh-68px)] overflow-y-auto px-4 py-6 flex flex-col gap-2">
             <Link
               href="/shop"
               onClick={() => setMobileMenuOpen(false)}
@@ -267,7 +264,6 @@ export default function Navbar({ cartCount = 0, showCart = false, onCartClick }:
                 </a>
               )}
               </div>
-            </div>
           </div>
         </div>
       )}

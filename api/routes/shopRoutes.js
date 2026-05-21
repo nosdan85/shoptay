@@ -3546,6 +3546,7 @@ router.put('/owner/products/:id', authRequired, async (req, res) => {
         if (originalPriceString !== undefined) product.originalPriceString = String(originalPriceString || '').trim();
         if (bulkPrice !== undefined) product.bulkPrice = bulkPrice !== null && bulkPrice !== '' ? Number(bulkPrice) : null;
         if (bulkPriceString !== undefined) product.bulkPriceString = String(bulkPriceString || '').trim();
+        if (req.body?.packQuantity !== undefined) product.packQuantity = Number(req.body.packQuantity) || 1;
         if (image !== undefined) product.image = String(image).trim();
         if (desc !== undefined) product.desc = String(desc || '').trim();
         if (category !== undefined) product.category = String(category).trim();

@@ -357,11 +357,11 @@ export default function ShopPage() {
     finally { setSubmitting(false); }
   };
 
-  if (loading) return <div className="min-h-screen bg-[#050505]"><Navbar /><LogoLoader /></div>;
+  if (loading) return <div className="min-h-screen bg-[#050505]"><Navbar showCart={step === "shop"} cartCount={cartCount} onCartClick={() => { setCartClosing(false); setCartOpen(true); }} /><LogoLoader /></div>;
 
   return (
     <div className="min-h-screen bg-[#050505] text-white">
-      <Navbar />
+      <Navbar cartCount={cartCount} showCart={step === "shop" && cartCount > 0} onCartClick={() => { setCartClosing(false); setCartOpen(true); }} />
 
       {checkoutLoading && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in">
@@ -373,11 +373,8 @@ export default function ShopPage() {
       )}
 
       {step === "shop" && cartCount > 0 && (
-        <button onClick={() => { setCartClosing(false); setCartOpen(true); }} className="fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-full bg-[#2F9BE6] px-4 py-2.5 text-sm md:bottom-6 md:right-6 md:px-5 md:py-3 md:text-base font-medium shadow-2xl transition-transform hover:scale-105 active:scale-95">
-          <div className="relative">
-            <ShoppingCart className="h-6 w-6 text-white" />
-            <span className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-[#FF4D4F] text-[10px] font-bold text-white">{cartCount}</span>
-          </div>
+        <button onClick={() => { setCartClosing(false); setCartOpen(true); }} className="hidden md:flex fixed bottom-6 right-6 z-40 items-center gap-2 rounded-full bg-[#2F9BE6] px-5 py-3 text-base font-medium shadow-2xl transition-transform hover:scale-105 active:scale-95">
+          <ShoppingCart className="h-5 w-5" /> Cart ({cartCount})
         </button>
       )}
 
@@ -680,7 +677,7 @@ export default function ShopPage() {
                   <span key={i} className="mx-4 inline-flex items-center gap-2 text-sm text-[#B5B5B5] sm:mx-6">
                     <span className="text-[#2F9BE6] font-medium">{maskName(p.username)}</span>
                     <span className="text-[#B5B5B5]/80">purchased</span>
-                    <span className="text-[#3DDC84]">{p.productName}{p.quantity ? ` x${p.quantity}` : ""}</span>
+                    <span className="text-[#3DDC84]">{p.productName}{typeof p.quantity === "number" ? ` x${p.quantity}` : ""}</span>
                     {p.price && <span className="text-[#B5B5B5]">@ ${p.price.toFixed(2)}</span>}
                   </span>
                 ))}

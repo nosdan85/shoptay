@@ -203,9 +203,27 @@ select:focus-visible {
 }
 
 /* Prevent horizontal scroll */
-html, body {
+html {
   overflow-x: hidden;
   width: 100%;
+}
+body {
+  overflow-x: hidden;
+  width: 100%;
+  overflow-y: scroll;
+  -webkit-overflow-scrolling: touch;
+}
+/* Ensure all overflow containers hide scrollbar but allow scroll */
+[class*="overflow-y-auto"],
+[class*="overflow-y-scroll"],
+[class*="overflow-auto"] {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+[class*="overflow-y-auto"]::-webkit-scrollbar,
+[class*="overflow-y-scroll"]::-webkit-scrollbar,
+[class*="overflow-auto"]::-webkit-scrollbar {
+  display: none;
 }
 
 /* Safe area insets for notched devices */
@@ -220,7 +238,7 @@ html, body {
 /* ─── Safari iOS fixes ─── */
 @supports (-webkit-touch-callout: none) {
   /* Fix position:fixed + backdrop-filter flicker */
-  * { -webkit-transform: translateZ(0); }
+  /* Removed -webkit-transform: translateZ(0) as it breaks fixed positioning */
   
   /* Ensure body doesn't scroll behind modals */
   body.modal-open { position: fixed; width: 100%; }

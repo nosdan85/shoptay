@@ -8,9 +8,10 @@ import { useState, useRef, useEffect } from "react";
 interface NavbarProps {
   cartCount?: number;
   showCart?: boolean;
+  onCartClick?: () => void;
 }
 
-export default function Navbar({ cartCount = 0, showCart = false }: NavbarProps) {
+export default function Navbar({ cartCount = 0, showCart = false, onCartClick }: NavbarProps) {
   const { user, isLoading, logout, getOAuthUrl } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -103,9 +104,10 @@ export default function Navbar({ cartCount = 0, showCart = false }: NavbarProps)
         <div className="flex items-center gap-3">
           {/* Cart Icon */}
           {showCart && (
-            <Link 
-              href="/shop" 
-              className="relative p-2 text-[#B5B5B5] hover:text-white transition-colors duration-200"
+            <button
+              type="button"
+              onClick={onCartClick}
+              className="relative rounded-xl p-2 text-[#B5B5B5] transition-colors duration-200 hover:text-white active:scale-95"
             >
               <ShoppingCart className="w-5 h-5" />
               {cartCount > 0 && (
@@ -113,7 +115,7 @@ export default function Navbar({ cartCount = 0, showCart = false }: NavbarProps)
                   {cartCount}
                 </span>
               )}
-            </Link>
+            </button>
           )}
 
           {/* User Section Desktop */}
@@ -185,7 +187,7 @@ export default function Navbar({ cartCount = 0, showCart = false }: NavbarProps)
 
       {/* Mobile Fullscreen Drawer */}
       {mobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 z-[60] bg-[#050505]/98 backdrop-blur-xl animate-fade-in">
+        <div className="md:hidden fixed inset-0 z-[9998] bg-[#050505] backdrop-blur-xl animate-fade-in">
           <div className="h-full flex flex-col">
             {/* Mobile Header */}
             <div className="flex items-center justify-between px-4 h-[68px] border-b border-[#1E1E1E]">
@@ -195,7 +197,7 @@ export default function Navbar({ cartCount = 0, showCart = false }: NavbarProps)
                   NOS<span className="text-[#2F9BE6]">Market</span>
                 </span>
               </Link>
-              <button onClick={() => setMobileMenuOpen(false)} className="p-2 text-white">
+              <button onClick={() => setMobileMenuOpen(false)} className="rounded-xl bg-[#111111] p-2 text-white">
                 <X className="w-6 h-6" />
               </button>
             </div>
@@ -204,14 +206,14 @@ export default function Navbar({ cartCount = 0, showCart = false }: NavbarProps)
             <Link
               href="/shop"
               onClick={() => setMobileMenuOpen(false)}
-              className="flex items-center px-4 py-3 text-base font-medium text-[#B5B5B5] hover:text-white hover:bg-[#111111] rounded-lg transition-all"
+              className="flex items-center rounded-2xl bg-[#111111] px-5 py-4 text-lg font-semibold text-white transition-all active:scale-[0.98]"
             >
               Shop
             </Link>
             <Link
               href="/proofs"
               onClick={() => setMobileMenuOpen(false)}
-              className="flex items-center px-4 py-3 text-base font-medium text-[#B5B5B5] hover:text-white hover:bg-[#111111] rounded-lg transition-all"
+              className="flex items-center rounded-2xl bg-[#111111] px-5 py-4 text-lg font-semibold text-white transition-all active:scale-[0.98]"
             >
               Proofs
             </Link>
@@ -219,7 +221,7 @@ export default function Navbar({ cartCount = 0, showCart = false }: NavbarProps)
               <Link
                 href="/admin"
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center px-4 py-3 text-base font-medium text-[#2F9BE6] hover:bg-[#111111] rounded-lg transition-all"
+                className="flex items-center rounded-2xl bg-[#111111] px-5 py-4 text-lg font-semibold text-[#2F9BE6] transition-all active:scale-[0.98]"
               >
                 Admin Dashboard
               </Link>

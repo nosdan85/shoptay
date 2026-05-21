@@ -34,7 +34,7 @@ interface Slot { _id: string; ownerTimezone: string; startAt: string; endAt: str
 
 export default function AdminPage() {
   const { user, token, isLoading, getOAuthUrl } = useAuth();
-  const [tab, setTab] = useState<"products" | "slots" | "games" | "config">("products");
+  const [tab, setTab] = useState<"sản phẩm" | "khung giờ" | "game" | "cấu hình">("sản phẩm");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -145,17 +145,17 @@ export default function AdminPage() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error("Save failed");
+      if (!res.ok) throw new Error("Luu that bai");
       setShowProductForm(false);
       setEditingProduct(null);
       setProductForm({ name: "", price: "", bulkPrice: "", packQuantity: "", image: "", desc: "", category: "", gameId: "" });
       await fetchProducts();
-    } catch (err) { setError("Save failed"); }
+    } catch (err) { setError("Luu that bai"); }
     setSubmitting(false);
   };
 
   const deleteProduct = async (id: string) => {
-    if (!token || !confirm("Delete item?")) return;
+    if (!token || !confirm("Xóa item?")) return;
     try {
       await fetch(`/api/shop/owner/products/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
       await fetchProducts();
@@ -175,17 +175,17 @@ export default function AdminPage() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(gameForm),
       });
-      if (!res.ok) throw new Error("Save game failed");
+      if (!res.ok) throw new Error("Luu game that bai");
       setShowGameForm(false);
       setEditingGame(null);
       setGameForm({ name: "", slug: "", image: "", active: true });
       await fetchGames();
-    } catch { setError("Save game failed"); }
+    } catch { setError("Luu game that bai"); }
     setSubmitting(false);
   };
 
   const deleteGame = async (id: string) => {
-    if (!token || !confirm("Delete game?")) return;
+    if (!token || !confirm("Xóa game?")) return;
     try {
       await fetch(`/api/shop/owner/games/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
       await fetchGames();
@@ -206,14 +206,14 @@ export default function AdminPage() {
         body: JSON.stringify({ ownerTimezone: "Asia/Ho_Chi_Minh", date: slotDate, ranges: cleanRanges }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Failed to create slots");
+      if (!res.ok) throw new Error(data?.error || "Tao khung gio that bai");
       if (!Array.isArray(data?.slots) || data.slots.length === 0) {
         throw new Error("No valid slots were created. Check start/end times.");
       }
       setRanges([{ startTime: "", endTime: "", note: "" }]);
       setSlotDate("");
       await fetchSlots();
-    } catch (err) { setError(err instanceof Error ? err.message : "Failed to create slots"); }
+    } catch (err) { setError(err instanceof Error ? err.message : "Tao khung gio that bai"); }
     setSubmitting(false);
   };
 
@@ -263,19 +263,19 @@ export default function AdminPage() {
         body: JSON.stringify({ active }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Failed to update slot");
+      if (!res.ok) throw new Error(data?.error || "Cap nhat khung gio that bai");
       await fetchSlots();
-    } catch (err) { setError(err instanceof Error ? err.message : "Failed to update slot"); }
+    } catch (err) { setError(err instanceof Error ? err.message : "Cap nhat khung gio that bai"); }
   };
 
   const deleteSlot = async (id: string) => {
-    if (!token || !confirm("Delete slot?")) return;
+    if (!token || !confirm("Xóa slot?")) return;
     try {
       const res = await fetch(`/api/shop/delivery-slots/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Failed to delete slot");
+      if (!res.ok) throw new Error(data?.error || "Xoa khung gio that bai");
       await fetchSlots();
-    } catch (err) { setError(err instanceof Error ? err.message : "Failed to delete slot"); }
+    } catch (err) { setError(err instanceof Error ? err.message : "Xoa khung gio that bai"); }
   };
 
   const startEditSlot = (slot: Slot) => {
@@ -306,10 +306,10 @@ export default function AdminPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Failed to save slot");
+      if (!res.ok) throw new Error(data?.error || "Luu khung gio that bai");
       setEditingSlot(null);
       await fetchSlots();
-    } catch (err) { setError(err instanceof Error ? err.message : "Failed to save slot"); }
+    } catch (err) { setError(err instanceof Error ? err.message : "Luu khung gio that bai"); }
     setSubmitting(false);
   };
 
@@ -325,15 +325,15 @@ export default function AdminPage() {
         body: JSON.stringify({ bannerUrl: newBannerUrl.trim() }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Save banner failed");
+      if (!res.ok) throw new Error(data?.error || "Luu banner that bai");
       setNewBannerUrl("");
       await fetchConfig();
-    } catch (err) { setError(err instanceof Error ? err.message : "Save banner failed"); }
+    } catch (err) { setError(err instanceof Error ? err.message : "Luu banner that bai"); }
     setSubmitting(false);
   };
 
   const deleteBanner = async (bannerUrl: string) => {
-    if (!token || !confirm("Delete banner?")) return;
+    if (!token || !confirm("Xóa banner?")) return;
     try {
       await fetch("/api/shop/owner/config/banners", {
         method: "DELETE",
@@ -365,8 +365,8 @@ export default function AdminPage() {
       <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center p-4">
         <div className="max-w-md w-full rounded-[18px] border border-red-500/20 bg-[#111111] p-8 text-center">
           <AlertCircle className="mx-auto mb-4 h-12 w-12 text-[#FF4D4F]" />
-          <h1 className="text-xl font-semibold">Access denied</h1>
-          <p className="mt-2 text-[#B5B5B5]/80 text-sm">Owner account login required via Discord.</p>
+          <h1 className="text-xl font-semibold">Không có quyền truy cập</h1>
+          <p className="mt-2 text-[#B5B5B5]/80 text-sm">Yêu cầu đăng nhập bằng Discord tài khoản owner.</p>
           <a href={getOAuthUrl()} className="mt-4 inline-block bg-[#5865F2] px-6 py-2.5 rounded-[14px] text-sm font-medium">Login with Discord</a>
         </div>
       </div>
@@ -380,18 +380,18 @@ export default function AdminPage() {
       <main className="mx-auto max-w-7xl px-4 py-8">
         <div className="mb-8 flex flex-wrap gap-4 items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-            <p className="text-[#B5B5B5]/80 text-sm">Vietnam Timezone Slots, Games, and Banners configured natively.</p>
+            <h1 className="text-2xl font-bold">Quản lý cửa hàng</h1>
+            <p className="text-[#B5B5B5]/80 text-sm">Quản lý sản phẩm, khung giờ giao hàng, game và banner.</p>
           </div>
           <div className="flex gap-3">
-            <a href="/shop" className="flex items-center gap-2 rounded-[14px] bg-[#111111] border border-[#1E1E1E] px-4 py-2 text-sm text-[#B5B5B5] hover:text-white hover:border-slate-600 transition-all">← Back to Shop</a>
-            <button onClick={() => void fetchAll()} className="flex items-center gap-2 rounded-[14px] bg-[#111111] border border-[#1E1E1E] px-4 py-2 text-sm"><RefreshCcw className="h-4 w-4" /> Sync All</button>
+            <a href="/shop" className="flex items-center gap-2 rounded-[14px] bg-[#111111] border border-[#1E1E1E] px-4 py-2 text-sm text-[#B5B5B5] hover:text-white hover:border-slate-600 transition-all">← Về cửa hàng</a>
+            <button onClick={() => void fetchAll()} className="flex items-center gap-2 rounded-[14px] bg-[#111111] border border-[#1E1E1E] px-4 py-2 text-sm"><RefreshCcw className="h-4 w-4" /> Đồng bộ</button>
           </div>
         </div>
 
         <div className="mb-6 flex gap-2 border-b border-[#1E1E1E] pb-3">
-          {(["products", "slots", "games", "config"] as const).map((t) => (
-            <button key={t} onClick={() => setTab(t)} className={"rounded-[14px] px-4 py-2 text-sm font-medium capitalize " + (tab === t ? "bg-[#2F9BE6] text-white" : "bg-[#111111] text-[#B5B5B5]/80 hover:text-[#B5B5B5]")}>
+          {(["sản phẩm", "khung giờ", "game", "cấu hình"] as const).map((t) => (
+            <button key={t} onClick={() => setTab(t)} className={"rounded-[14px] px-4 py-2 text-sm font-medium " + (tab === t ? "bg-[#2F9BE6] text-white" : "bg-[#111111] text-[#B5B5B5]/80 hover:text-[#B5B5B5]")}>
               {t}
             </button>
           ))}
@@ -400,43 +400,42 @@ export default function AdminPage() {
         {error && <div className="mb-4 rounded-[16px] border border-red-500/20 bg-[#FF4D4F]/10 px-4 py-3 text-sm text-red-200">{error}</div>}
 
         {/* ─── TAB: PRODUCTS ─── */}
-        {tab === "products" && (
+        {tab === "sản phẩm" && (
           <div className="space-y-6">
             <div className="flex items-center justify-between border border-[#1E1E1E] bg-[#111111] p-4 rounded-[16px]">
-              <div><h2 className="font-semibold text-lg">Product Items</h2><p className="text-xs text-[#B5B5B5]/80">Add, edit, or delete store items directly.</p></div>
-              <button onClick={() => { setProductForm({ name: "", price: "", bulkPrice: "", packQuantity: "", image: "", desc: "", category: "", gameId: "" }); setEditingProduct(null); setShowProductForm(true); }} className="flex items-center gap-2 rounded-[14px] bg-[#2F9BE6] px-4 py-2 text-sm font-medium"><Plus className="h-4 w-4" /> Add Item</button>
+              <div><h2 className="font-semibold text-lg">Danh sách mặt hàng</h2><p className="text-xs text-[#B5B5B5]/80">Thêm, sửa, hoặc xóa mặt hàng.</p></div>
+              <button onClick={() => { setProductForm({ name: "", price: "", bulkPrice: "", packQuantity: "", image: "", desc: "", category: "", gameId: "" }); setEditingProduct(null); setShowProductForm(true); }} className="flex items-center gap-2 rounded-[14px] bg-[#2F9BE6] px-4 py-2 text-sm font-medium"><Plus className="h-4 w-4" /> Thêm mặt hàng</button>
             </div>
 
             {showProductForm && (
               <form onSubmit={submitProduct} className="rounded-[16px] border border-[#1E1E1E] bg-[#111111] p-5 space-y-4">
-                <h3 className="font-medium">{editingProduct ? "Edit Item" : "Create Item"}</h3>
+                <h3 className="font-medium">{editingProduct ? "Chỉnh sửa mặt hàng" : "Thêm mặt hàng mới"}</h3>
                 <div className="grid gap-4 md:grid-cols-2">
-                  <input required value={productForm.name} onChange={(e) => setProductForm((p) => ({ ...p, name: e.target.value }))} placeholder="Item name" className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
-                  <input required value={productForm.category} onChange={(e) => setProductForm((p) => ({ ...p, category: e.target.value }))} placeholder="Category" className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
-                  <input required type="number" step="0.01" value={productForm.price} onChange={(e) => setProductForm((p) => ({ ...p, price: e.target.value }))} placeholder="Price" className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
-                  <input type="number" step="0.01" value={productForm.bulkPrice} onChange={(e) => setProductForm((p) => ({ ...p, bulkPrice: e.target.value }))} placeholder="Bulk price (optional)" className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
-                  <input type="number" step="1" min="1" value={productForm.packQuantity} onChange={(e) => setProductForm((p) => ({ ...p, packQuantity: e.target.value }))} placeholder="Qty per pack (default: 1)" className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
-                  <input type="number" step="1" min="1" value={productForm.packQuantity} onChange={(e) => setProductForm((p) => ({ ...p, packQuantity: e.target.value }))} placeholder="Quantity (default: 1)" className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
+                  <input required value={productForm.name} onChange={(e) => setProductForm((p) => ({ ...p, name: e.target.value }))} placeholder="Tên mặt hàng (ví dụ: Aura Crate)" className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
+                  <input required value={productForm.category} onChange={(e) => setProductForm((p) => ({ ...p, category: e.target.value }))} placeholder="Danh mục (ví dụ: Chest, Trait, Race...)" className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
+                  <input required type="number" step="0.01" value={productForm.price} onChange={(e) => setProductForm((p) => ({ ...p, price: e.target.value }))} placeholder="Giá ($)" className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
+                  <input type="number" step="0.01" value={productForm.bulkPrice} onChange={(e) => setProductForm((p) => ({ ...p, bulkPrice: e.target.value }))} placeholder="Giá sỉ (tùy chọn)" className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
+                  <input type="number" step="1" min="1" value={productForm.packQuantity} onChange={(e) => setProductForm((p) => ({ ...p, packQuantity: e.target.value }))} placeholder="Số lượng mỗi gói (ví dụ: 50, 100, 1000...)" className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
                   <select value={productForm.gameId} onChange={(e) => setProductForm((p) => ({ ...p, gameId: e.target.value }))} className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none">
-                    <option value="">Select Game</option>
+                    <option value="">Chọn game</option>
                     {games.map((g) => <option key={g._id} value={g._id}>{g.name}</option>)}
                   </select>
                 </div>
-                <textarea value={productForm.desc} onChange={(e) => setProductForm((p) => ({ ...p, desc: e.target.value }))} placeholder="Description details..." rows={3} className="w-full rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
+                <textarea value={productForm.desc} onChange={(e) => setProductForm((p) => ({ ...p, desc: e.target.value }))} placeholder="Mô tả chi tiết..." rows={3} className="w-full rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
                 <div className="space-y-2">
-                  <label className="text-xs text-[#B5B5B5]/80">Product Image URL</label>
-                  <input value={productForm.image} onChange={(e) => setProductForm((p) => ({ ...p, image: e.target.value }))} placeholder="Paste image URL" className="w-full rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-2 outline-none" />
+                  <label className="text-xs text-[#B5B5B5]/80">URL Anh san pham</label>
+                  <input value={productForm.image} onChange={(e) => setProductForm((p) => ({ ...p, image: e.target.value }))} placeholder="URL ảnh (Cloudinary / ImgBB)" className="w-full rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-2 outline-none" />
                   {productForm.image && <img src={imgUrl(productForm.image)} alt="preview" className="mt-2 h-20 w-20 rounded border border-[#1E1E1E] object-cover" />}
                 </div>
                 <div className="flex gap-2">
-                  <button type="submit" disabled={submitting} className="rounded-[14px] bg-[#2F9BE6] px-5 py-2.5 text-sm font-medium disabled:opacity-50">Save Item</button>
-                  <button type="button" onClick={() => setShowProductForm(false)} className="rounded-[14px] bg-slate-800 px-5 py-2.5 text-sm">Cancel</button>
+                  <button type="submit" disabled={submitting} className="rounded-[14px] bg-[#2F9BE6] px-5 py-2.5 text-sm font-medium disabled:opacity-50">Lưu mặt hàng</button>
+                  <button type="button" onClick={() => setShowProductForm(false)} className="rounded-[14px] bg-slate-800 px-5 py-2.5 text-sm">Hủy</button>
                 </div>
               </form>
             )}
 
             <div className="grid gap-3">
-              {productsLoading && <p className="text-[#B5B5B5]/60 text-sm">Loading items...</p>}
+              {productsLoading && <p className="text-[#B5B5B5]/60 text-sm">Đang tải...</p>}
               {products.map((p) => (
                 <div key={p._id} className="flex gap-4 items-center justify-between border border-[#1E1E1E] bg-[#111111] p-4 rounded-[16px]">
                   <div className="flex gap-3 items-center min-w-0">
@@ -447,7 +446,7 @@ export default function AdminPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => void toggleBestSeller(p._id)} className={"rounded px-3 py-1.5 text-xs font-semibold " + (bestSellers.includes(p._id) ? "bg-[#2F9BE6] text-white" : "bg-slate-800 text-[#B5B5B5]/80")}>Best Seller</button>
+                    <button onClick={() => void toggleBestSeller(p._id)} className={"rounded px-3 py-1.5 text-xs font-semibold " + (bestSellers.includes(p._id) ? "bg-[#2F9BE6] text-white" : "bg-slate-800 text-[#B5B5B5]/80")}>Bán chạy</button>
                     <button onClick={() => {
                       setProductForm({ name: p.name, price: String(p.price), bulkPrice: p.bulkPrice ? String(p.bulkPrice) : "", packQuantity: p.packQuantity ? String(p.packQuantity) : "1", image: p.image, desc: p.desc || "", category: p.category, gameId: p.gameId || "" });
                       setEditingProduct(p._id); setShowProductForm(true);
@@ -461,10 +460,10 @@ export default function AdminPage() {
         )}
 
         {/* ─── TAB: SLOTS ─── */}
-        {tab === "slots" && (
+        {tab === "khung giờ" && (
           <div className="grid gap-6 lg:grid-cols-[400px_1fr]">
             <div className="rounded-[16px] border border-[#1E1E1E] bg-[#111111] p-5 space-y-4 h-fit">
-              <div><h2 className="font-semibold text-lg">Vietnam Time Slots</h2><p className="text-xs text-[#B5B5B5]/80">All slots are saved relative to your Vietnam time (`Asia/Ho_Chi_Minh`). Conversion for customers is automatic.</p></div>
+              <div><h2 className="font-semibold text-lg">Tạo khung giờ giao hàng</h2><p className="text-xs text-[#B5B5B5]/80">Tất cả khung giờ được lưu theo giờ Việt Nam (Asia/Ho_Chi_Minh). Tự động chuyển cho khách.</p></div>
               <form onSubmit={createSlots} className="space-y-4">
                 <input type="date" value={slotDate} onChange={(e) => setSlotDate(e.target.value)} className="w-full rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
                 {ranges.map((row, idx) => (
@@ -474,21 +473,21 @@ export default function AdminPage() {
                       <input type="time" required value={row.endTime} onChange={(e) => setRanges((p) => p.map((r, i) => (i === idx ? { ...r, endTime: e.target.value } : r)))} className="flex-1 rounded border border-[#1E1E1E] bg-[#111111] px-2 py-1 text-sm outline-none" />
                     </div>
                     <div className="flex gap-2">
-                      <input placeholder="Note (optional)" value={row.note} onChange={(e) => setRanges((p) => p.map((r, i) => (i === idx ? { ...r, note: e.target.value } : r)))} className="flex-1 rounded border border-[#1E1E1E] bg-[#111111] px-2 py-1 text-xs outline-none" />
-                      {ranges.length > 1 && <button type="button" onClick={() => setRanges((p) => p.filter((_, i) => i !== idx))} className="text-[#FF4D4F] text-xs hover:underline">Delete</button>}
+                      <input placeholder="Ghi chú (tùy chọn)" value={row.note} onChange={(e) => setRanges((p) => p.map((r, i) => (i === idx ? { ...r, note: e.target.value } : r)))} className="flex-1 rounded border border-[#1E1E1E] bg-[#111111] px-2 py-1 text-xs outline-none" />
+                      {ranges.length > 1 && <button type="button" onClick={() => setRanges((p) => p.filter((_, i) => i !== idx))} className="text-[#FF4D4F] text-xs hover:underline">Xóa</button>}
                     </div>
                   </div>
                 ))}
                 <div className="flex gap-2">
-                  <button type="button" onClick={() => setRanges((p) => [...p, { startTime: "", endTime: "", note: "" }])} className="rounded bg-slate-800 px-4 py-2 text-xs">Add Range</button>
-                  <button type="submit" disabled={submitting} className="rounded bg-[#2F9BE6] px-4 py-2 text-xs font-semibold disabled:opacity-50">Create Slots</button>
+                  <button type="button" onClick={() => setRanges((p) => [...p, { startTime: "", endTime: "", note: "" }])} className="rounded bg-slate-800 px-4 py-2 text-xs">Thêm khung giờ</button>
+                  <button type="submit" disabled={submitting} className="rounded bg-[#2F9BE6] px-4 py-2 text-xs font-semibold disabled:opacity-50">Tạo khung giờ</button>
                 </div>
               </form>
             </div>
             <div className="rounded-[16px] border border-[#1E1E1E] bg-[#111111] p-5 space-y-3">
-              <h2 className="font-semibold text-lg">Active Slots (Vietnam Time)</h2>
+              <h2 className="font-semibold text-lg">Khung giờ đã tạo (giờ Việt Nam)</h2>
               <div className="mb-4 flex items-center gap-3">
-                <label className="text-sm text-[#B5B5B5]/80" htmlFor="slot-filter">Filter by month:</label>
+                <label className="text-sm text-[#B5B5B5]/80" htmlFor="slot-filter">Lọc theo tháng:</label>
                 <input
                   id="slot-filter"
                   type="month"
@@ -498,11 +497,11 @@ export default function AdminPage() {
                 />
                 {slotFilter && (
                   <button type="button" onClick={() => setSlotFilter("")} className="text-xs text-[#B5B5B5]/60 hover:text-white">
-                    Clear filter
+                    Xóa lọc
                   </button>
                 )}
               </div>
-              {slotsLoading && <p className="text-[#B5B5B5]/60 text-sm">Loading slots...</p>}
+              {slotsLoading && <p className="text-[#B5B5B5]/60 text-sm">Đang tải...</p>}
               {filteredSlots.map((s) => (
                 <div key={s._id} className={"border border-[#1E1E1E] bg-[#050505] p-4 rounded-[14px] transition-all " + (s.active ? "" : "opacity-60")}>
                   {editingSlot === s._id ? (
@@ -512,14 +511,14 @@ export default function AdminPage() {
                         <input type="time" value={slotEditForm.startTime} onChange={(e) => setSlotEditForm((p) => ({ ...p, startTime: e.target.value }))} className="rounded border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm outline-none" />
                         <input type="time" value={slotEditForm.endTime} onChange={(e) => setSlotEditForm((p) => ({ ...p, endTime: e.target.value }))} className="rounded border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm outline-none" />
                       </div>
-                      <input placeholder="Note (optional)" value={slotEditForm.note} onChange={(e) => setSlotEditForm((p) => ({ ...p, note: e.target.value }))} className="w-full rounded border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm outline-none" />
+                      <input placeholder="Ghi chú (tùy chọn)" value={slotEditForm.note} onChange={(e) => setSlotEditForm((p) => ({ ...p, note: e.target.value }))} className="w-full rounded border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm outline-none" />
                       <label className="flex items-center gap-2 text-sm text-[#B5B5B5]">
                         <input type="checkbox" checked={slotEditForm.active} onChange={(e) => setSlotEditForm((p) => ({ ...p, active: e.target.checked }))} />
                         Active
                       </label>
                       <div className="flex gap-2">
-                        <button type="button" onClick={() => void saveSlotEdit()} disabled={submitting} className="rounded bg-[#2F9BE6] px-4 py-2 text-xs font-semibold disabled:opacity-50">Save</button>
-                        <button type="button" onClick={() => setEditingSlot(null)} className="rounded bg-slate-800 px-4 py-2 text-xs">Cancel</button>
+                        <button type="button" onClick={() => void saveSlotEdit()} disabled={submitting} className="rounded bg-[#2F9BE6] px-4 py-2 text-xs font-semibold disabled:opacity-50">Lưu</button>
+                        <button type="button" onClick={() => setEditingSlot(null)} className="rounded bg-slate-800 px-4 py-2 text-xs">Hủy</button>
                       </div>
                     </div>
                   ) : (
@@ -529,9 +528,9 @@ export default function AdminPage() {
                         {s.note && <p className="text-xs text-[#B5B5B5]/80 mt-1">{s.note}</p>}
                       </div>
                       <div className="flex gap-2">
-                        <button onClick={() => startEditSlot(s)} className="p-2 text-[#2F9BE6] bg-[#111111] rounded" title="Edit"><Edit2 className="h-4 w-4" /></button>
+                        <button onClick={() => startEditSlot(s)} className="p-2 text-[#2F9BE6] bg-[#111111] rounded" title="Sua"><Edit2 className="h-4 w-4" /></button>
                         <button onClick={() => void toggleSlot(s._id, !s.active)} className={"p-2 rounded " + (s.active ? "text-[#2F9BE6] bg-[#111111]" : "text-[#3DDC84] bg-[#111111]")} title={s.active ? "Deactivate" : "Activate"}><RefreshCcw className="h-4 w-4" /></button>
-                        <button onClick={() => void deleteSlot(s._id)} className="p-2 text-[#FF4D4F] bg-[#111111] rounded" title="Delete"><Trash2 className="h-4 w-4" /></button>
+                        <button onClick={() => void deleteSlot(s._id)} className="p-2 text-[#FF4D4F] bg-[#111111] rounded" title="Xóa"><Trash2 className="h-4 w-4" /></button>
                       </div>
                     </div>
                   )}
@@ -542,30 +541,30 @@ export default function AdminPage() {
         )}
 
         {/* ─── TAB: GAMES ─── */}
-        {tab === "games" && (
+        {tab === "game" && (
           <div className="space-y-6">
             <div className="flex items-center justify-between border border-[#1E1E1E] bg-[#111111] p-4 rounded-[16px]">
-              <div><h2 className="font-semibold text-lg">Game Catalog</h2><p className="text-xs text-[#B5B5B5]/80">Configure separate games with unique tags.</p></div>
-              <button onClick={() => { setEditingGame(null); setGameForm({ name: "", slug: "", image: "", active: true }); setShowGameForm(true); }} className="flex items-center gap-2 rounded-[14px] bg-[#2F9BE6] px-4 py-2 text-sm font-medium"><Plus className="h-4 w-4" /> Add Game</button>
+              <div><h2 className="font-semibold text-lg">Danh mục game</h2><p className="text-xs text-[#B5B5B5]/80">Quản lý danh sách game.</p></div>
+              <button onClick={() => { setEditingGame(null); setGameForm({ name: "", slug: "", image: "", active: true }); setShowGameForm(true); }} className="flex items-center gap-2 rounded-[14px] bg-[#2F9BE6] px-4 py-2 text-sm font-medium"><Plus className="h-4 w-4" /> Thêm game</button>
             </div>
 
             {showGameForm && (
               <form onSubmit={submitGame} className="rounded-[16px] border border-[#1E1E1E] bg-[#111111] p-5 space-y-4">
-                <h3 className="font-medium">{editingGame ? "Edit Game" : "New Game"}</h3>
+                <h3 className="font-medium">{editingGame ? "Chỉnh sửa game" : "Thêm game mới"}</h3>
                 <div className="grid gap-4 md:grid-cols-2">
-                  <input required value={gameForm.name} onChange={(e) => setGameForm((p) => ({ ...p, name: e.target.value }))} placeholder="Game name" className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
-                  <input required value={gameForm.slug} onChange={(e) => setGameForm((p) => ({ ...p, slug: e.target.value }))} placeholder="Game slug" className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
-                  <input value={gameForm.image} onChange={(e) => setGameForm((p) => ({ ...p, image: e.target.value }))} placeholder="Image URL (optional)" className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
+                  <input required value={gameForm.name} onChange={(e) => setGameForm((p) => ({ ...p, name: e.target.value }))} placeholder="Tên game" className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
+                  <input required value={gameForm.slug} onChange={(e) => setGameForm((p) => ({ ...p, slug: e.target.value }))} placeholder="Slug game" className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
+                  <input value={gameForm.image} onChange={(e) => setGameForm((p) => ({ ...p, image: e.target.value }))} placeholder="URL ảnh (tùy chọn)" className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
                 </div>
                 <div className="flex gap-2">
-                  <button type="submit" disabled={submitting} className="rounded-[14px] bg-[#2F9BE6] px-5 py-2.5 text-sm font-medium disabled:opacity-50">Save Game</button>
-                  <button type="button" onClick={() => setShowGameForm(false)} className="rounded-[14px] bg-slate-800 px-5 py-2.5 text-sm">Cancel</button>
+                  <button type="submit" disabled={submitting} className="rounded-[14px] bg-[#2F9BE6] px-5 py-2.5 text-sm font-medium disabled:opacity-50">Lưu game</button>
+                  <button type="button" onClick={() => setShowGameForm(false)} className="rounded-[14px] bg-slate-800 px-5 py-2.5 text-sm">Hủy</button>
                 </div>
               </form>
             )}
 
             <div className="grid gap-3">
-              {gamesLoading && <p className="text-[#B5B5B5]/60 text-sm">Loading games...</p>}
+              {gamesLoading && <p className="text-[#B5B5B5]/60 text-sm">Đang tải...</p>}
               {games.map((g) => (
                 <div key={g._id} className="flex items-center justify-between border border-[#1E1E1E] bg-[#111111] p-4 rounded-[16px]">
                   <div className="flex items-center gap-3">
@@ -583,17 +582,17 @@ export default function AdminPage() {
         )}
 
         {/* ─── TAB: CONFIG (BANNERS) ─── */}
-        {tab === "config" && (
+        {tab === "cấu hình" && (
           <div className="rounded-[16px] border border-[#1E1E1E] bg-[#111111] p-5 space-y-6">
-            <div><h2 className="font-semibold text-lg">Shop Banner</h2><p className="text-xs text-[#B5B5B5]/80">Only one banner is active. Paste a Cloudinary image URL to replace the current banner.</p></div>
+            <div><h2 className="font-semibold text-lg">Banner cửa hàng</h2><p className="text-xs text-[#B5B5B5]/80">Chỉ 1 banner hiện có. Dán URL ảnh để thay thế.</p></div>
             <div className="flex items-center gap-3 flex-wrap">
               <input
                 value={newBannerUrl}
                 onChange={(e) => setNewBannerUrl(e.target.value)}
-                placeholder="Paste banner image URL"
+                placeholder="Dán URL ảnh banner"
                 className="min-w-[280px] flex-1 rounded border border-[#1E1E1E] bg-[#050505] p-2 text-sm outline-none"
               />
-              <button onClick={() => void handleBannerSave()} disabled={submitting || !newBannerUrl.trim()} className="rounded bg-[#2F9BE6] px-4 py-2 text-sm font-semibold disabled:opacity-50">Save / Replace Banner</button>
+              <button onClick={() => void handleBannerSave()} disabled={submitting || !newBannerUrl.trim()} className="rounded bg-[#2F9BE6] px-4 py-2 text-sm font-semibold disabled:opacity-50">Lưu banner</button>
             </div>
             {banners[0] ? (
               <div className="relative group overflow-hidden rounded-[14px] border border-[#1E1E1E]">
@@ -601,7 +600,7 @@ export default function AdminPage() {
                 <button onClick={() => void deleteBanner(banners[0])} className="absolute top-2 right-2 bg-red-600 text-white rounded p-1.5 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="h-4 w-4" /></button>
               </div>
             ) : (
-              <div className="rounded-[14px] border border-dashed border-[#1E1E1E] bg-[#050505] p-8 text-center text-sm text-[#B5B5B5]/60">No banner uploaded.</div>
+              <div className="rounded-[14px] border border-dashed border-[#1E1E1E] bg-[#050505] p-8 text-center text-sm text-[#B5B5B5]/60">Chưa có banner.</div>
             )}
           </div>
         )}
@@ -609,6 +608,7 @@ export default function AdminPage() {
     </div>
   );
 }
+
 
 
 

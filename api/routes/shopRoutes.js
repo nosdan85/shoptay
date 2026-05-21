@@ -3825,6 +3825,22 @@ router.get('/recent-purchases', async (req, res) => {
         return res.status(500).json({ error: 'Could not load recent purchases.' });
     }
 });
+
+// GET /api/shop/owner/games ? list all games for owner admin
+router.get('/owner/games', authRequired, async (req, res) => {
+    try {
+        const discordId = String(req.user?.discordId || '').trim();
+        if (!discordId) return res.status(401).json({ error: 'Authentication required' });
+        const isOwner = await canAccessOwnerEndpoints(discordId);
+        if (!isOwner) return res.status(403).json({ error: 'Forbidden' });
+        const games = await Game.find({}).sort({ createdAt: -1, name: 1 }).lean();
+        return res.json({ games });
+    } catch (error) {
+        console.error('Owner games list error:', error);
+        return res.status(500).json({ error: 'Could not load games.' });
+    }
+});
+
 router.post('/owner/games', authRequired, async (req, res) => {
     try {
         const discordId = String(req.user?.discordId || '').trim();
@@ -3832,11 +3848,13 @@ router.post('/owner/games', authRequired, async (req, res) => {
         const isOwner = await canAccessOwnerEndpoints(discordId);
         if (!isOwner) return res.status(403).json({ error: 'Forbidden' });
         const { name, slug, image, active } = req.body || {};
-        if (!name || !String(name).trim()) return res.status(400).json({ error: 'Game name is required.' });
-        if (!slug || !String(slug).trim()) return res.status(400).json({ error: 'Game slug is required.' });
+        const cleanName = String(name || '').trim();
+        if (!cleanName) return res.status(400).json({ error: 'Game name is required.' });
+        const cleanSlug = String(slug || cleanName).trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+        if (!cleanSlug) return res.status(400).json({ error: 'Game slug is required.' });
         const game = await Game.create({
-            name: String(name).trim(),
-            slug: String(slug).trim().toLowerCase().replace(/[^a-z0-9-]/g, '-'),
+            name: cleanName,
+            slug: cleanSlug,
             image: String(image || '').trim(),
             active: Boolean(active)
         });

@@ -116,7 +116,8 @@ export default function AdminPage() {
     try {
       const res = await fetch("/api/shop/owner/games", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
       const data = await res.json();
-      setGames(Array.isArray(data) ? data : []);
+      const games = data.games || (Array.isArray(data) ? data : []);
+      setGames(Array.isArray(games) ? games : []);
     } catch { /* silent */ }
     setGamesLoading(false);
   };
@@ -196,10 +197,19 @@ export default function AdminPage() {
     try {
       const url = editingGame ? `/api/shop/owner/games/${editingGame}` : "/api/shop/owner/games";
       const method = editingGame ? "PUT" : "POST";
+      const payload = {
+        ...gameForm,
+        slug: String(gameForm.slug || gameForm.name)
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9-]/g, "-")
+          .replace(/-+/g, "-")
+          .replace(/^-|-$/g, ""),
+      };
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(gameForm),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error("Luu game that bai");
       setShowGameForm(false);

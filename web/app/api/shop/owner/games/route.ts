@@ -9,7 +9,9 @@ export async function GET(request: NextRequest) {
       cache: "no-store",
     });
     const data = await res.json();
-    return NextResponse.json(data, { status: res.status });
+    // Support both { games: [] } and flat [] responses
+    const games = data.games || (Array.isArray(data) ? data : []);
+    return NextResponse.json(Array.isArray(games) ? games : [], { status: res.status });
   } catch (error) {
     console.error("Owner games API error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

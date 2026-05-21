@@ -370,14 +370,14 @@ export default function ShopPage() {
       )}
 
       {step === "shop" && cartCount > 0 && (
-        <button onClick={() => { setCartClosing(false); setCartOpen(true); }} className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full bg-[#2F9BE6] px-5 py-3 font-medium shadow-2xl transition-transform hover:scale-105 active:scale-95">
+        <button onClick={() => { setCartClosing(false); setCartOpen(true); }} className="fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-full bg-[#2F9BE6] px-4 py-2.5 text-sm md:bottom-6 md:right-6 md:px-5 md:py-3 md:text-base font-medium shadow-2xl transition-transform hover:scale-105 active:scale-95">
           <ShoppingCart className="h-5 w-5" /> Cart ({cartCount})
         </button>
       )}
 
       {(cartOpen || cartClosing) && (
-        <div className={"fixed inset-0 z-50 bg-black/60 backdrop-blur-sm " + (cartClosing ? "animate-fade-out" : "animate-fade-in")} onClick={closeCart}>
-          <div className={"absolute right-0 top-0 h-full w-full max-w-md bg-[#111111] border-l border-[#1E1E1E] flex flex-col " + (cartClosing ? "animate-cart-slide-out" : "animate-cart-slide-in")} onClick={(e) => e.stopPropagation()}>
+        <div className={"fixed inset-0 z-50 flex bg-black/60 backdrop-blur-sm " + (cartClosing ? "animate-fade-out" : "animate-fade-in")} onClick={closeCart}>
+          <div className={"ml-auto h-full w-full max-w-md bg-[#111111] border-l border-[#1E1E1E] flex flex-col " + (cartClosing ? "animate-cart-slide-out" : "animate-cart-slide-in")} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-[#1E1E1E] p-4">
               <h2 className="text-lg font-semibold">Cart ({cartCount})</h2>
               <button onClick={closeCart}><X className="h-5 w-5" /></button>
@@ -414,8 +414,8 @@ export default function ShopPage() {
       )}
 
       {(modalOpen || modalClosing) && selectedProduct && (
-        <div className={"fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 " + (modalClosing ? "animate-fade-out" : "animate-fade-in")}>
-          <div className={"relative w-full max-w-lg rounded-[18px] border border-[#1E1E1E] bg-[#111111] p-6 shadow-2xl " + (modalClosing ? "animate-fade-out" : "animate-modal-zoom-in")}>
+        <div className={"fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto " + (modalClosing ? "animate-fade-out" : "animate-fade-in")} onClick={closeProductModal}>
+          <div className={"relative w-full max-w-lg rounded-[18px] border border-[#1E1E1E] bg-[#111111] p-6 shadow-2xl my-auto " + (modalClosing ? "animate-fade-out" : "animate-modal-zoom-in")} onClick={(e) => e.stopPropagation()}>
             <button onClick={closeProductModal} className="absolute right-4 top-4 rounded-[14px] bg-[#161616] p-2 hover:bg-[#1E1E1E]"><X className="h-5 w-5" /></button>
             <div className="flex gap-4 mb-4">
               <div className="w-32 aspect-square flex-shrink-0 overflow-hidden rounded-[16px] bg-[#050505]">
@@ -630,7 +630,7 @@ export default function ShopPage() {
                       })}
                     </div>
                   </div>
-                  <div className="space-y-2">{slots.length === 0 && <p className="text-sm text-[#B5B5B5]">No available VN delivery slots.</p>}
+                  <div className="space-y-2">{slots.length === 0 && <p className="text-sm text-[#B5B5B5]">No available delivery slots.</p>}
                     {slots.map((s) => (
                       <button key={s.id} onClick={() => setPickedSlot(s.id)} className={"w-full rounded-[16px] border p-4 text-left transition-all " + (pickedSlot === s.id ? "border-[#2F9BE6] bg-[#49B6FF]/10" : "border-[#1E1E1E] bg-[#050505] hover:border-[#1E1E1E]")}>
                         <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-[#2F9BE6]" /><span className="text-sm font-medium">Your time: {s.customerStartText} - {s.customerEndText}</span></div>
@@ -788,7 +788,6 @@ export default function ShopPage() {
     </div>
   );
 }
-
 
 
 

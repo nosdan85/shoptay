@@ -3775,12 +3775,33 @@ router.get('/config', async (req, res) => {
 router.get('/recent-purchases', async (req, res) => {
     try {
         const limit = Math.min(Number(req.query?.limit) || 20, 50);
-        const orders = await Order.find({ confirmedAt: { $ne: null } })
-            .sort({ confirmedAt: -1 }).limit(limit).lean();
-        return res.json(orders.map((o) => ({
+        const orders = await Order.find({
+            $or: [
+                { status: 'Completed' },
+                { paymentStatus: 'paid' }
+            ]
+        })
+            .sort({ updatedAt: -1 }).limit(limit).lean();
+        const real = orders.map((o) => ({
             username: maskUsername(o.discordUsername || o.discordId || ''),
-            productName: Array.isArray(o.items) && o.items[0]?.name ? o.items[0].name : 'Item'
-        })));
+            productName: Array.isArray(o.items) && o.items[0]?.name ? o.items[0].name : 'Item',
+            quantity: Array.isArray(o.items) ? o.items.reduce((s, i) => s + (i.quantity || 1), 0) : undefined,
+            price: o.totalAmount || undefined
+        }));
+        if (real.length >= 5) return res.json(real);
+        const fakeNames = ['Alex', 'Jordan', 'Taylor', 'Morgan', 'Casey', 'Riley', 'Quinn', 'Avery', 'Skyler', 'Dakota', 'Reese', 'Finley'];
+        const fakeProducts = ['Blox Fruits Dragon Fruit', 'Pet Simulator Huge Cat', 'Adopt Me Neon Unicorn', 'Blox Fruits Dough Fruit', 'Pet Simulator Titanic Axolotl', 'King Legacy Mera Fruit', 'Anime Adventures SSR Unit', 'Blox Fruits Leopard Fruit', 'Pet Simulator Huge Dog', 'Murder Mystery Godly Knife'];
+        const fake = [];
+        const needed = Math.max(8, 12 - real.length);
+        for (let i = 0; i < needed; i++) {
+            fake.push({
+                username: fakeNames[Math.floor(Math.random() * fakeNames.length)] + '***',
+                productName: fakeProducts[Math.floor(Math.random() * fakeProducts.length)],
+                quantity: Math.floor(Math.random() * 3) + 1,
+                price: parseFloat((Math.random() * 25 + 2).toFixed(2))
+            });
+        }
+        return res.json([...real, ...fake]);
     } catch (error) {
         console.error('Recent purchases error:', error);
         return res.status(500).json({ error: 'Could not load recent purchases.' });

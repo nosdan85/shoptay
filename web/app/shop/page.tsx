@@ -40,7 +40,7 @@ interface Product { _id: string; name: string; category: string; price: number; 
 interface CartItem extends Product { quantity: number }
 interface Game { _id: string; name: string; slug: string; image?: string }
 interface Slot { id: string; ownerStartText: string; ownerEndText: string; customerStartText: string; customerEndText: string; startAt: string; endAt: string; note?: string }
-interface Purchase { username: string; productName: string; quantity?: number; price?: number }
+interface Purchase { username: string; items: string; price?: number }
 interface TicketResult { channelId: string; guildId?: string; url?: string }
 
 type Step = "shop" | "roblox" | "delivery" | "ticket";
@@ -663,7 +663,7 @@ export default function ShopPage() {
                   <span key={i} className="mx-4 inline-flex items-center gap-2 text-sm text-[#B5B5B5] sm:mx-6">
                     <span className="text-[#2F9BE6] font-medium">{maskName(p.username)}</span>
                     <span className="text-[#B5B5B5]/80">purchased</span>
-                    <span className="text-[#3DDC84]">{p.productName}{typeof p.quantity === "number" ? ` x${p.quantity}` : ""}</span>
+                    <span className="text-[#3DDC84]">{p.items}</span>
                     {p.price && <span className="text-[#B5B5B5]">@ ${p.price.toFixed(2)}</span>}
                   </span>
                 ))}

@@ -955,10 +955,12 @@ const calculateCartSummary = async ({ cartItems, couponCodeRaw = '' }) => {
     const pricedItems = products.map((product) => {
         const quantity = quantityByProductId.get(String(product._id));
         const pricing = getLinePricing(product, quantity);
+        const packQty = Math.max(1, Number(product.packQuantity) || 1);
         return {
             product: product._id,
             name: product.name,
             quantity,
+            packQuantity: packQty,
             price: pricing.effectiveUnitPrice,
             lineTotal: pricing.lineTotal
         };
@@ -3772,6 +3774,7 @@ router.get('/config', async (req, res) => {
 });
 
 // GET /api/shop/recent-purchases — public feed of confirmed orders (masked usernames)
+// GET /api/shop/recent-purchases ? public feed of confirmed orders (masked usernames)
 router.get('/recent-purchases', async (req, res) => {
     try {
         const limit = Math.min(Number(req.query?.limit) || 20, 50);
@@ -3782,12 +3785,28 @@ router.get('/recent-purchases', async (req, res) => {
             ]
         })
             .sort({ updatedAt: -1 }).limit(limit).lean();
-        const real = orders.map((o) => ({
-            username: maskUsername(o.discordUsername || o.discordId || ''),
-            productName: Array.isArray(o.items) && o.items[0]?.name ? o.items[0].name : 'Item',
-            quantity: Array.isArray(o.items) ? o.items.reduce((s, i) => s + (i.quantity || 1), 0) : undefined,
-            price: o.totalAmount || undefined
-        }));
+
+        const real = orders.map((o) => {
+            if (!Array.isArray(o.items) || o.items.length === 0) {
+                return {
+                    username: maskUsername(o.discordUsername || o.discordId || ''),
+                    items: 'Item x1',
+                    price: o.totalAmount || undefined
+                };
+            }
+            const itemsText = o.items.map(item => {
+                const packQty = Math.max(1, Number(item.packQuantity) || 1);
+                const orderQty = Math.max(1, Number(item.quantity) || 1);
+                const totalQty = packQty * orderQty;
+                return `${item.name || 'Item'} x${totalQty}`;
+            }).join(', ');
+            return {
+                username: maskUsername(o.discordUsername || o.discordId || ''),
+                items: itemsText,
+                price: o.totalAmount || undefined
+            };
+        });
+
         if (real.length >= 5) return res.json(real);
         const fakeNames = ['Alex', 'Jordan', 'Taylor', 'Morgan', 'Casey', 'Riley', 'Quinn', 'Avery', 'Skyler', 'Dakota', 'Reese', 'Finley'];
         const fakeProducts = ['Blox Fruits Dragon Fruit', 'Pet Simulator Huge Cat', 'Adopt Me Neon Unicorn', 'Blox Fruits Dough Fruit', 'Pet Simulator Titanic Axolotl', 'King Legacy Mera Fruit', 'Anime Adventures SSR Unit', 'Blox Fruits Leopard Fruit', 'Pet Simulator Huge Dog', 'Murder Mystery Godly Knife'];
@@ -3796,8 +3815,7 @@ router.get('/recent-purchases', async (req, res) => {
         for (let i = 0; i < needed; i++) {
             fake.push({
                 username: fakeNames[Math.floor(Math.random() * fakeNames.length)] + '***',
-                productName: fakeProducts[Math.floor(Math.random() * fakeProducts.length)],
-                quantity: Math.floor(Math.random() * 3) + 1,
+                items: fakeProducts[Math.floor(Math.random() * fakeProducts.length)] + ' x1',
                 price: parseFloat((Math.random() * 25 + 2).toFixed(2))
             });
         }
@@ -3807,25 +3825,6 @@ router.get('/recent-purchases', async (req, res) => {
         return res.status(500).json({ error: 'Could not load recent purchases.' });
     }
 });
-
-// --- ADMIN SHOP ENDPOINTS ------------------------------------------------------
-
-// GET /api/shop/owner/games
-router.get('/owner/games', authRequired, async (req, res) => {
-    try {
-        const discordId = String(req.user?.discordId || '').trim();
-        if (!discordId) return res.status(401).json({ error: 'Authentication required' });
-        const isOwner = await canAccessOwnerEndpoints(discordId);
-        if (!isOwner) return res.status(403).json({ error: 'Forbidden' });
-        const games = await Game.find({}).sort({ name: 1 }).lean();
-        return res.json(games);
-    } catch (error) {
-        console.error('Owner list games error:', error);
-        return res.status(500).json({ error: 'Could not list games.' });
-    }
-});
-
-// POST /api/shop/owner/games
 router.post('/owner/games', authRequired, async (req, res) => {
     try {
         const discordId = String(req.user?.discordId || '').trim();
@@ -4002,7 +4001,6 @@ router.put('/owner/config/featured', authRequired, async (req, res) => {
         return res.status(500).json({ error: 'Could not update featured products.' });
     }
 });
-
 
 
 

@@ -374,7 +374,10 @@ export default function ShopPage() {
 
       {step === "shop" && cartCount > 0 && (
         <button onClick={() => { setCartClosing(false); setCartOpen(true); }} className="fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-full bg-[#2F9BE6] px-4 py-2.5 text-sm md:bottom-6 md:right-6 md:px-5 md:py-3 md:text-base font-medium shadow-2xl transition-transform hover:scale-105 active:scale-95">
-          <ShoppingCart className="h-5 w-5" /> Cart ({cartCount})
+          <div className="relative">
+            <ShoppingCart className="h-6 w-6 text-white" />
+            <span className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-[#FF4D4F] text-[10px] font-bold text-white">{cartCount}</span>
+          </div>
         </button>
       )}
 
@@ -418,32 +421,36 @@ export default function ShopPage() {
       )}
 
       {(modalOpen || modalClosing) && selectedProduct && (
-        <div className={"fixed inset-0 z-50 bg-black/70 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto " + (modalClosing ? "animate-fade-out" : "animate-fade-in")} onClick={closeProductModal}>
-          <div className={"fixed left-1/2 top-1/2 w-[min(92vw,420px)] max-w-lg max-h-[90vh] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-[20px] border border-[#1E1E1E] bg-[#111111] p-4 sm:p-6 shadow-2xl product-modal " + (modalClosing ? "animate-fade-out" : "animate-modal-zoom-in")} onClick={(e) => e.stopPropagation()}>
-            <button onClick={closeProductModal} className="absolute right-4 top-4 rounded-[14px] bg-[#161616] p-2 hover:bg-[#1E1E1E]"><X className="h-5 w-5" /></button>
-            <div className="mb-4 flex flex-col gap-4 sm:flex-row">
-              <div className="mx-auto w-28 sm:mx-0 sm:w-32 aspect-square flex-shrink-0 overflow-hidden rounded-[16px] bg-[#050505]">
+        <div className={"fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-0 " + (modalClosing ? "animate-fade-out" : "animate-fade-in")} onClick={closeProductModal}>
+          <div className={"relative mx-4 w-full max-w-[420px] max-h-[85vh] overflow-hidden rounded-[24px] border border-[#1E1E1E] bg-[#0A0A0A] shadow-2xl " + (modalClosing ? "animate-modal-zoom-out" : "animate-modal-zoom-in")} onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#1E1E1E] bg-[#0A0A0A]/95 px-4 py-3 backdrop-blur-sm">
+              <h3 className="text-base font-semibold">Product Details</h3>
+              <button onClick={closeProductModal} className="rounded-full bg-[#1E1E1E] p-2 active:scale-90"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="max-h-[calc(85vh-60px)] overflow-y-auto px-4 py-4">
+            <div className="space-y-4">
+              <div className="mx-auto aspect-square w-full max-w-[280px] overflow-hidden rounded-[20px] bg-[#050505]">
                 {selectedProduct.image ? <img src={imgUrl(selectedProduct.image)} alt="" className="h-full w-full object-contain" /> : <Package className="h-full w-full p-6 text-[#B5B5B5]/50" />}
               </div>
-              <div className="flex-1">
-                <h3 className="text-lg sm:text-xl font-bold leading-tight">{selectedProduct.name}</h3>
+              <div className="space-y-3">
+                <h2 className="text-xl font-bold leading-tight">{selectedProduct.name}</h2>
                 {<p className="text-sm text-[#2F9BE6] mt-1">Qty: x{selectedProduct.packQuantity || 1}</p>}
                 <p className="text-sm text-[#B5B5B5]">{selectedProduct.category}</p>
-                <p className="mt-2 text-xl sm:text-2xl font-bold text-[#3DDC84]">${selectedProduct.price.toFixed(2)}</p>
+                <div className="flex items-baseline gap-2"><span className="text-3xl font-bold text-[#3DDC84]">${selectedProduct.price.toFixed(2)}</span><span className="text-sm text-[#B5B5B5]">USD</span></div>
                 {selectedProduct.bulkPrice && (
                   <p className="text-xs text-[#2F9BE6]">Bulk price: ${selectedProduct.bulkPrice.toFixed(2)} (when applicable)</p>
                 )}
               </div>
             </div>
             {selectedProduct.desc && (
-              <div className="mb-4 rounded-[14px] bg-[#050505] p-3">
+              <div className="rounded-[16px] bg-[#050505] p-4">
                 <p className="text-sm text-[#B5B5B5] whitespace-pre-wrap">{selectedProduct.desc}</p>
               </div>
             )}
-            <div className="mb-4">
-              <label className="block text-sm font-medium mb-2">Quantity</label>
-              <div className="flex items-center gap-3">
-                <button onClick={() => setModalQty(Math.max(1, (typeof modalQty === "number" ? modalQty : parseInt(modalQty) || 1) - 1))} className="rounded-[14px] bg-[#161616] p-2 hover:bg-[#1E1E1E]"><Minus className="h-4 w-4" /></button>
+            <div className="space-y-3">
+              <label className="block text-sm font-semibold text-[#B5B5B5]">Quantity</label>
+              <div className="flex items-center justify-center gap-4">
+                <button onClick={() => setModalQty(Math.max(1, (typeof modalQty === "number" ? modalQty : parseInt(modalQty) || 1) - 1))} className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1E1E1E] active:scale-90"><Minus className="h-5 w-5" /></button>
                 <input
                   type="text"
                   value={modalQty}
@@ -458,17 +465,20 @@ export default function ShopPage() {
                       }
                     }
                   }}
-                  className="w-16 sm:w-20 rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-2 sm:px-3 py-2 text-center text-base sm:text-lg font-semibold outline-none focus:border-[#2F9BE6]"
+                  className="w-20 rounded-[16px] border-2 border-[#1E1E1E] bg-[#050505] py-3 text-center text-xl font-bold outline-none focus:border-[#2F9BE6]"
                 />
-                <button onClick={() => setModalQty((typeof modalQty === "number" ? modalQty : parseInt(modalQty) || 1) + 1)} className="rounded-[14px] bg-[#161616] p-2 hover:bg-[#1E1E1E]"><Plus className="h-4 w-4" /></button>
+                <button onClick={() => setModalQty((typeof modalQty === "number" ? modalQty : parseInt(modalQty) || 1) + 1)} className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1E1E1E] active:scale-90"><Plus className="h-5 w-5" /></button>
               </div>
             </div>
-            <button onClick={addToCartFromModal} className="w-full rounded-[14px] bg-[#2F9BE6] py-3 font-medium hover:bg-[#49B6FF] transition-colors">Add to Cart</button>
+            </div>
+            <div className="sticky bottom-0 border-t border-[#1E1E1E] bg-[#0A0A0A]/95 px-4 py-4 backdrop-blur-sm">
+              <button onClick={addToCartFromModal} className="w-full rounded-full bg-gradient-to-r from-[#2F9BE6] to-[#49B6FF] py-4 text-base font-semibold text-white shadow-lg active:scale-95">Add to Cart</button>
+            </div>
           </div>
         </div>
       )}
 
-      <main className="mx-auto max-w-7xl px-3 sm:px-4 py-4 sm:py-6 animate-page-enter">
+      <main className="mx-auto max-w-7xl px-4 py-4 sm:px-4 sm:py-6 animate-page-enter">
         {error && <div className="mb-4 rounded-[16px] border border-[#FF4D4F]/20 bg-[#FF4D4F]/10 px-4 py-3 text-sm text-[#FF4D4F]">{error}</div>}
 
         {step !== "shop" && (
@@ -479,7 +489,7 @@ export default function ShopPage() {
             <div className="flex gap-2">{(["roblox", "delivery", "ticket"] as const).map((s) => (
               <div key={s} className={"h-2 flex-1 rounded-full transition-colors " + (step === s ? "bg-[#49B6FF]" : (["roblox", "delivery", "ticket"].indexOf(step) > ["roblox", "delivery", "ticket"].indexOf(s) ? "bg-[#3DDC84]" : "bg-[#161616]"))} />
             ))}</div>
-            <div className="rounded-[18px] border border-[#1E1E1E] bg-[#111111] p-6 space-y-4 animate-section-enter">
+            <div className="rounded-[24px] border border-[#1E1E1E] bg-[#111111] p-4 sm:p-6 space-y-4 animate-section-enter">
               <div className="border-b border-[#1E1E1E] pb-3">
                 <p className="text-sm text-[#B5B5B5]">Order {orderId}</p>
                 <div className="mt-2 space-y-1">{cart.map((i) => (
@@ -520,7 +530,7 @@ export default function ShopPage() {
                             <User className="h-full w-full p-3 text-[#B5B5B5]/60" />
                           )}
                         </div>
-                        <div className="flex-1">
+                        <div className="space-y-3">
                           <p className="text-sm text-[#B5B5B5]">Display Name</p>
                           <p className="text-lg font-semibold text-white">{robloxSearchResult.displayName}</p>
                           <p className="text-sm text-[#2F9BE6]">@{robloxSearchResult.username}</p>
@@ -664,10 +674,10 @@ export default function ShopPage() {
 
         {step === "shop" && (
           <div className="space-y-8">
-            <div className="overflow-hidden rounded-[16px] border border-[#1E1E1E] bg-[#111111]/50 py-2 animate-section-enter">
+            <div className="overflow-hidden rounded-[20px] border border-[#1E1E1E] bg-[#111111]/70 py-3 animate-section-enter">
               <div className="flex animate-[scroll_30s_linear_infinite] whitespace-nowrap">
                 {[...recentPurchases, ...recentPurchases].map((p, i) => (
-                  <span key={i} className="mx-6 inline-flex items-center gap-2 text-sm text-[#B5B5B5]">
+                  <span key={i} className="mx-4 inline-flex items-center gap-2 text-sm text-[#B5B5B5] sm:mx-6">
                     <span className="text-[#2F9BE6] font-medium">{maskName(p.username)}</span>
                     <span className="text-[#B5B5B5]/80">purchased</span>
                     <span className="text-[#3DDC84]">{p.productName}{p.quantity ? ` x${p.quantity}` : ""}</span>
@@ -678,17 +688,17 @@ export default function ShopPage() {
               <style>{`@keyframes scroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}`}</style>
             </div>
 
-            <div className="relative animate-section-enter">
+            <div className="relative animate-section-enter mb-6">
               <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-[#B5B5B5]" />
-              <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search items..." className="w-full rounded-[16px] border border-[#1E1E1E] bg-[#111111] py-3 pl-10 pr-4 text-sm sm:text-base outline-none transition-colors focus:border-[#2F9BE6]" />
+              <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search items..." className="w-full rounded-[20px] border border-[#1E1E1E] bg-[#111111] py-4 pl-11 pr-4 text-base outline-none transition-colors focus:border-[#2F9BE6]" />
             </div>
 
-            <div className="flex flex-wrap gap-2 animate-section-enter">
-              <button onClick={() => setSelectedGame(null)} className={"rounded-[14px] px-4 py-2 text-sm font-medium transition-all " + (!selectedGame ? "bg-[#2F9BE6] text-white" : "bg-[#111111] text-[#B5B5B5] hover:bg-[#161616]")}>
+            <div className="-mx-4 mb-6 flex gap-2 overflow-x-auto px-4 pb-2 animate-section-enter scrollbar-hide">
+              <button onClick={() => setSelectedGame(null)} className={"shrink-0 rounded-full px-5 py-3 text-sm font-medium transition-all " + (!selectedGame ? "bg-[#2F9BE6] text-white shadow-lg" : "bg-[#111111] text-[#B5B5B5] active:bg-[#161616]")}>
                 All Games
               </button>
               {games.map((g) => (
-                <button key={g._id} onClick={() => setSelectedGame(g._id)} className={"flex items-center gap-2 rounded-[14px] px-4 py-2 text-sm font-medium transition-all " + (selectedGame === g._id ? "bg-[#2F9BE6] text-white" : "bg-[#111111] text-[#B5B5B5] hover:bg-[#161616]")}>
+                <button key={g._id} onClick={() => setSelectedGame(g._id)} className={"flex shrink-0 items-center gap-2 rounded-full px-5 py-3 text-sm font-medium transition-all " + (selectedGame === g._id ? "bg-[#2F9BE6] text-white shadow-lg" : "bg-[#111111] text-[#B5B5B5] active:bg-[#161616]")}>
                   {g.image && <img src={imgUrl(g.image)} alt="" className="h-5 w-5 rounded object-cover" />}
                   {g.name}
                 </button>
@@ -696,7 +706,7 @@ export default function ShopPage() {
             </div>
 
             {banners.length > 0 && (
-              <div className="overflow-hidden rounded-[18px] border border-[#1E1E1E] animate-section-enter">
+              <div className="overflow-hidden rounded-[24px] border border-[#1E1E1E] animate-section-enter mb-8">
                 <img src={imgUrl(banners[0])} alt="" className="w-full max-w-full h-auto object-cover max-h-[220px] sm:max-h-[320px] md:max-h-[400px]" />
               </div>
             )}
@@ -704,7 +714,7 @@ export default function ShopPage() {
             {bestSellers.length > 0 && !showAll && !selectedGame && !searchQuery && (
               <div className="animate-section-enter">
                 <div className="mb-4 flex items-center justify-between gap-4">
-                  <h2 className="text-xl font-semibold text-[#2F9BE6]">Best Sellers</h2>
+                  <h2 className="text-2xl font-bold text-[#2F9BE6]">Best Sellers</h2>
                   <div className="flex gap-2">
                     <button
                       type="button"
@@ -731,18 +741,18 @@ export default function ShopPage() {
                       <div
                         key={p._id}
                         onClick={() => openProductModal(p)}
-                        className="group cursor-pointer overflow-hidden rounded-[18px] border border-[#1E1E1E] bg-[#111111] transition-all duration-200 hover:-translate-y-1 hover:border-[#2F9BE6]/40 hover:shadow-[0_20px_50px_rgba(47,155,230,0.14)] animate-card-in"
+                        className="group cursor-pointer overflow-hidden rounded-[22px] border border-[#1E1E1E] bg-[#111111] shadow-[0_8px_24px_rgba(0,0,0,0.18)] transition-all duration-200 active:scale-[0.98] animate-card-in"
                         style={{ animationDelay: `${idx * 0.05}s` }}
                       >
                         <div className="aspect-square bg-[#050505] overflow-hidden">
                           {p.image ? (
-                            <img src={imgUrl(p.image)} alt={p.name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                            <img src={imgUrl(p.image)} alt={p.name} className="h-full w-full object-cover" />
                           ) : (
                             <div className="flex h-full items-center justify-center"><Package className="h-10 w-10 text-[#B5B5B5]/50" /></div>
                           )}
                         </div>
                         <div className="p-3">
-                          <p className="truncate text-sm font-medium">{p.name}</p>
+                          <p className="line-clamp-2 text-sm font-semibold leading-5">{p.name}</p>
                         <p className="text-xs text-[#2F9BE6] mt-0.5">Qty: x{p.packQuantity || 1}</p>
 {p.desc && <p className="text-xs text-[#B5B5B5] mt-1 line-clamp-2">{p.desc}</p>}
                           <div className="mt-2 flex items-center justify-between">
@@ -758,7 +768,7 @@ export default function ShopPage() {
 
             <div className="animate-section-enter">
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-xl font-semibold">{selectedGame ? games.find((g) => g._id === selectedGame)?.name || "Items" : "All Items"}</h2>
+                <h2 className="text-2xl font-bold">{selectedGame ? games.find((g) => g._id === selectedGame)?.name || "Items" : "All Items"}</h2>
                 {!showAll && filtered.length > 8 && !searchQuery && (
                   <button onClick={() => setShowAll(true)} className="rounded-[14px] bg-[#161616] px-4 py-2 text-sm transition-colors hover:bg-[#1E1E1E]">View Full</button>
                 )}
@@ -768,12 +778,12 @@ export default function ShopPage() {
                 )}
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                 {(showAll ? filtered : filtered.slice(0, 8)).map((p, idx) => (
-                  <div key={p._id} onClick={() => openProductModal(p)} className="group cursor-pointer overflow-hidden rounded-[18px] border border-[#1E1E1E] bg-[#111111] transition-all duration-200 hover:border-[#2F9BE6]/40 hover:-translate-y-1 animate-card-in" style={{ animationDelay: `${idx * 0.05}s` }}>
+                  <div key={p._id} onClick={() => openProductModal(p)} className="group cursor-pointer overflow-hidden rounded-[22px] border border-[#1E1E1E] bg-[#111111] shadow-[0_8px_24px_rgba(0,0,0,0.18)] transition-all duration-200 active:scale-[0.98] animate-card-in" style={{ animationDelay: `${idx * 0.05}s` }}>
                     <div className="aspect-square bg-[#050505] overflow-hidden">
-                      {p.image ? <img src={imgUrl(p.image)} alt={p.name} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" /> : <div className="flex h-full items-center justify-center"><Package className="h-10 w-10 text-[#B5B5B5]/50" /></div>}
+                      {p.image ? <img src={imgUrl(p.image)} alt={p.name} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center"><Package className="h-10 w-10 text-[#B5B5B5]/50" /></div>}
                     </div>
                     <div className="space-y-1.5 sm:space-y-2 p-3 sm:p-4">
-                      <h3 className="truncate text-sm font-medium">{p.name}</h3>
+                      <h3 className="line-clamp-2 text-sm font-semibold leading-5">{p.name}</h3>
                       <p className="text-xs text-[#2F9BE6] mt-0.5">Qty: x{p.packQuantity || 1}</p>
                       <p className="text-xs text-[#B5B5B5]/80">{p.category}</p>
                       <div className="flex items-center justify-between">

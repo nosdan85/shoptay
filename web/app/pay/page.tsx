@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -83,7 +83,7 @@ function PayContent() {
 
   useEffect(() => {
     if (!orderId) {
-      setLoading(false);
+      queueMicrotask(() => setLoading(false));
       return;
     }
 

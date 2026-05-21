@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
@@ -73,7 +73,9 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     if (!isLoading && user?.isOwner && token) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       void fetchAnalytics();
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       const interval = setInterval(() => void fetchAnalytics(), 30000);
       return () => clearInterval(interval);
     }

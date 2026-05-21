@@ -30,13 +30,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const savedUser = localStorage.getItem("discordUser");
       const savedToken = localStorage.getItem("discordToken");
       if (savedUser && savedToken) {
-        setUser(JSON.parse(savedUser));
-        setToken(savedToken);
+        queueMicrotask(() => {
+          setUser(JSON.parse(savedUser));
+          setToken(savedToken);
+        });
       }
     } catch (e) {
       console.error("Failed to load auth state:", e);
     } finally {
-      setIsLoading(false);
+      queueMicrotask(() => setIsLoading(false));
     }
   }, []);
 

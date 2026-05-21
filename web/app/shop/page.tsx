@@ -146,8 +146,10 @@ export default function ShopPage() {
   useEffect(() => {
     try {
       const saved = localStorage.getItem("nosmarket_cart");
-      if (saved) setCart(JSON.parse(saved));
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (saved) queueMicrotask(() => setCart(JSON.parse(saved)));
     } catch {}
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, []);
 

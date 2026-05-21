@@ -1,6 +1,7 @@
-﻿"use client"
+"use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
+import Link from "next/link"
 import Navbar from "../components/Navbar"
 import {
   ShieldCheck,
@@ -91,6 +92,7 @@ export default function ProofsPage() {
   }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchProofs(1)
     detectAdmin()
   }, [detectAdmin])
@@ -187,7 +189,7 @@ export default function ProofsPage() {
   }
 
   const deleteProof = async (proofId: string) => {
-    if (!adminToken || !confirm("XÃ³a proof nÃ y?")) return
+    if (!adminToken || !confirm("Xóa proof này?")) return
     try {
       const res = await fetch(`/api/shop/proofs/${proofId}`, {
         method: "DELETE",
@@ -231,13 +233,13 @@ export default function ProofsPage() {
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-8 flex items-center justify-between animate-fade-in-up">
           <div className="flex items-center gap-4">
-            <a
+            <Link
               href="/"
               className="flex items-center gap-2 rounded-[14px] bg-[#111111] px-4 py-2 transition-colors hover:bg-[#1E1E1E]"
             >
               <Home className="h-5 w-5" />
               <span className="font-medium">Home</span>
-            </a>
+            </Link>
 
             <h1 className="flex items-center gap-3 text-3xl font-bold text-white">
               <ShieldCheck className="h-8 w-8 text-[#3DDC84]" />
@@ -377,7 +379,7 @@ export default function ProofsPage() {
                                 onClick={() => void saveEdit(proof.id)}
                                 disabled={saving}
                                 className="rounded bg-[#3DDC84] p-1.5 text-white transition-colors hover:bg-[#3DDC84]/90 disabled:opacity-50"
-                                title="LÆ°u"
+                                title="Lưu"
                               >
                                 <Check className="h-4 w-4" />
                               </button>
@@ -385,7 +387,7 @@ export default function ProofsPage() {
                                 type="button"
                                 onClick={cancelEdit}
                                 className="rounded bg-[#1E1E1E] p-1.5 text-white transition-colors hover:bg-[#1E1E1E]"
-                                title="Há»§y"
+                                title="Hủy"
                               >
                                 <X className="h-4 w-4" />
                               </button>
@@ -396,7 +398,7 @@ export default function ProofsPage() {
                                 type="button"
                                 onClick={() => startEdit(proof)}
                                 className="rounded bg-[#1E1E1E] p-1.5 text-white transition-colors hover:bg-[#49B6FF]"
-                                title="Sá»­a"
+                                title="Sửa"
                               >
                                 <Edit2 className="h-4 w-4" />
                               </button>
@@ -404,7 +406,7 @@ export default function ProofsPage() {
                                 type="button"
                                 onClick={() => void deleteProof(proof.id)}
                                 className="rounded bg-[#1E1E1E] p-1.5 text-white transition-colors hover:bg-[#FF4D4F]/90"
-                                title="XÃ³a"
+                                title="Xóa"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </button>

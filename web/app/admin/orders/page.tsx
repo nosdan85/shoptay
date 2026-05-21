@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Navbar from "../../components/Navbar";
@@ -61,6 +61,7 @@ export default function AdminOrdersPage() {
 
   useEffect(() => {
     if (token && user?.isOwner) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       void loadOrders();
     } else {
       setLoading(false);

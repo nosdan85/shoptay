@@ -49,6 +49,7 @@ const path = require('path');
 const fs = require('fs');
 const { uploadToImgbb } = require('../utils/imgbbService');
 const { log } = require('../utils/loggingService');
+const { formatPurchasedUnitsLabel } = require('../utils/itemQuantityDisplay');
 
 // Redis cache + Bull queue
 const { cacheGet, cacheSet, cacheDel } = require('../cache/redis');
@@ -4177,7 +4178,7 @@ router.get('/config', async (req, res) => {
 // GET /api/shop/recent-purchases ? public feed of confirmed orders (masked usernames)
 router.get('/recent-purchases', async (req, res) => {
     try {
-        const limit = Math.min(Number(req.query?.limit) || 20, 50);
+        const limit = Math.min(Number(req.query?.limit) || 10, 10);
         const orders = await Order.find({
             $or: [
                 { status: 'Completed' },
@@ -4194,12 +4195,7 @@ router.get('/recent-purchases', async (req, res) => {
                     price: o.totalAmount || undefined
                 };
             }
-            const itemsText = o.items.map(item => {
-                const packQty = Math.max(1, Number(item.packQuantity) || 1);
-                const orderQty = Math.max(1, Number(item.quantity) || 1);
-                const totalQty = packQty * orderQty;
-                return `${item.name || 'Item'} (x${totalQty})`;
-            }).join(', ');
+            const itemsText = o.items.map(item => `${item.name || 'Item'} (${formatPurchasedUnitsLabel(item)})`).join(', ');
             return {
                 username: maskUsername(o.discordUsername || o.discordId || ''),
                 items: itemsText,
@@ -4207,11 +4203,11 @@ router.get('/recent-purchases', async (req, res) => {
             };
         });
 
-        if (real.length >= 5) return res.json(real);
+        if (real.length >= 5) return res.json(real.slice(0, 10));
         const fakeNames = ['Alex', 'Jordan', 'Taylor', 'Morgan', 'Casey', 'Riley', 'Quinn', 'Avery', 'Skyler', 'Dakota', 'Reese', 'Finley'];
         const fakeProducts = ['Blox Fruits Dragon Fruit', 'Pet Simulator Huge Cat', 'Adopt Me Neon Unicorn', 'Blox Fruits Dough Fruit', 'Pet Simulator Titanic Axolotl', 'King Legacy Mera Fruit', 'Anime Adventures SSR Unit', 'Blox Fruits Leopard Fruit', 'Pet Simulator Huge Dog', 'Murder Mystery Godly Knife'];
         const fake = [];
-        const needed = Math.max(8, 12 - real.length);
+        const needed = Math.max(0, 10 - real.length);
         for (let i = 0; i < needed; i++) {
             fake.push({
                 username: fakeNames[Math.floor(Math.random() * fakeNames.length)] + '***',
@@ -4219,7 +4215,7 @@ router.get('/recent-purchases', async (req, res) => {
                 price: parseFloat((Math.random() * 25 + 2).toFixed(2))
             });
         }
-        return res.json([...real, ...fake]);
+        return res.json([...real, ...fake].slice(0, 10));
     } catch (error) {
         console.error('Recent purchases error:', error);
         return res.status(500).json({ error: 'Could not load recent purchases.' });

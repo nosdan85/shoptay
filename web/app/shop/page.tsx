@@ -236,7 +236,7 @@ export default function ShopPage() {
         fetch("/api/shop/products", { cache: "no-store" }),
         fetch("/api/shop/games?nocache=" + Date.now(), { cache: "no-store" }),
         fetch("/api/shop/config", { cache: "no-store" }),
-        fetch("/api/shop/recent-purchases", { cache: "no-store" }),
+        fetch("/api/shop/recent-purchases?limit=10", { cache: "no-store" }),
       ]);
       const pData = await pRes.json();
       const gData = await gRes.json();

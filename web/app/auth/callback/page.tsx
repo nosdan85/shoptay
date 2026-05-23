@@ -68,7 +68,7 @@ function AuthCallbackContent() {
   }, [searchParams, login, router]);
 
   return (
-    <div className="max-w-lg w-full bg-slate-800 border border-slate-700 rounded-2xl p-8 text-center shadow-xl animate-fade-in-up">
+    <div className="max-w-lg w-full bg-[#111111] border border-[#1E1E1E] rounded-2xl p-8 text-center shadow-xl animate-fade-in-up">
       {!error ? (
         <>
           {status.includes("Success") ? (
@@ -77,18 +77,18 @@ function AuthCallbackContent() {
             <Loader2 className="w-16 h-16 text-blue-400 mx-auto mb-4 animate-spin" />
           )}
           <h1 className="text-2xl font-bold mb-3">{status}</h1>
-          <p className="text-slate-400">Please wait while we link your Discord account.</p>
+          <p className="text-[#B5B5B5]">Please wait while we link your Discord account.</p>
         </>
       ) : (
         <>
           <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
           <h1 className="text-2xl font-bold mb-3">{status}</h1>
-          <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 mb-6 text-left">
-            <p className="text-sm text-slate-300 whitespace-pre-wrap">{error}</p>
+          <div className="bg-[#111111] border border-[#1E1E1E] rounded-lg p-4 mb-6 text-left">
+            <p className="text-sm text-[#B5B5B5] whitespace-pre-wrap">{error}</p>
           </div>
           <button
             onClick={() => router.push("/")}
-            className="px-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg font-medium transition-all duration-200 hover:scale-105"
+            className="px-6 py-3 bg-[#161616] hover:bg-[#1E1E1E] rounded-lg font-medium transition-all duration-200 hover:scale-105"
           >
             Back to Home
           </button>
@@ -100,9 +100,9 @@ function AuthCallbackContent() {
 
 export default function AuthCallbackPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white px-4">
+    <div className="min-h-screen flex items-center justify-center bg-black text-white px-4">
       <Suspense fallback={
-        <div className="max-w-lg w-full bg-slate-800 border border-slate-700 rounded-2xl p-8 text-center shadow-xl animate-fade-in-up">
+        <div className="max-w-lg w-full bg-[#111111] border border-[#1E1E1E] rounded-2xl p-8 text-center shadow-xl animate-fade-in-up">
           <Loader2 className="w-16 h-16 text-blue-400 mx-auto mb-4 animate-spin" />
           <h1 className="text-2xl font-bold mb-3">Loading...</h1>
         </div>

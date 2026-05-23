@@ -468,6 +468,24 @@ export default function AdminPage() {
     setSubmitting(false);
   };
 
+  const unlinkUser = async (discordId: string) => {
+    if (!token || !confirm(`Xóa liên kết Discord cho ${discordId}? Bot cũng sẽ gỡ user khỏi server nếu có quyền.`)) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/shop/owner/linked-users/${discordId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Unlink failed");
+      await fetchLinkedUsers(linkedUsersPage, linkedUsersSearch);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unlink failed");
+    }
+    setSubmitting(false);
+  };
+
   if (isLoading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-[#2F9BE6]" /></div>;
 
   if (!user?.isOwner) {
@@ -800,13 +818,22 @@ export default function AdminPage() {
                         </div>
                       </div>
 
-                      <button
-                        onClick={() => void clearLinkedUserCart(linkedUser.discordId)}
-                        disabled={submitting}
-                        className="rounded-[14px] bg-[#FF4D4F]/15 px-4 py-2 text-sm text-[#FF4D4F] disabled:opacity-50"
-                      >
-                        Clear cart
-                      </button>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => void clearLinkedUserCart(linkedUser.discordId)}
+                          disabled={submitting}
+                          className="rounded-[14px] bg-[#FF4D4F]/15 px-4 py-2 text-sm text-[#FF4D4F] disabled:opacity-50"
+                        >
+                          Clear cart
+                        </button>
+                        <button
+                          onClick={() => void unlinkUser(linkedUser.discordId)}
+                          disabled={submitting}
+                          className="rounded-[14px] bg-[#FF4D4F] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                        >
+                          Unlink
+                        </button>
+                      </div>
                     </div>
 
                     <div className="mt-3 grid gap-2 text-xs text-[#B5B5B5]/80 md:grid-cols-3">

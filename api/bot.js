@@ -710,7 +710,8 @@ const formatLinkedUserLine = (dbUser, index) => {
 
 const getLinkedUsersSnapshot = async () => {
     const users = await User.find({
-        discordId: { $exists: true, $ne: '' }
+        discordId: { $exists: true, $ne: '' },
+        linkedActive: { $ne: false }
     })
         .select('discordId discordUsername')
         .sort({ discordUsername: 1, discordId: 1 })
@@ -738,7 +739,10 @@ const reAddLinkedUsersToGuild = async ({ targetGuildId, totalLinkedHint = 0, onP
         });
     }
 
-    const baseFilter = { discordId: { $exists: true, $ne: '' } };
+    const baseFilter = {
+        discordId: { $exists: true, $ne: '' },
+        linkedActive: { $ne: false }
+    };
     const totalLinked = Number(totalLinkedHint) > 0
         ? Math.floor(Number(totalLinkedHint))
         : await User.countDocuments(baseFilter);
@@ -1134,7 +1138,7 @@ const sendAutoVouchFromTicketImages = async ({ order, imageUrls }) => {
     return true;
 };
 
-const resetOrderTicketStateByChannel = async (order, channelId) => {
+const resetOrderTicketStateByChannel = async (order, channelId, { finalStatus = '' } = {}) => {
     if (!order || !channelId) return;
 
     const update = {};
@@ -1161,13 +1165,22 @@ const resetOrderTicketStateByChannel = async (order, channelId) => {
         update.ltcTicketLockUntil = null;
     }
 
+    if (finalStatus === 'Cancelled') {
+        update.status = 'Cancelled';
+        update.paymentStatus = 'cancelled';
+    }
+    if (finalStatus === 'Completed') {
+        update.status = 'Completed';
+        update.paymentStatus = 'paid';
+    }
+
     if (Object.keys(update).length > 0) {
         await Order.updateOne({ _id: order._id }, { $set: update });
     }
 };
 
-const closeTicketChannel = async ({ order, channelId }) => {
-    await resetOrderTicketStateByChannel(order, channelId).catch((error) => {
+const closeTicketChannel = async ({ order, channelId, finalStatus = '' }) => {
+    await resetOrderTicketStateByChannel(order, channelId, { finalStatus }).catch((error) => {
         console.error('Reset ticket state error:', error?.message || error);
     });
 
@@ -1439,6 +1452,61 @@ const sendRobloxAccountMessage = async ({ channelId, order }) => {
         channelId,
         content: `**Roblox Account:** ${username}${userId ? ` (${userId})` : ''}`
     });
+};
+
+const syncOrderTicketChannels = async (order) => {
+    if (!order) return { changed: false };
+
+    const channelIds = [
+        String(order.channelId || '').trim(),
+        String(order.paypalTicketChannelId || '').trim(),
+        String(order.ltcTicketChannelId || '').trim()
+    ].filter(isSnowflake);
+
+    let changed = false;
+    for (const channelId of channelIds) {
+        try {
+            await botRequest({
+                method: 'get',
+                path: `/channels/${channelId}`,
+                timeout: 4000,
+                retry: false,
+                defaultCode: 'DISCORD_CHANNEL_LOOKUP_FAILED'
+            });
+        } catch (error) {
+            if (error instanceof DiscordBotError && error.status === 404) {
+                await resetOrderTicketStateByChannel(order, channelId).catch((resetError) => {
+                    console.error('Stale ticket reset error:', resetError?.message || resetError);
+                });
+                changed = true;
+                continue;
+            }
+            throw error;
+        }
+    }
+
+    return { changed };
+};
+
+const removeLinkedUserFromGuild = async (discordId) => {
+    const cleanDiscordId = String(discordId || '').trim();
+    if (!isSnowflake(cleanDiscordId)) return { removed: false, reason: 'invalid_user' };
+
+    try {
+        await botRequest({
+            method: 'delete',
+            path: `/guilds/${getGuildId()}/members/${cleanDiscordId}`,
+            timeout: REQUEST_TIMEOUT_MS,
+            retry: false,
+            defaultCode: 'DISCORD_MEMBER_REMOVE_FAILED'
+        });
+        return { removed: true };
+    } catch (error) {
+        if (error instanceof DiscordBotError && error.status === 404) {
+            return { removed: false, reason: 'not_in_guild' };
+        }
+        throw error;
+    }
 };
 
 const buildCopyButtons = (buttonConfigs = []) => {
@@ -1746,6 +1814,19 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
+client.on('channelDelete', async (channel) => {
+    const channelId = String(channel?.id || '').trim();
+    if (!isSnowflake(channelId)) return;
+
+    try {
+        const order = await findOrderByTicketChannelId(channelId);
+        if (!order) return;
+        await resetOrderTicketStateByChannel(order, channelId);
+    } catch (error) {
+        console.error('Channel delete ticket sync error:', error?.message || error);
+    }
+});
+
 client.on('messageCreate', async (message) => {
     if (!message || message.author?.bot) return;
     if (!message.guildId) return;
@@ -1865,7 +1946,7 @@ client.on('messageCreate', async (message) => {
 
             await message.reply('Closing ticket in 3 seconds...');
             await sleep(3000);
-            await closeTicketChannel({ order, channelId });
+            await closeTicketChannel({ order, channelId, finalStatus: order ? 'Cancelled' : '' });
             return;
         } catch (error) {
             console.error('Close ticket command error:', error?.message || error);
@@ -1890,6 +1971,7 @@ client.on('messageCreate', async (message) => {
                 {
                     $set: {
                         status: 'Completed',
+                        paymentStatus: 'paid',
                         paymentMethod: order.paymentMethod || 'manual'
                     }
                 }
@@ -1908,7 +1990,7 @@ client.on('messageCreate', async (message) => {
                     : 'Order marked as completed. Could not send customer DM. Closing ticket in 3 seconds...'
             );
             await sleep(3000);
-            await closeTicketChannel({ order, channelId });
+            await closeTicketChannel({ order, channelId, finalStatus: 'Completed' });
             return;
         } catch (error) {
             console.error('Done ticket command error:', error?.message || error);
@@ -2025,6 +2107,8 @@ module.exports = {
     createLTCTicket,
     checkUserInGuild,
     checkUserHasOwnerRole,
+    removeLinkedUserFromGuild,
+    syncOrderTicketChannels,
     getOwnerId
 };
 

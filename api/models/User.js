@@ -9,6 +9,8 @@ const userSchema = new mongoose.Schema({
     refreshToken: { type: String },
     tokenExpiresAt: { type: Date }, // thời điểm hết hạn accessToken
     scopes: [{ type: String }],
+    linkedActive: { type: Boolean, default: true, index: true },
+    unlinkedAt: { type: Date, default: null },
 
     walletBalanceCents: { type: Number, default: 0, min: 0 },
 

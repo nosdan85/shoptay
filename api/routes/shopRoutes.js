@@ -20,6 +20,8 @@ const {
     createLTCTicket,
     checkUserInGuild,
     checkUserHasOwnerRole,
+    removeLinkedUserFromGuild,
+    syncOrderTicketChannels,
     DiscordBotError
 } = require('../bot');
 const { createPayPalOrder, capturePayPalOrder, createLTCInvoice } = require('../services/paymentService');
@@ -564,6 +566,8 @@ const upsertDiscordUserAndBuildAuthPayload = async ({
 
     if (safeAccessToken) dbUser.accessToken = encryptSecret(safeAccessToken);
     if (safeRefreshToken) dbUser.refreshToken = encryptSecret(safeRefreshToken);
+    dbUser.linkedActive = true;
+    dbUser.unlinkedAt = null;
     if (Number.isFinite(expiresInSeconds) && expiresInSeconds > 0) {
         dbUser.tokenExpiresAt = new Date(Date.now() + expiresInSeconds * 1000);
     }
@@ -1074,9 +1078,24 @@ const clearUserCart = async (discordId) => {
 const findUserActiveTicketOrder = async (discordId, excludeOrderId = '') => {
     const cleanDiscordId = String(discordId || '').trim();
     if (!cleanDiscordId) return null;
-    return Order.findOne(buildActiveTicketQuery(cleanDiscordId, excludeOrderId))
+    const order = await Order.findOne(buildActiveTicketQuery(cleanDiscordId, excludeOrderId))
         .sort({ updatedAt: -1, createdAt: -1 })
         .lean();
+    if (!order) return null;
+
+    if (typeof syncOrderTicketChannels === 'function') {
+        const syncResult = await syncOrderTicketChannels(order).catch((error) => {
+            console.warn('Active ticket sync failed:', error?.message || error);
+            return { changed: false };
+        });
+        if (syncResult?.changed) {
+            return Order.findOne(buildActiveTicketQuery(cleanDiscordId, excludeOrderId))
+                .sort({ updatedAt: -1, createdAt: -1 })
+                .lean();
+        }
+    }
+
+    return order;
 };
 
 const findUserCreatingTicketOrder = async (discordId, excludeOrderId = '') => {
@@ -3851,7 +3870,10 @@ router.get('/owner/linked-users', authRequired, async (req, res) => {
         const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(200, Math.floor(rawLimit))) : 50;
         const search = String(req.query?.search || '').trim();
 
-        const filter = { discordId: { $exists: true, $ne: '' } };
+        const filter = {
+            discordId: { $exists: true, $ne: '' },
+            linkedActive: { $ne: false }
+        };
         if (search) {
             const escapedSearch = escapeRegex(search);
             filter.$or = [
@@ -3918,6 +3940,49 @@ router.delete('/owner/linked-users/:discordId/cart', authRequired, async (req, r
     } catch (error) {
         console.error('Owner clear linked user cart error:', error);
         return res.status(500).json({ error: 'Could not clear linked user cart.' });
+    }
+});
+
+router.delete('/owner/linked-users/:discordId', authRequired, async (req, res) => {
+    try {
+        const ownerDiscordId = String(req.user?.discordId || '').trim();
+        if (!ownerDiscordId) return res.status(401).json({ error: 'Authentication required' });
+        const isOwner = await canAccessOwnerEndpoints(ownerDiscordId);
+        if (!isOwner) return res.status(403).json({ error: 'Forbidden' });
+
+        const targetDiscordId = String(req.params?.discordId || '').trim();
+        if (!targetDiscordId) return res.status(400).json({ error: 'Discord ID is required' });
+
+        const guildResult = typeof removeLinkedUserFromGuild === 'function'
+            ? await removeLinkedUserFromGuild(targetDiscordId).catch((error) => ({
+                removed: false,
+                reason: error?.message || 'bot_remove_failed'
+            }))
+            : { removed: false, reason: 'bot_unavailable' };
+
+        const updated = await User.findOneAndUpdate(
+            { discordId: targetDiscordId },
+            {
+                $set: {
+                    accessToken: '',
+                    refreshToken: '',
+                    tokenExpiresAt: null,
+                    scopes: [],
+                    cartItems: [],
+                    cartUpdatedAt: new Date(),
+                    linkedActive: false,
+                    unlinkedAt: new Date()
+                }
+            },
+            { new: true }
+        ).lean();
+
+        if (!updated) return res.status(404).json({ error: 'Linked user not found' });
+
+        return res.json({ success: true, guild: guildResult });
+    } catch (error) {
+        console.error('Owner unlink user error:', error);
+        return res.status(500).json({ error: 'Could not unlink user.' });
     }
 });
 

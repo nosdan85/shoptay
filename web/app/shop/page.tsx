@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
 import { ALL_TIMEZONES, detectUserTimezone, filterTimezones, getTimezonesGroupedByCountry, type CountryGroup } from "@/lib/timezones";
@@ -23,7 +23,6 @@ import {
 } from "lucide-react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-const LOCAL_CART_KEY = "nosmarket_cart";
 
 function imgUrl(src: string | undefined | null): string {
   if (!src) return "";
@@ -44,35 +43,6 @@ function formatProductNameWithQty(name: string, quantity: number | undefined | n
   return `${name} ${formatQtyLabel(quantity)}`;
 }
 
-function readLocalCart(): CartItem[] {
-  try {
-    const saved = localStorage.getItem(LOCAL_CART_KEY);
-    if (!saved) return [];
-    const parsed = JSON.parse(saved);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function mergeCartItems(primary: CartItem[], secondary: CartItem[]): CartItem[] {
-  const byId = new Map<string, CartItem>();
-  for (const item of [...primary, ...secondary]) {
-    if (!item?._id) continue;
-    const existing = byId.get(item._id);
-    if (existing) {
-      byId.set(item._id, {
-        ...existing,
-        quantity: Math.max(1, Number(existing.quantity || 1) + Number(item.quantity || 1)),
-      });
-      continue;
-    }
-    byId.set(item._id, { ...item, quantity: Math.max(1, Number(item.quantity) || 1) });
-  }
-  return Array.from(byId.values());
-}
-
-
 interface Product { _id: string; name: string; category: string; price: number; bulkPrice?: number; packQuantity?: number; image?: string; desc?: string; gameId?: string }
 interface CartItem extends Product { quantity: number }
 interface Game { _id: string; name: string; slug: string; image?: string }
@@ -84,6 +54,57 @@ type Step = "shop" | "roblox" | "delivery" | "ticket";
 type PriceSort = "none" | "low-high" | "high-low";
 
 const BEST_SELLERS_PER_PAGE = 4;
+
+const ProductCard = memo(function ProductCard({
+  product,
+  index,
+  onOpen,
+  variant = "default",
+}: {
+  product: Product;
+  index: number;
+  onOpen: (product: Product) => void;
+  variant?: "default" | "bestSeller";
+}) {
+  const handleOpen = useCallback(() => onOpen(product), [onOpen, product]);
+
+  return (
+    <div
+      onClick={handleOpen}
+      className="group product-card cursor-pointer overflow-hidden rounded-[22px] border border-[#1E1E1E] bg-[#111111] shadow-[0_8px_24px_rgba(0,0,0,0.18)] transition-all duration-200 active:scale-[0.98] animate-card-in md:transition-transform md:duration-200 md:hover:scale-[1.03]"
+      style={{ animationDelay: `${index * (variant === "bestSeller" ? 0.08 : 0.05)}s` }}
+    >
+      <div className="aspect-square bg-[#050505] overflow-hidden">
+        {product.image ? (
+          <img src={imgUrl(product.image)} alt={product.name} loading="lazy" className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex h-full items-center justify-center"><Package className="h-10 w-10 text-[#B5B5B5]/50" /></div>
+        )}
+      </div>
+      {variant === "bestSeller" ? (
+        <div className="p-3">
+          <p className="line-clamp-2 text-sm font-semibold leading-5">{product.name}</p>
+          <p className="text-xs text-[#2F9BE6] mt-0.5">{formatQtyLabel(product.packQuantity)}</p>
+          {product.desc && <p className="text-xs text-[#B5B5B5] mt-1 line-clamp-2">{product.desc}</p>}
+          <div className="mt-2 flex items-center justify-between">
+            <span className="text-sm font-semibold text-[#3DDC84]">${product.price.toFixed(2)}</span>
+            <span className="text-xs text-[#2F9BE6]">View</span>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-1.5 sm:space-y-2 p-3 sm:p-4">
+          <h3 className="line-clamp-2 text-sm font-semibold leading-5">{product.name}</h3>
+          <p className="text-xs text-[#2F9BE6] mt-0.5">{formatQtyLabel(product.packQuantity)}</p>
+          <p className="text-xs text-[#B5B5B5]/80">{product.category}</p>
+          <div className="flex items-center justify-between">
+            <span className="text-lg font-semibold text-[#3DDC84]">${product.price.toFixed(2)}</span>
+            <span className="text-xs text-[#2F9BE6]">View</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
 
 function LogoLoader() {
   return (
@@ -126,6 +147,7 @@ export default function ShopPage() {
   const [bestSellerIds, setBestSellerIds] = useState<string[]>([]);
   const [recentPurchases, setRecentPurchases] = useState<Purchase[]>([]);
   const [selectedGame, setSelectedGame] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [priceSort, setPriceSort] = useState<PriceSort>("none");
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -156,26 +178,36 @@ export default function ShopPage() {
   const checkoutInFlightRef = useRef(false);
   const ticketInFlightRef = useRef(false);
   const lastActionRef = useRef(0);
+  const searchDebounceRef = useRef<number | null>(null);
 
-  const ACTION_COOLDOWN_MS = 2000;
+  const ACTION_COOLDOWN_MS = 450;
   const canAct = () => { if (submitting || Date.now() - lastActionRef.current < ACTION_COOLDOWN_MS) return false; lastActionRef.current = Date.now(); return true; };
 
-  const saveCart = (newCart: CartItem[], options?: { skipRemoteSync?: boolean }) => {
+  const saveCart = useCallback((newCart: CartItem[], options?: { skipRemoteSync?: boolean }) => {
     if (options?.skipRemoteSync) skipNextRemoteCartSyncRef.current = true;
     setCart(newCart);
-    try {
-      localStorage.setItem(LOCAL_CART_KEY, JSON.stringify(newCart));
-    } catch (_) {}
-  };
+  }, []);
 
-  const syncCartToAccount = async (nextCart: CartItem[]) => {
+  const syncCartToAccount = useCallback(async (nextCart: CartItem[]) => {
     if (!token) return;
     await fetch("/api/shop/cart", {
       method: "PUT",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ cartItems: nextCart.map((i) => ({ product: i._id, quantity: i.quantity })) }),
     });
-  };
+  }, [token]);
+
+  const fetchRemoteCart = useCallback(async (signal?: AbortSignal): Promise<CartItem[]> => {
+    if (!token) return [];
+    const res = await fetch("/api/shop/cart", {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+      signal,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error || "Failed to load cart");
+    return Array.isArray(data?.items) ? (data.items as CartItem[]) : [];
+  }, [token]);
 
   const load = async () => {
     setLoading(true);
@@ -201,9 +233,13 @@ export default function ShopPage() {
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    queueMicrotask(() => setCart(readLocalCart()));
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (searchDebounceRef.current) window.clearTimeout(searchDebounceRef.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -212,32 +248,46 @@ export default function ShopPage() {
       return;
     }
 
-    let cancelled = false;
+    const controller = new AbortController();
+    remoteCartHydratedRef.current = false;
     void (async () => {
       try {
-        const res = await fetch("/api/shop/cart", {
-          headers: { Authorization: `Bearer ${token}` },
-          cache: "no-store",
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data?.error || "Failed to load cart");
-        const remoteItems = Array.isArray(data?.items) ? (data.items as CartItem[]) : [];
-        const merged = mergeCartItems(remoteItems, readLocalCart());
-        if (cancelled) return;
-        saveCart(merged, { skipRemoteSync: true });
-        remoteCartHydratedRef.current = true;
-        if (JSON.stringify(remoteItems) !== JSON.stringify(merged)) {
-          await syncCartToAccount(merged);
-        }
+        const remoteItems = await fetchRemoteCart(controller.signal);
+        if (controller.signal.aborted) return;
+        saveCart(remoteItems, { skipRemoteSync: true });
       } catch {
-        remoteCartHydratedRef.current = true;
+        if (controller.signal.aborted) return;
+      } finally {
+        if (!controller.signal.aborted) remoteCartHydratedRef.current = true;
       }
     })();
 
     return () => {
-      cancelled = true;
+      controller.abort();
     };
-  }, [token, user?.discordId]);
+  }, [fetchRemoteCart, saveCart, token, user?.discordId]);
+
+  useEffect(() => {
+    if (!token || !user?.discordId) return;
+
+    const syncRemoteCart = () => {
+      void fetchRemoteCart()
+        .then((remoteItems) => saveCart(remoteItems, { skipRemoteSync: true }))
+        .catch(() => {});
+    };
+
+    const syncVisibleRemoteCart = () => {
+      if (document.visibilityState === "visible") syncRemoteCart();
+    };
+
+    window.addEventListener("focus", syncRemoteCart);
+    const intervalId = window.setInterval(syncVisibleRemoteCart, 30000);
+
+    return () => {
+      window.removeEventListener("focus", syncRemoteCart);
+      window.clearInterval(intervalId);
+    };
+  }, [fetchRemoteCart, saveCart, token, user?.discordId]);
 
   useEffect(() => {
     if (!token || !user?.discordId || !remoteCartHydratedRef.current) return;
@@ -251,7 +301,7 @@ export default function ShopPage() {
     }, 250);
 
     return () => window.clearTimeout(timeoutId);
-  }, [cart, token, user?.discordId]);
+  }, [cart, syncCartToAccount, token, user?.discordId]);
 
   const activeSelectedGame = selectedGame && games.some((g) => g._id === selectedGame)
     ? selectedGame
@@ -312,12 +362,24 @@ export default function ShopPage() {
   const cartTotal = useMemo(() => cart.reduce((s, i) => s + i.price * i.quantity, 0), [cart]);
   const cartCount = useMemo(() => cart.reduce((s, i) => s + i.quantity, 0), [cart]);
 
-  const openProductModal = (p: Product) => {
+  const handleSearchChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    setSearchInput(value);
+    if (searchDebounceRef.current) window.clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = window.setTimeout(() => setSearchQuery(value), 300);
+  }, []);
+
+  const openCart = useCallback(() => {
+    setCartClosing(false);
+    setCartOpen(true);
+  }, []);
+
+  const openProductModal = useCallback((p: Product) => {
     setSelectedProduct(p);
     setModalQty(1);
     setModalClosing(false);
     setModalOpen(true);
-  };
+  }, []);
 
   const closeProductModal = () => {
     setModalClosing(true);
@@ -367,9 +429,6 @@ export default function ShopPage() {
 
   const clearCartState = () => {
     saveCart([], { skipRemoteSync: true });
-    try {
-      localStorage.removeItem(LOCAL_CART_KEY);
-    } catch (_) {}
     if (token) {
       void fetch("/api/shop/cart", {
         method: "DELETE",
@@ -478,11 +537,11 @@ export default function ShopPage() {
     finally { setSubmitting(false); ticketInFlightRef.current = false; }
   };
 
-  if (loading) return <div className="min-h-screen bg-[#050505]"><Navbar showCart={step === "shop"} cartCount={cartCount} onCartClick={() => { setCartClosing(false); setCartOpen(true); }} /><LogoLoader /></div>;
+  if (loading) return <div className="min-h-screen bg-[#050505]"><Navbar showCart={step === "shop"} cartCount={cartCount} onCartClick={openCart} /><LogoLoader /></div>;
 
   return (
     <div className="min-h-screen bg-[#050505] text-white">
-      <Navbar cartCount={cartCount} showCart={step === "shop" && cartCount > 0} onCartClick={() => { setCartClosing(false); setCartOpen(true); }} />
+      <Navbar cartCount={cartCount} showCart={step === "shop" && cartCount > 0} onCartClick={openCart} />
 
       {checkoutLoading && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in">
@@ -494,7 +553,7 @@ export default function ShopPage() {
       )}
 
       {step === "shop" && cartCount > 0 && (
-        <button onClick={() => { setCartClosing(false); setCartOpen(true); }} className="hidden md:flex fixed bottom-6 right-6 z-40 items-center gap-2 rounded-full bg-[#2F9BE6] px-5 py-3 text-base font-medium shadow-2xl transition-transform hover:scale-105 active:scale-95">
+        <button onClick={openCart} className={"hidden md:flex fixed bottom-6 right-6 z-40 items-center gap-2 rounded-full bg-[#2F9BE6] px-5 py-3 text-base font-medium shadow-2xl transition-transform hover:scale-105 active:scale-95 cart-pulse primary-hover-glow " + (cartPulse ? "animate-pulse-glow" : "")}>
           <ShoppingCart className="h-5 w-5" /> Cart ({cartCount})
         </button>
       )}
@@ -511,7 +570,7 @@ export default function ShopPage() {
               {cart.map((item) => (
                 <div key={item._id} className="flex gap-3 rounded-[16px] border border-[#1E1E1E] bg-[#050505] p-3 sm:p-3">
                   <div className="h-12 w-12 sm:h-14 sm:w-14 flex-shrink-0 overflow-hidden rounded-[12px] sm:rounded-[14px] bg-[#111111]">
-                    {item.image ? <img src={imgUrl(item.image)} alt="" className="h-full w-full object-cover" /> : <Package className="h-full w-full p-3 text-[#B5B5B5]/60" />}
+                    {item.image ? <img src={imgUrl(item.image)} alt="" loading="lazy" className="h-full w-full object-cover" /> : <Package className="h-full w-full p-3 text-[#B5B5B5]/60" />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="truncate text-sm font-medium leading-5">{formatProductNameWithQty(item.name, item.packQuantity)}</p>
@@ -531,7 +590,7 @@ export default function ShopPage() {
             {cart.length > 0 && (
               <div className="border-t border-[#1E1E1E] px-4 py-4 space-y-3 sticky bottom-0 bg-[#111111]">
                 <div className="flex justify-between text-lg font-semibold"><span>Total</span><span className="text-[#3DDC84]">${cartTotal.toFixed(2)}</span></div>
-                <button onClick={() => { closeCart(); void doCheckout(); }} disabled={submitting} className="w-full rounded-[14px] bg-[#2F9BE6] py-3 font-medium transition-all hover:bg-[#49B6FF] disabled:opacity-50">{submitting ? "Processing..." : "Checkout"}</button>
+                <button onClick={() => { closeCart(); void doCheckout(); }} disabled={submitting} className="w-full rounded-[14px] bg-[#2F9BE6] py-3 font-medium transition-all hover:bg-[#49B6FF] primary-hover-glow disabled:opacity-50">{submitting ? "Processing..." : "Checkout"}</button>
               </div>
             )}
           </div>
@@ -548,7 +607,7 @@ export default function ShopPage() {
             <div className="max-h-[calc(82dvh-96px)] overflow-y-auto px-4 py-3">
             <div className="space-y-3">
               <div className="mx-auto aspect-square w-full max-w-[120px] overflow-hidden rounded-[14px] bg-[#050505]">
-                {selectedProduct.image ? <img src={imgUrl(selectedProduct.image)} alt="" className="h-full w-full object-contain" /> : <Package className="h-full w-full p-8 text-[#B5B5B5]/50" />}
+                {selectedProduct.image ? <img src={imgUrl(selectedProduct.image)} alt="" loading="lazy" className="h-full w-full object-contain" /> : <Package className="h-full w-full p-8 text-[#B5B5B5]/50" />}
               </div>
               <div className="space-y-1.5">
                 <h2 className="text-base font-bold leading-tight">{formatProductNameWithQty(selectedProduct.name, selectedProduct.packQuantity)}</h2>
@@ -576,7 +635,7 @@ export default function ShopPage() {
             </div>
             </div>
             <div className="border-t border-[#1E1E1E] bg-[#0A0A0A] px-4 py-3">
-              <button onClick={addToCartFromModal} className="w-full rounded-full bg-gradient-to-r from-[#2F9BE6] to-[#49B6FF] py-3.5 text-sm font-semibold text-white active:scale-95">Add to Cart</button>
+              <button onClick={addToCartFromModal} className="w-full rounded-full bg-gradient-to-r from-[#2F9BE6] to-[#49B6FF] py-3.5 text-sm font-semibold text-white active:scale-95 primary-hover-glow">Add to Cart</button>
             </div>
           </div>
         </div>
@@ -794,7 +853,7 @@ export default function ShopPage() {
 
             <div className="relative animate-section-enter mb-6">
               <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-[#B5B5B5]" />
-              <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search items..." className="w-full rounded-[20px] border border-[#1E1E1E] bg-[#111111] py-4 pl-11 pr-4 text-base outline-none transition-colors focus:border-[#2F9BE6]" />
+              <input value={searchInput} onChange={handleSearchChange} placeholder="Search items..." className="w-full rounded-[20px] border border-[#1E1E1E] bg-[#111111] py-4 pl-11 pr-4 text-base outline-none transition-colors focus:border-[#2F9BE6]" />
             </div>
 
             <div className="mb-6 flex items-center gap-2 animate-section-enter">
@@ -860,60 +919,44 @@ export default function ShopPage() {
                   {bestSellers
                     .slice(bestSellerPage * BEST_SELLERS_PER_PAGE, (bestSellerPage + 1) * BEST_SELLERS_PER_PAGE)
                     .map((p, idx) => (
-                      <div
-                        key={p._id}
-                        onClick={() => openProductModal(p)}
-                        className="group cursor-pointer overflow-hidden rounded-[22px] border border-[#1E1E1E] bg-[#111111] shadow-[0_8px_24px_rgba(0,0,0,0.18)] transition-all duration-200 active:scale-[0.98] animate-card-in"
-                        style={{ animationDelay: `${idx * 0.05}s` }}
-                      >
-                        <div className="aspect-square bg-[#050505] overflow-hidden">
-                          {p.image ? (
-                            <img src={imgUrl(p.image)} alt={p.name} className="h-full w-full object-cover" />
-                          ) : (
-                            <div className="flex h-full items-center justify-center"><Package className="h-10 w-10 text-[#B5B5B5]/50" /></div>
-                          )}
-                        </div>
-                        <div className="p-3">
-                          <p className="line-clamp-2 text-sm font-semibold leading-5">{p.name}</p>
-                  <p className="text-xs text-[#2F9BE6] mt-0.5">{formatQtyLabel(p.packQuantity)}</p>
-{p.desc && <p className="text-xs text-[#B5B5B5] mt-1 line-clamp-2">{p.desc}</p>}
-                          <div className="mt-2 flex items-center justify-between">
-                            <span className="text-sm font-semibold text-[#3DDC84]">${p.price.toFixed(2)}</span>
-                            <span className="text-xs text-[#2F9BE6]">View</span>
-                          </div>
-                        </div>
-                      </div>
+                      <ProductCard key={p._id} product={p} index={idx} onOpen={openProductModal} variant="bestSeller" />
                     ))}
                 </div>
               </div>
             )}
 
             <div className="animate-section-enter">
-              <div className="mb-4 flex items-center justify-between">
+              <div className="mb-4 flex items-center justify-between gap-4">
                 <h2 className="text-2xl font-bold">{activeSelectedGame ? games.find((g) => g._id === activeSelectedGame)?.name || "Items" : "All Items"}</h2>
                 {!showAll && filtered.length > 8 && !searchQuery && (
                   <button onClick={() => setShowAll(true)} className="rounded-[14px] bg-[#161616] px-4 py-2 text-sm transition-colors hover:bg-[#1E1E1E]">View Full</button>
                 )}
               </div>
                 {showAll && (
-                  <button onClick={() => setShowAll(false)} className="flex items-center gap-2 rounded-[14px] bg-[#1E1E1E] px-4 py-2 text-sm transition-colors hover:bg-[#1E1E1E]"><ArrowLeft className="h-4 w-4" /> Back</button>
+                  <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <button onClick={() => setShowAll(false)} className="flex items-center gap-2 rounded-[14px] bg-[#1E1E1E] px-4 py-2 text-sm transition-colors hover:bg-[#1E1E1E]"><ArrowLeft className="h-4 w-4" /> Back</button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm text-[#B5B5B5]/80">Price</span>
+                      {([
+                        ["none", "Default"],
+                        ["low-high", "Low to High"],
+                        ["high-low", "High to Low"],
+                      ] as const).map(([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setPriceSort(value)}
+                          className={"rounded-full px-4 py-2 text-sm font-medium transition-all " + (priceSort === value ? "bg-[#2F9BE6] text-white" : "bg-[#111111] text-[#B5B5B5] hover:text-white")}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 )}
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                 {(showAll ? filtered : filtered.slice(0, 8)).map((p, idx) => (
-                  <div key={p._id} onClick={() => openProductModal(p)} className="group cursor-pointer overflow-hidden rounded-[22px] border border-[#1E1E1E] bg-[#111111] shadow-[0_8px_24px_rgba(0,0,0,0.18)] transition-all duration-200 active:scale-[0.98] animate-card-in" style={{ animationDelay: `${idx * 0.05}s` }}>
-                    <div className="aspect-square bg-[#050505] overflow-hidden">
-                      {p.image ? <img src={imgUrl(p.image)} alt={p.name} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center"><Package className="h-10 w-10 text-[#B5B5B5]/50" /></div>}
-                    </div>
-                    <div className="space-y-1.5 sm:space-y-2 p-3 sm:p-4">
-                      <h3 className="line-clamp-2 text-sm font-semibold leading-5">{p.name}</h3>
-                    <p className="text-xs text-[#2F9BE6] mt-0.5">{formatQtyLabel(p.packQuantity)}</p>
-                      <p className="text-xs text-[#B5B5B5]/80">{p.category}</p>
-                      <div className="flex items-center justify-between">
-                        <span className="text-lg font-semibold text-[#3DDC84]">${p.price.toFixed(2)}</span>
-                        <span className="text-xs text-[#2F9BE6]">View</span>
-                      </div>
-                    </div>
-                  </div>
+                  <ProductCard key={p._id} product={p} index={idx} onOpen={openProductModal} />
                 ))}
               </div>
               {filtered.length === 0 && <div className="py-20 text-center text-[#B5B5B5]"><Package className="mx-auto mb-4 h-16 w-16 opacity-30" /><p>No items found.</p></div>}

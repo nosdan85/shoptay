@@ -20,7 +20,6 @@ const {
     createLTCTicket,
     checkUserInGuild,
     checkUserHasOwnerRole,
-    removeLinkedUserFromGuild,
     syncOrderTicketChannels,
     DiscordBotError
 } = require('../bot');
@@ -3953,13 +3952,6 @@ router.delete('/owner/linked-users/:discordId', authRequired, async (req, res) =
         const targetDiscordId = String(req.params?.discordId || '').trim();
         if (!targetDiscordId) return res.status(400).json({ error: 'Discord ID is required' });
 
-        const guildResult = typeof removeLinkedUserFromGuild === 'function'
-            ? await removeLinkedUserFromGuild(targetDiscordId).catch((error) => ({
-                removed: false,
-                reason: error?.message || 'bot_remove_failed'
-            }))
-            : { removed: false, reason: 'bot_unavailable' };
-
         const updated = await User.findOneAndUpdate(
             { discordId: targetDiscordId },
             {
@@ -3979,7 +3971,7 @@ router.delete('/owner/linked-users/:discordId', authRequired, async (req, res) =
 
         if (!updated) return res.status(404).json({ error: 'Linked user not found' });
 
-        return res.json({ success: true, guild: guildResult });
+        return res.json({ success: true });
     } catch (error) {
         console.error('Owner unlink user error:', error);
         return res.status(500).json({ error: 'Could not unlink user.' });

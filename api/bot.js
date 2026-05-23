@@ -1488,27 +1488,6 @@ const syncOrderTicketChannels = async (order) => {
     return { changed };
 };
 
-const removeLinkedUserFromGuild = async (discordId) => {
-    const cleanDiscordId = String(discordId || '').trim();
-    if (!isSnowflake(cleanDiscordId)) return { removed: false, reason: 'invalid_user' };
-
-    try {
-        await botRequest({
-            method: 'delete',
-            path: `/guilds/${getGuildId()}/members/${cleanDiscordId}`,
-            timeout: REQUEST_TIMEOUT_MS,
-            retry: false,
-            defaultCode: 'DISCORD_MEMBER_REMOVE_FAILED'
-        });
-        return { removed: true };
-    } catch (error) {
-        if (error instanceof DiscordBotError && error.status === 404) {
-            return { removed: false, reason: 'not_in_guild' };
-        }
-        throw error;
-    }
-};
-
 const buildCopyButtons = (buttonConfigs = []) => {
     const usableConfigs = (Array.isArray(buttonConfigs) ? buttonConfigs : [])
         .filter((item) => item && item.customId && item.label);
@@ -2107,7 +2086,6 @@ module.exports = {
     createLTCTicket,
     checkUserInGuild,
     checkUserHasOwnerRole,
-    removeLinkedUserFromGuild,
     syncOrderTicketChannels,
     getOwnerId
 };

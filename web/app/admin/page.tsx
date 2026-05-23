@@ -469,7 +469,7 @@ export default function AdminPage() {
   };
 
   const unlinkUser = async (discordId: string) => {
-    if (!token || !confirm(`Xóa liên kết Discord cho ${discordId}? Bot cũng sẽ gỡ user khỏi server nếu có quyền.`)) return;
+    if (!token || !confirm(`Xóa liên kết Discord cho ${discordId}? User vẫn ở trong server.`)) return;
     setSubmitting(true);
     setError(null);
     try {

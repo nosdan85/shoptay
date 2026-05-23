@@ -29,9 +29,10 @@ const {
 } = require('../services/paypalFfService');
 const { discordRequest } = require('../utils/discordApi');
 const { authRequired, getBearerToken, verifyAnyJwtToken } = require('../middleware/authMiddleware');
-const { checkoutLimiter, discordAuthLimiter } = require('../middleware/rateLimit');
+const { checkoutLimiter, discordAuthLimiter, ticketCreateLimiter, cartSyncLimiter } = require('../middleware/rateLimit');
 const { getDiscordGatewayStatus } = require('../config/discordGateway');
 const { encryptSecret } = require('../utils/tokenCrypto');
+const { ACTIVE_TICKET_MESSAGE, buildActiveTicketQuery } = require('../utils/orderGuards');
 const {
     normalizeCouponCode,
     isSupportedCouponCode,
@@ -123,6 +124,7 @@ const PAYMENT_PROVIDER_TIMEOUT_MS = 15000;
 const TICKET_LOCK_WINDOW_MS = 30 * 1000;
 const PAYPAL_TICKET_LOCK_WINDOW_MS = 30 * 1000;
 const LTC_TICKET_LOCK_WINDOW_MS = 30 * 1000;
+const USER_TICKET_CREATION_LOCK_WINDOW_MS = 30 * 1000;
 const DEFAULT_LTC_PAY_ADDRESS = 'ltc1ququ7e6ryccpnu7jgy0l4vukgc3mventxyulyge';
 const DEFAULT_LTC_QR_IMAGE_URL = '/pictures/payments/ltc.png';
 const DEFAULT_CASHAPP_HANDLE = '$yoko276';
@@ -213,6 +215,7 @@ const normalizeEnvValue = (value) => {
     }
     return text;
 };
+const escapeRegex = (value) => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const getBackendBaseUrl = () => normalizeEnvValue(process.env.WEBHOOK_BASE_URL || process.env.BACKEND_URL).replace(/\/+$/, '');
 const getClientBaseUrl = () => normalizeEnvValue((process.env.CLIENT_URL || '').split(',')[0] || '').replace(/\/+$/, '');
@@ -992,6 +995,156 @@ const calculateCartSummary = async ({ cartItems, couponCodeRaw = '' }) => {
         couponCode: couponValidation.couponCode || ''
     };
 };
+
+const buildPersistedCartEntries = (cartItems) => {
+    const quantityByProductId = buildQuantityMapFromCartItems(Array.isArray(cartItems) ? cartItems : []);
+    return Array.from(quantityByProductId.entries()).slice(0, 100).map(([productId, quantity]) => ({
+        product: productId,
+        quantity
+    }));
+};
+
+const buildHydratedCartPayload = async (user) => {
+    const rawItems = Array.isArray(user?.cartItems) ? user.cartItems : [];
+    if (rawItems.length === 0) {
+        return { items: [], updatedAt: user?.cartUpdatedAt || null };
+    }
+
+    const quantityByProductId = new Map();
+    for (const item of rawItems) {
+        const productId = String(item?.product || '').trim();
+        const quantity = Number(item?.quantity);
+        if (!OBJECT_ID_PATTERN.test(productId)) continue;
+        if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_QUANTITY_PER_PRODUCT) continue;
+        quantityByProductId.set(productId, quantity);
+    }
+
+    const products = await Product.find({ _id: { $in: Array.from(quantityByProductId.keys()) } }).lean();
+    const items = products.map((product) => ({
+        _id: String(product._id),
+        name: product.name,
+        category: product.category,
+        price: Number(product.price || 0),
+        bulkPrice: Number.isFinite(Number(product.bulkPrice)) ? Number(product.bulkPrice) : undefined,
+        packQuantity: Math.max(1, Number(product.packQuantity) || 1),
+        image: product.image || '',
+        desc: product.desc || '',
+        gameId: product.gameId ? String(product.gameId) : '',
+        quantity: quantityByProductId.get(String(product._id)) || 1
+    }));
+
+    return {
+        items,
+        updatedAt: user?.cartUpdatedAt || null
+    };
+};
+
+const persistUserCart = async (discordId, cartItems) => {
+    const cleanDiscordId = String(discordId || '').trim();
+    if (!cleanDiscordId) return null;
+
+    const entries = buildPersistedCartEntries(cartItems);
+    const updated = await User.findOneAndUpdate(
+        { discordId: cleanDiscordId },
+        {
+            $set: {
+                cartItems: entries,
+                cartUpdatedAt: new Date()
+            }
+        },
+        { new: true }
+    );
+    return updated;
+};
+
+const clearUserCart = async (discordId) => {
+    const cleanDiscordId = String(discordId || '').trim();
+    if (!cleanDiscordId) return;
+    await User.updateOne(
+        { discordId: cleanDiscordId },
+        {
+            $set: {
+                cartItems: [],
+                cartUpdatedAt: new Date()
+            }
+        }
+    );
+};
+
+const findUserActiveTicketOrder = async (discordId, excludeOrderId = '') => {
+    const cleanDiscordId = String(discordId || '').trim();
+    if (!cleanDiscordId) return null;
+    return Order.findOne(buildActiveTicketQuery(cleanDiscordId, excludeOrderId))
+        .sort({ updatedAt: -1, createdAt: -1 })
+        .lean();
+};
+
+const findUserCreatingTicketOrder = async (discordId, excludeOrderId = '') => {
+    const cleanDiscordId = String(discordId || '').trim();
+    if (!cleanDiscordId) return null;
+
+    const query = {
+        discordId: cleanDiscordId,
+        status: { $nin: ['Completed', 'Cancelled'] },
+        paymentStatus: { $ne: 'cancelled' },
+        $or: [
+            { ticketStatus: 'creating' },
+            { paypalTicketStatus: 'creating' },
+            { ltcTicketStatus: 'creating' }
+        ]
+    };
+
+    const cleanExclude = String(excludeOrderId || '').trim();
+    if (cleanExclude) query.orderId = { $ne: cleanExclude };
+
+    return Order.findOne(query)
+        .sort({ updatedAt: -1, createdAt: -1 })
+        .lean();
+};
+
+const acquireUserTicketCreationLock = async (discordId) => {
+    const cleanDiscordId = String(discordId || '').trim();
+    if (!cleanDiscordId) return { user: null, lockUntil: null };
+
+    const now = new Date();
+    const lockUntil = new Date(Date.now() + USER_TICKET_CREATION_LOCK_WINDOW_MS);
+    const user = await User.findOneAndUpdate(
+        {
+            discordId: cleanDiscordId,
+            $or: [
+                { ticketCreationLockUntil: null },
+                { ticketCreationLockUntil: { $exists: false } },
+                { ticketCreationLockUntil: { $lt: now } }
+            ]
+        },
+        {
+            $set: {
+                ticketCreationLockUntil: lockUntil
+            }
+        },
+        { new: true }
+    );
+
+    return { user, lockUntil };
+};
+
+const releaseUserTicketCreationLock = async (discordId, lockUntil = null) => {
+    const cleanDiscordId = String(discordId || '').trim();
+    if (!cleanDiscordId) return;
+
+    const filter = { discordId: cleanDiscordId };
+    if (lockUntil) filter.ticketCreationLockUntil = lockUntil;
+
+    await User.updateOne(filter, {
+        $unset: { ticketCreationLockUntil: 1 }
+    });
+};
+
+const hasAnyOrderTicketChannel = (order) => Boolean(
+    String(order?.channelId || '').trim()
+    || String(order?.paypalTicketChannelId || '').trim()
+    || String(order?.ltcTicketChannelId || '').trim()
+);
 
 const joinGuildWithAccessToken = async (guildId, userId, accessToken) => {
     if (!guildId || !userId || !accessToken || !process.env.DISCORD_BOT_TOKEN) return false;
@@ -2003,6 +2156,49 @@ router.post('/wallet/admin/topups/:transactionId/reject', authRequired, async (r
     }
 });
 
+router.get('/cart', authRequired, cartSyncLimiter, async (req, res) => {
+    try {
+        const discordId = String(req.user?.discordId || '').trim();
+        if (!discordId) return res.status(401).json({ error: 'Authentication required' });
+
+        const user = await User.findOne({ discordId }).select('cartItems cartUpdatedAt').lean();
+        if (!user) return res.json({ items: [], updatedAt: null });
+
+        return res.json(await buildHydratedCartPayload(user));
+    } catch (error) {
+        console.error('Load cart error:', error);
+        return res.status(500).json({ error: 'Could not load cart.' });
+    }
+});
+
+router.put('/cart', authRequired, cartSyncLimiter, async (req, res) => {
+    try {
+        const discordId = String(req.user?.discordId || '').trim();
+        if (!discordId) return res.status(401).json({ error: 'Authentication required' });
+
+        const cartItems = Array.isArray(req.body?.cartItems) ? req.body.cartItems : [];
+        const user = await persistUserCart(discordId, cartItems);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        return res.json(await buildHydratedCartPayload(user));
+    } catch (error) {
+        console.error('Save cart error:', error);
+        return res.status(500).json({ error: 'Could not save cart.' });
+    }
+});
+
+router.delete('/cart', authRequired, cartSyncLimiter, async (req, res) => {
+    try {
+        const discordId = String(req.user?.discordId || '').trim();
+        if (!discordId) return res.status(401).json({ error: 'Authentication required' });
+        await clearUserCart(discordId);
+        return res.json({ success: true, items: [] });
+    } catch (error) {
+        console.error('Clear cart error:', error);
+        return res.status(500).json({ error: 'Could not clear cart.' });
+    }
+});
+
 router.post('/checkout', checkoutLimiter, async (req, res) => {
     const startTime = Date.now();
     log.info('[CHECKOUT] Incoming checkout request', {
@@ -2025,6 +2221,15 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
         }
 
         const dbUser = discordId ? await User.findOne({ discordId }).lean() : null;
+
+        const activeTicketOrder = await findUserActiveTicketOrder(discordId);
+        if (activeTicketOrder) {
+            return res.status(409).json({
+                error: ACTIVE_TICKET_MESSAGE,
+                code: 'ACTIVE_TICKET_EXISTS',
+                orderId: activeTicketOrder.orderId || ''
+            });
+        }
 
         const cartSummary = await calculateCartSummary({ cartItems, couponCodeRaw });
         if (cartSummary.error) {
@@ -2885,10 +3090,12 @@ router.get('/owner/confirmed-orders', authRequired, async (req, res) => {
     }
 });
 
-router.post('/create-ticket-paypal-ff', authRequired, async (req, res) => {
+router.post('/create-ticket-paypal-ff', authRequired, ticketCreateLimiter, async (req, res) => {
     let lockAcquiredOrderId = '';
     let lockAcquiredDiscordId = '';
     let lockAcquiredUntil = null;
+    let userTicketLockDiscordId = '';
+    let userTicketLockUntil = null;
     try {
         const { orderId } = req.body || {};
         if (!orderId) return res.status(400).json({ error: 'Missing orderId' });
@@ -2922,6 +3129,55 @@ router.post('/create-ticket-paypal-ff', authRequired, async (req, res) => {
                 memoExpected: instructions?.memoExpected || buildMemoExpected(order)
             });
         }
+
+        if (hasAnyOrderTicketChannel(order)) {
+            return res.status(409).json({ error: ACTIVE_TICKET_MESSAGE, code: 'ACTIVE_TICKET_EXISTS' });
+        }
+
+        const activeTicketOrder = await findUserActiveTicketOrder(req.user.discordId, order.orderId);
+        if (activeTicketOrder) {
+            return res.status(409).json({
+                error: ACTIVE_TICKET_MESSAGE,
+                code: 'ACTIVE_TICKET_EXISTS',
+                orderId: activeTicketOrder.orderId || ''
+            });
+        }
+
+        const userTicketLock = await acquireUserTicketCreationLock(req.user.discordId);
+        if (!userTicketLock.user) {
+            const creatingTicketOrder = await findUserCreatingTicketOrder(req.user.discordId, order.orderId);
+            if (creatingTicketOrder) {
+                return res.status(409).json({
+                    ...buildInProgressPayload(
+                        creatingTicketOrder?.ticketLockUntil || creatingTicketOrder?.paypalTicketLockUntil || creatingTicketOrder?.ltcTicketLockUntil,
+                        'A ticket is already being created for your account. Please wait a moment.',
+                        'USER_TICKET_CREATION_IN_PROGRESS'
+                    ),
+                    email: instructions?.paypalEmail || process.env.PAYPAL_EMAIL || '',
+                    memoExpected: instructions?.memoExpected || buildMemoExpected(order)
+                });
+            }
+
+            const freshActiveTicketOrder = await findUserActiveTicketOrder(req.user.discordId, order.orderId);
+            if (freshActiveTicketOrder) {
+                return res.status(409).json({
+                    error: ACTIVE_TICKET_MESSAGE,
+                    code: 'ACTIVE_TICKET_EXISTS',
+                    orderId: freshActiveTicketOrder.orderId || '',
+                    email: instructions?.paypalEmail || process.env.PAYPAL_EMAIL || '',
+                    memoExpected: instructions?.memoExpected || buildMemoExpected(order)
+                });
+            }
+
+            return res.status(409).json({
+                error: 'A ticket request is already in progress for your account. Please wait a moment.',
+                code: 'USER_TICKET_CREATION_IN_PROGRESS',
+                email: instructions?.paypalEmail || process.env.PAYPAL_EMAIL || '',
+                memoExpected: instructions?.memoExpected || buildMemoExpected(order)
+            });
+        }
+        userTicketLockDiscordId = req.user.discordId;
+        userTicketLockUntil = userTicketLock.lockUntil;
 
         const { lockedOrder, lockUntil } = await acquirePayPalTicketLock({
             orderId,
@@ -3034,6 +3290,9 @@ router.post('/create-ticket-paypal-ff', authRequired, async (req, res) => {
             );
         }
 
+        await clearUserCart(req.user.discordId).catch(() => {});
+        await releaseUserTicketCreationLock(userTicketLockDiscordId, userTicketLockUntil).catch(() => {});
+
         return res.json({
             success: true,
             channelId: channelId || null,
@@ -3051,6 +3310,9 @@ router.post('/create-ticket-paypal-ff', authRequired, async (req, res) => {
                 payload.error || 'PayPal ticket creation failed.'
             ).catch(() => {});
         }
+        if (userTicketLockDiscordId) {
+            await releaseUserTicketCreationLock(userTicketLockDiscordId, userTicketLockUntil).catch(() => {});
+        }
         if (payload.code === 'USER_NOT_IN_GUILD') {
             return res.status(status).json({
                 ...payload,
@@ -3065,10 +3327,12 @@ router.post('/create-ticket-paypal-ff', authRequired, async (req, res) => {
     }
 });
 
-router.post('/create-ticket-ltc', authRequired, async (req, res) => {
+router.post('/create-ticket-ltc', authRequired, ticketCreateLimiter, async (req, res) => {
     let lockAcquiredOrderId = '';
     let lockAcquiredDiscordId = '';
     let lockAcquiredUntil = null;
+    let userTicketLockDiscordId = '';
+    let userTicketLockUntil = null;
     try {
         const { orderId } = req.body || {};
         if (!orderId) return res.status(400).json({ error: 'Missing orderId' });
@@ -3097,6 +3361,49 @@ router.post('/create-ticket-ltc', authRequired, async (req, res) => {
                 channelId: order.ltcTicketChannelId
             });
         }
+
+        if (hasAnyOrderTicketChannel(order)) {
+            return res.status(409).json({ error: ACTIVE_TICKET_MESSAGE, code: 'ACTIVE_TICKET_EXISTS' });
+        }
+
+        const activeTicketOrder = await findUserActiveTicketOrder(req.user.discordId, order.orderId);
+        if (activeTicketOrder) {
+            return res.status(409).json({
+                error: ACTIVE_TICKET_MESSAGE,
+                code: 'ACTIVE_TICKET_EXISTS',
+                orderId: activeTicketOrder.orderId || ''
+            });
+        }
+
+        const userTicketLock = await acquireUserTicketCreationLock(req.user.discordId);
+        if (!userTicketLock.user) {
+            const creatingTicketOrder = await findUserCreatingTicketOrder(req.user.discordId, order.orderId);
+            if (creatingTicketOrder) {
+                return res.status(409).json(
+                    buildInProgressPayload(
+                        creatingTicketOrder?.ticketLockUntil || creatingTicketOrder?.paypalTicketLockUntil || creatingTicketOrder?.ltcTicketLockUntil,
+                        'A ticket is already being created for your account. Please wait a moment.',
+                        'USER_TICKET_CREATION_IN_PROGRESS'
+                    )
+                );
+            }
+
+            const freshActiveTicketOrder = await findUserActiveTicketOrder(req.user.discordId, order.orderId);
+            if (freshActiveTicketOrder) {
+                return res.status(409).json({
+                    error: ACTIVE_TICKET_MESSAGE,
+                    code: 'ACTIVE_TICKET_EXISTS',
+                    orderId: freshActiveTicketOrder.orderId || ''
+                });
+            }
+
+            return res.status(409).json({
+                error: 'A ticket request is already in progress for your account. Please wait a moment.',
+                code: 'USER_TICKET_CREATION_IN_PROGRESS'
+            });
+        }
+        userTicketLockDiscordId = req.user.discordId;
+        userTicketLockUntil = userTicketLock.lockUntil;
 
         const { lockedOrder, lockUntil } = await acquireLtcTicketLock({
             orderId,
@@ -3194,6 +3501,9 @@ router.post('/create-ticket-ltc', authRequired, async (req, res) => {
             );
         }
 
+        await clearUserCart(req.user.discordId).catch(() => {});
+        await releaseUserTicketCreationLock(userTicketLockDiscordId, userTicketLockUntil).catch(() => {});
+
         return res.json({
             success: true,
             channelId: channelId || null,
@@ -3211,6 +3521,9 @@ router.post('/create-ticket-ltc', authRequired, async (req, res) => {
                 payload.error || 'LTC ticket creation failed.'
             ).catch(() => {});
         }
+        if (userTicketLockDiscordId) {
+            await releaseUserTicketCreationLock(userTicketLockDiscordId, userTicketLockUntil).catch(() => {});
+        }
         if (payload.code === 'USER_NOT_IN_GUILD') {
             return res.status(status).json({
                 ...payload,
@@ -3221,10 +3534,12 @@ router.post('/create-ticket-ltc', authRequired, async (req, res) => {
     }
 });
 
-router.post('/create-ticket', authRequired, async (req, res) => {
+router.post('/create-ticket', authRequired, ticketCreateLimiter, async (req, res) => {
     let lockAcquiredOrderId = '';
     let lockAcquiredDiscordId = '';
     let lockAcquiredUntil = null;
+    let userTicketLockDiscordId = '';
+    let userTicketLockUntil = null;
     try {
         const { orderId } = req.body || {};
         if (!orderId) return res.status(400).json({ error: 'Missing orderId' });
@@ -3269,6 +3584,49 @@ router.post('/create-ticket', authRequired, async (req, res) => {
                 guildId: process.env.DISCORD_GUILD_ID || ''
             });
         }
+
+        if (hasAnyOrderTicketChannel(order)) {
+            return res.status(409).json({ error: ACTIVE_TICKET_MESSAGE, code: 'ACTIVE_TICKET_EXISTS' });
+        }
+
+        const activeTicketOrder = await findUserActiveTicketOrder(req.user.discordId, order.orderId);
+        if (activeTicketOrder) {
+            return res.status(409).json({
+                error: ACTIVE_TICKET_MESSAGE,
+                code: 'ACTIVE_TICKET_EXISTS',
+                orderId: activeTicketOrder.orderId || ''
+            });
+        }
+
+        const userTicketLock = await acquireUserTicketCreationLock(req.user.discordId);
+        if (!userTicketLock.user) {
+            const creatingTicketOrder = await findUserCreatingTicketOrder(req.user.discordId, order.orderId);
+            if (creatingTicketOrder) {
+                return res.status(409).json(
+                    buildInProgressPayload(
+                        creatingTicketOrder?.ticketLockUntil || creatingTicketOrder?.paypalTicketLockUntil || creatingTicketOrder?.ltcTicketLockUntil,
+                        'A ticket is already being created for your account. Please wait a moment.',
+                        'USER_TICKET_CREATION_IN_PROGRESS'
+                    )
+                );
+            }
+
+            const freshActiveTicketOrder = await findUserActiveTicketOrder(req.user.discordId, order.orderId);
+            if (freshActiveTicketOrder) {
+                return res.status(409).json({
+                    error: ACTIVE_TICKET_MESSAGE,
+                    code: 'ACTIVE_TICKET_EXISTS',
+                    orderId: freshActiveTicketOrder.orderId || ''
+                });
+            }
+
+            return res.status(409).json({
+                error: 'A ticket request is already in progress for your account. Please wait a moment.',
+                code: 'USER_TICKET_CREATION_IN_PROGRESS'
+            });
+        }
+        userTicketLockDiscordId = req.user.discordId;
+        userTicketLockUntil = userTicketLock.lockUntil;
 
         const { lockedOrder, lockUntil } = await acquireOrderTicketLock({
             orderId,
@@ -3361,6 +3719,9 @@ router.post('/create-ticket', authRequired, async (req, res) => {
             );
         }
 
+        await clearUserCart(req.user.discordId).catch(() => {});
+        await releaseUserTicketCreationLock(userTicketLockDiscordId, userTicketLockUntil).catch(() => {});
+
         return res.json({
             success: true,
             channelId,
@@ -3376,6 +3737,9 @@ router.post('/create-ticket', authRequired, async (req, res) => {
                 lockAcquiredUntil,
                 payload.error || 'Ticket creation failed.'
             ).catch(() => {});
+        }
+        if (userTicketLockDiscordId) {
+            await releaseUserTicketCreationLock(userTicketLockDiscordId, userTicketLockUntil).catch(() => {});
         }
         if (payload.code === 'USER_NOT_IN_GUILD') {
             return res.status(status).json({
@@ -3474,6 +3838,89 @@ router.post('/owner/product-images/upload', authRequired, uploadProductImage.sin
     }
 });
 
+router.get('/owner/linked-users', authRequired, async (req, res) => {
+    try {
+        const discordId = String(req.user?.discordId || '').trim();
+        if (!discordId) return res.status(401).json({ error: 'Authentication required' });
+        const isOwner = await canAccessOwnerEndpoints(discordId);
+        if (!isOwner) return res.status(403).json({ error: 'Forbidden' });
+
+        const rawPage = Number(req.query?.page);
+        const rawLimit = Number(req.query?.limit);
+        const page = Number.isFinite(rawPage) ? Math.max(1, Math.floor(rawPage)) : 1;
+        const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(200, Math.floor(rawLimit))) : 50;
+        const search = String(req.query?.search || '').trim();
+
+        const filter = { discordId: { $exists: true, $ne: '' } };
+        if (search) {
+            const escapedSearch = escapeRegex(search);
+            filter.$or = [
+                { discordId: { $regex: escapedSearch, $options: 'i' } },
+                { discordUsername: { $regex: escapedSearch, $options: 'i' } }
+            ];
+        }
+
+        const [total, users] = await Promise.all([
+            User.countDocuments(filter),
+            User.find(filter)
+                .select('_id discordId discordUsername scopes tokenExpiresAt joinedAt createdAt cartUpdatedAt cartItems accessToken refreshToken')
+                .sort({ joinedAt: -1, createdAt: -1, _id: -1 })
+                .skip((page - 1) * limit)
+                .limit(limit)
+                .lean()
+        ]);
+
+        return res.json({
+            users: users.map((user) => ({
+                _id: String(user._id || ''),
+                discordId: String(user.discordId || ''),
+                discordUsername: String(user.discordUsername || ''),
+                hasAccessToken: Boolean(String(user.accessToken || '').trim()),
+                hasRefreshToken: Boolean(String(user.refreshToken || '').trim()),
+                tokenExpiresAt: user.tokenExpiresAt || null,
+                scopes: Array.isArray(user.scopes) ? user.scopes : [],
+                cartItemsCount: Array.isArray(user.cartItems) ? user.cartItems.length : 0,
+                cartUpdatedAt: user.cartUpdatedAt || null,
+                joinedAt: user.joinedAt || null
+            })),
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit)
+        });
+    } catch (error) {
+        console.error('Owner linked users error:', error);
+        return res.status(500).json({ error: 'Could not load linked users.' });
+    }
+});
+
+router.delete('/owner/linked-users/:discordId/cart', authRequired, async (req, res) => {
+    try {
+        const ownerDiscordId = String(req.user?.discordId || '').trim();
+        if (!ownerDiscordId) return res.status(401).json({ error: 'Authentication required' });
+        const isOwner = await canAccessOwnerEndpoints(ownerDiscordId);
+        if (!isOwner) return res.status(403).json({ error: 'Forbidden' });
+
+        const targetDiscordId = String(req.params?.discordId || '').trim();
+        if (!targetDiscordId) return res.status(400).json({ error: 'Discord ID is required' });
+
+        await User.updateOne(
+            { discordId: targetDiscordId },
+            {
+                $set: {
+                    cartItems: [],
+                    cartUpdatedAt: null
+                }
+            }
+        );
+
+        return res.json({ success: true });
+    } catch (error) {
+        console.error('Owner clear linked user cart error:', error);
+        return res.status(500).json({ error: 'Could not clear linked user cart.' });
+    }
+});
+
 // --- Owner product CRUD -------------------------------------------------------
 router.get('/owner/products', authRequired, async (req, res) => {
     try {
@@ -3502,6 +3949,7 @@ router.post('/owner/products', authRequired, async (req, res) => {
         if (!isOwner) return res.status(403).json({ error: 'Forbidden' });
 
         const { name, price, originalPriceString, bulkPrice, bulkPriceString, image, desc, category, gameId } = req.body || {};
+        const packQuantity = Number(req.body?.packQuantity) || 1;
         if (!name || !String(name).trim()) return res.status(400).json({ error: 'Product name is required.' });
         if (price === undefined || price === null || Number(price) <= 0) return res.status(400).json({ error: 'Valid price is required.' });
         if (!category || !String(category).trim()) return res.status(400).json({ error: 'Category is required.' });
@@ -3513,6 +3961,7 @@ router.post('/owner/products', authRequired, async (req, res) => {
             originalPriceString: String(originalPriceString || '').trim(),
             bulkPrice: bulkPrice !== undefined && bulkPrice !== null && bulkPrice !== '' ? Number(bulkPrice) : null,
             bulkPriceString: String(bulkPriceString || '').trim(),
+            packQuantity,
             image: String(image).trim(),
             desc: String(desc || '').trim(),
             category: String(category).trim(),
@@ -3790,7 +4239,7 @@ router.get('/recent-purchases', async (req, res) => {
             if (!Array.isArray(o.items) || o.items.length === 0) {
                 return {
                     username: maskUsername(o.discordUsername || o.discordId || ''),
-                    items: 'Item x1',
+                    items: 'Item (x1)',
                     price: o.totalAmount || undefined
                 };
             }
@@ -3798,7 +4247,7 @@ router.get('/recent-purchases', async (req, res) => {
                 const packQty = Math.max(1, Number(item.packQuantity) || 1);
                 const orderQty = Math.max(1, Number(item.quantity) || 1);
                 const totalQty = packQty * orderQty;
-                return `${item.name || 'Item'} x${totalQty}`;
+                return `${item.name || 'Item'} (x${totalQty})`;
             }).join(', ');
             return {
                 username: maskUsername(o.discordUsername || o.discordId || ''),
@@ -3815,7 +4264,7 @@ router.get('/recent-purchases', async (req, res) => {
         for (let i = 0; i < needed; i++) {
             fake.push({
                 username: fakeNames[Math.floor(Math.random() * fakeNames.length)] + '***',
-                items: fakeProducts[Math.floor(Math.random() * fakeProducts.length)] + ' x1',
+                items: fakeProducts[Math.floor(Math.random() * fakeProducts.length)] + ' (x1)',
                 price: parseFloat((Math.random() * 25 + 2).toFixed(2))
             });
         }

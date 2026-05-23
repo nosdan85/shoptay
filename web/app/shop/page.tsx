@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
 import { ALL_TIMEZONES, detectUserTimezone, filterTimezones, getTimezonesGroupedByCountry, type CountryGroup } from "@/lib/timezones";
@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const LOCAL_CART_KEY = "nosmarket_cart";
 
 function imgUrl(src: string | undefined | null): string {
   if (!src) return "";
@@ -35,6 +36,42 @@ function maskName(name: string): string {
   return name[0] + "*".repeat(Math.min(name.length - 1, 4));
 }
 
+function formatQtyLabel(quantity: number | undefined | null): string {
+  return `(x${Math.max(1, Number(quantity) || 1)})`;
+}
+
+function formatProductNameWithQty(name: string, quantity: number | undefined | null): string {
+  return `${name} ${formatQtyLabel(quantity)}`;
+}
+
+function readLocalCart(): CartItem[] {
+  try {
+    const saved = localStorage.getItem(LOCAL_CART_KEY);
+    if (!saved) return [];
+    const parsed = JSON.parse(saved);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function mergeCartItems(primary: CartItem[], secondary: CartItem[]): CartItem[] {
+  const byId = new Map<string, CartItem>();
+  for (const item of [...primary, ...secondary]) {
+    if (!item?._id) continue;
+    const existing = byId.get(item._id);
+    if (existing) {
+      byId.set(item._id, {
+        ...existing,
+        quantity: Math.max(1, Number(existing.quantity || 1) + Number(item.quantity || 1)),
+      });
+      continue;
+    }
+    byId.set(item._id, { ...item, quantity: Math.max(1, Number(item.quantity) || 1) });
+  }
+  return Array.from(byId.values());
+}
+
 
 interface Product { _id: string; name: string; category: string; price: number; bulkPrice?: number; packQuantity?: number; image?: string; desc?: string; gameId?: string }
 interface CartItem extends Product { quantity: number }
@@ -44,6 +81,7 @@ interface Purchase { username: string; items: string; price?: number }
 interface TicketResult { channelId: string; guildId?: string; url?: string }
 
 type Step = "shop" | "roblox" | "delivery" | "ticket";
+type PriceSort = "none" | "low-high" | "high-low";
 
 const BEST_SELLERS_PER_PAGE = 4;
 
@@ -89,6 +127,7 @@ export default function ShopPage() {
   const [recentPurchases, setRecentPurchases] = useState<Purchase[]>([]);
   const [selectedGame, setSelectedGame] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [priceSort, setPriceSort] = useState<PriceSort>("none");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [cartClosing, setCartClosing] = useState(false);
@@ -112,13 +151,30 @@ export default function ShopPage() {
   const [modalClosing, setModalClosing] = useState(false);
   const [robloxSearchResult, setRobloxSearchResult] = useState<null | { userId: string; username: string; displayName: string; avatar: string }>(null);
   const [bestSellerPage, setBestSellerPage] = useState(0);
+  const remoteCartHydratedRef = useRef(false);
+  const skipNextRemoteCartSyncRef = useRef(false);
+  const checkoutInFlightRef = useRef(false);
+  const ticketInFlightRef = useRef(false);
+  const lastActionRef = useRef(0);
 
-  // Save cart to localStorage when changed
-  const saveCart = (newCart: CartItem[]) => {
+  const ACTION_COOLDOWN_MS = 2000;
+  const canAct = () => { if (submitting || Date.now() - lastActionRef.current < ACTION_COOLDOWN_MS) return false; lastActionRef.current = Date.now(); return true; };
+
+  const saveCart = (newCart: CartItem[], options?: { skipRemoteSync?: boolean }) => {
+    if (options?.skipRemoteSync) skipNextRemoteCartSyncRef.current = true;
     setCart(newCart);
     try {
-      localStorage.setItem("nosmarket_cart", JSON.stringify(newCart));
+      localStorage.setItem(LOCAL_CART_KEY, JSON.stringify(newCart));
     } catch (_) {}
+  };
+
+  const syncCartToAccount = async (nextCart: CartItem[]) => {
+    if (!token) return;
+    await fetch("/api/shop/cart", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ cartItems: nextCart.map((i) => ({ product: i._id, quantity: i.quantity })) }),
+    });
   };
 
   const load = async () => {
@@ -143,27 +199,73 @@ export default function ShopPage() {
     setLoading(false);
   };
 
-  // Load cart from localStorage on mount
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("nosmarket_cart");
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (saved) queueMicrotask(() => setCart(JSON.parse(saved)));
-    } catch {}
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    queueMicrotask(() => setCart(readLocalCart()));
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, []);
 
+  useEffect(() => {
+    if (!token || !user?.discordId) {
+      remoteCartHydratedRef.current = false;
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/shop/cart", {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "Failed to load cart");
+        const remoteItems = Array.isArray(data?.items) ? (data.items as CartItem[]) : [];
+        const merged = mergeCartItems(remoteItems, readLocalCart());
+        if (cancelled) return;
+        saveCart(merged, { skipRemoteSync: true });
+        remoteCartHydratedRef.current = true;
+        if (JSON.stringify(remoteItems) !== JSON.stringify(merged)) {
+          await syncCartToAccount(merged);
+        }
+      } catch {
+        remoteCartHydratedRef.current = true;
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token, user?.discordId]);
+
+  useEffect(() => {
+    if (!token || !user?.discordId || !remoteCartHydratedRef.current) return;
+    if (skipNextRemoteCartSyncRef.current) {
+      skipNextRemoteCartSyncRef.current = false;
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void syncCartToAccount(cart).catch(() => {});
+    }, 250);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [cart, token, user?.discordId]);
+
+  const activeSelectedGame = selectedGame && games.some((g) => g._id === selectedGame)
+    ? selectedGame
+    : null;
+
   const filtered = useMemo(() => {
     let list = products;
-    // Auto-remove filter if selected game no longer exists
-    if (selectedGame && !games.some((g) => g._id === selectedGame)) {
-      setSelectedGame(null);
-    }
-    if (selectedGame) list = list.filter((p) => p.gameId === selectedGame);
+    if (activeSelectedGame) list = list.filter((p) => p.gameId === activeSelectedGame);
     if (searchQuery) list = list.filter((p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    if (priceSort !== "none") {
+      list = [...list].sort((a, b) => priceSort === "low-high" ? a.price - b.price : b.price - a.price);
+    }
     return list;
-  }, [products, selectedGame, searchQuery, games]);
+  }, [activeSelectedGame, priceSort, products, searchQuery]);
 
   const bestSellers = useMemo(() => {
     if (bestSellerIds.length === 0) return [];
@@ -235,7 +337,8 @@ export default function ShopPage() {
   };
 
   const addToCartFromModal = () => {
-    if (!selectedProduct) return;
+    if (!canAct()) return;
+    if (!selectedProduct || submitting) return;
     const finalQty = Math.max(1, typeof modalQty === "number" ? modalQty : parseInt(modalQty) || 1);
     const updatedCart = [...cart];
     const exIndex = updatedCart.findIndex((i) => i._id === selectedProduct._id);
@@ -251,25 +354,36 @@ export default function ShopPage() {
   };
 
   const updateQty = (id: string, d: number) => {
+    if (submitting) return;
     const updated = cart.map((i) => (i._id === id ? { ...i, quantity: Math.max(1, i.quantity + d) } : i));
     saveCart(updated);
   };
 
   const removeItem = (id: string) => {
+    if (submitting) return;
     const updated = cart.filter((i) => i._id !== id);
     saveCart(updated);
   };
 
   const clearCartState = () => {
-    setCart([]);
+    saveCart([], { skipRemoteSync: true });
     try {
-      localStorage.removeItem("nosmarket_cart");
+      localStorage.removeItem(LOCAL_CART_KEY);
     } catch (_) {}
+    if (token) {
+      void fetch("/api/shop/cart", {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => {});
+    }
   };
 
   const doCheckout = async () => {
+    if (!canAct()) return;
     if (!user || !token) { setError("Login first"); return; }
-    if (cart.length === 0) return;
+    if (cart.length === 0 || submitting) return;
+    if (checkoutInFlightRef.current) return;
+    checkoutInFlightRef.current = true;
     setSubmitting(true); setCheckoutLoading(true); setError(null);
     try {
       const res = await fetch("/api/shop/checkout", {
@@ -282,7 +396,7 @@ export default function ShopPage() {
       setOrderId(data.orderId);
       setStep("roblox");
     } catch (e) { setError(e instanceof Error ? e.message : "Checkout failed"); }
-    finally { setSubmitting(false); setCheckoutLoading(false); }
+    finally { setSubmitting(false); setCheckoutLoading(false); checkoutInFlightRef.current = false; }
   };
 
   const lookupRobloxUsername = async () => {
@@ -342,7 +456,10 @@ export default function ShopPage() {
   };
 
   const createTicket = async () => {
-    if (!orderId || !token) return;
+    if (!canAct()) return;
+    if (!orderId || !token || submitting) return;
+    if (ticketInFlightRef.current) return;
+    ticketInFlightRef.current = true;
     setSubmitting(true); setError(null);
     try {
       const res = await fetch(`/api/shop/orders/${orderId}?action=create-ticket`, {
@@ -358,7 +475,7 @@ export default function ShopPage() {
       clearCartState();
       if (ticketUrl) window.location.href = ticketUrl;
     } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
-    finally { setSubmitting(false); }
+    finally { setSubmitting(false); ticketInFlightRef.current = false; }
   };
 
   if (loading) return <div className="min-h-screen bg-[#050505]"><Navbar showCart={step === "shop"} cartCount={cartCount} onCartClick={() => { setCartClosing(false); setCartOpen(true); }} /><LogoLoader /></div>;
@@ -397,7 +514,7 @@ export default function ShopPage() {
                     {item.image ? <img src={imgUrl(item.image)} alt="" className="h-full w-full object-cover" /> : <Package className="h-full w-full p-3 text-[#B5B5B5]/60" />}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="truncate text-sm font-medium leading-5">{item.name}</p>
+                    <p className="truncate text-sm font-medium leading-5">{formatProductNameWithQty(item.name, item.packQuantity)}</p>
                     <div className="mt-1 flex items-center gap-2">
                       <button onClick={() => updateQty(item._id, -1)} className="rounded bg-[#161616] p-1"><Minus className="h-3 w-3" /></button>
                       <span className="text-sm">{item.quantity}</span>
@@ -434,8 +551,8 @@ export default function ShopPage() {
                 {selectedProduct.image ? <img src={imgUrl(selectedProduct.image)} alt="" className="h-full w-full object-contain" /> : <Package className="h-full w-full p-8 text-[#B5B5B5]/50" />}
               </div>
               <div className="space-y-1.5">
-                <h2 className="text-base font-bold leading-tight">{selectedProduct.name}</h2>
-                {<p className="text-xs text-[#2F9BE6]">Pack: {selectedProduct.packQuantity || 1} items</p>}
+                <h2 className="text-base font-bold leading-tight">{formatProductNameWithQty(selectedProduct.name, selectedProduct.packQuantity)}</h2>
+                {<p className="text-xs text-[#2F9BE6]">Pack {formatQtyLabel(selectedProduct.packQuantity)}</p>}
                 
                 <div className="flex items-baseline gap-1.5"><span className="text-xl font-bold text-[#3DDC84]">${selectedProduct.price.toFixed(2)}</span><span className="text-[10px] text-[#B5B5B5]">USD</span></div>
                 {selectedProduct.bulkPrice && (
@@ -480,7 +597,7 @@ export default function ShopPage() {
               <div className="border-b border-[#1E1E1E] pb-3">
                 <p className="text-sm text-[#B5B5B5]">Order {orderId}</p>
                 <div className="mt-2 space-y-1">{cart.map((i) => (
-                  <div key={i._id} className="flex justify-between text-sm"><span>{i.quantity}x {i.name}</span><span className="text-[#B5B5B5]">${(i.price * i.quantity).toFixed(2)}</span></div>
+                  <div key={i._id} className="flex justify-between text-sm"><span>{formatProductNameWithQty(i.name, i.packQuantity)} x {i.quantity}</span><span className="text-[#B5B5B5]">${(i.price * i.quantity).toFixed(2)}</span></div>
                 ))}<div className="flex justify-between border-t border-[#1E1E1E] pt-2 font-semibold"><span>Total</span><span className="text-[#3DDC84]">${cartTotal.toFixed(2)}</span></div></div>
               </div>
               {step === "roblox" && (
@@ -680,12 +797,30 @@ export default function ShopPage() {
               <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search items..." className="w-full rounded-[20px] border border-[#1E1E1E] bg-[#111111] py-4 pl-11 pr-4 text-base outline-none transition-colors focus:border-[#2F9BE6]" />
             </div>
 
+            <div className="mb-6 flex items-center gap-2 animate-section-enter">
+              <span className="text-sm text-[#B5B5B5]/80">Price</span>
+              {([
+                ["none", "Default"],
+                ["low-high", "Low to High"],
+                ["high-low", "High to Low"],
+              ] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setPriceSort(value)}
+                  className={"rounded-full px-4 py-2 text-sm font-medium transition-all " + (priceSort === value ? "bg-[#2F9BE6] text-white" : "bg-[#111111] text-[#B5B5B5] hover:text-white")}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
             <div className="-mx-4 mb-6 flex gap-2 overflow-x-auto px-4 pb-2 animate-section-enter scrollbar-hide">
-              <button onClick={() => setSelectedGame(null)} className={"shrink-0 rounded-full px-5 py-3 text-sm font-medium transition-all " + (!selectedGame ? "bg-[#2F9BE6] text-white shadow-lg" : "bg-[#111111] text-[#B5B5B5] active:bg-[#161616]")}>
+              <button onClick={() => setSelectedGame(null)} className={"shrink-0 rounded-full px-5 py-3 text-sm font-medium transition-all " + (!activeSelectedGame ? "bg-[#2F9BE6] text-white shadow-lg" : "bg-[#111111] text-[#B5B5B5] active:bg-[#161616]")}>
                 All Games
               </button>
               {games.map((g) => (
-                <button key={g._id} onClick={() => setSelectedGame(g._id)} className={"flex shrink-0 items-center gap-2 rounded-full px-5 py-3 text-sm font-medium transition-all " + (selectedGame === g._id ? "bg-[#2F9BE6] text-white shadow-lg" : "bg-[#111111] text-[#B5B5B5] active:bg-[#161616]")}>
+                <button key={g._id} onClick={() => setSelectedGame(g._id)} className={"flex shrink-0 items-center gap-2 rounded-full px-5 py-3 text-sm font-medium transition-all " + (activeSelectedGame === g._id ? "bg-[#2F9BE6] text-white shadow-lg" : "bg-[#111111] text-[#B5B5B5] active:bg-[#161616]")}>
                   {g.image && <img src={imgUrl(g.image)} alt="" className="h-5 w-5 rounded object-cover" />}
                   {g.name}
                 </button>
@@ -698,7 +833,7 @@ export default function ShopPage() {
               </div>
             )}
 
-            {bestSellers.length > 0 && !showAll && !selectedGame && !searchQuery && (
+            {bestSellers.length > 0 && !showAll && !activeSelectedGame && !searchQuery && (
               <div className="animate-section-enter">
                 <div className="mb-4 flex items-center justify-between gap-4">
                   <h2 className="text-2xl font-bold text-[#2F9BE6]">Best Sellers</h2>
@@ -740,7 +875,7 @@ export default function ShopPage() {
                         </div>
                         <div className="p-3">
                           <p className="line-clamp-2 text-sm font-semibold leading-5">{p.name}</p>
-                        <p className="text-xs text-[#2F9BE6] mt-0.5">Qty: x{p.packQuantity || 1}</p>
+                  <p className="text-xs text-[#2F9BE6] mt-0.5">{formatQtyLabel(p.packQuantity)}</p>
 {p.desc && <p className="text-xs text-[#B5B5B5] mt-1 line-clamp-2">{p.desc}</p>}
                           <div className="mt-2 flex items-center justify-between">
                             <span className="text-sm font-semibold text-[#3DDC84]">${p.price.toFixed(2)}</span>
@@ -755,7 +890,7 @@ export default function ShopPage() {
 
             <div className="animate-section-enter">
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-2xl font-bold">{selectedGame ? games.find((g) => g._id === selectedGame)?.name || "Items" : "All Items"}</h2>
+                <h2 className="text-2xl font-bold">{activeSelectedGame ? games.find((g) => g._id === activeSelectedGame)?.name || "Items" : "All Items"}</h2>
                 {!showAll && filtered.length > 8 && !searchQuery && (
                   <button onClick={() => setShowAll(true)} className="rounded-[14px] bg-[#161616] px-4 py-2 text-sm transition-colors hover:bg-[#1E1E1E]">View Full</button>
                 )}
@@ -771,7 +906,7 @@ export default function ShopPage() {
                     </div>
                     <div className="space-y-1.5 sm:space-y-2 p-3 sm:p-4">
                       <h3 className="line-clamp-2 text-sm font-semibold leading-5">{p.name}</h3>
-                      <p className="text-xs text-[#2F9BE6] mt-0.5">Qty: x{p.packQuantity || 1}</p>
+                    <p className="text-xs text-[#2F9BE6] mt-0.5">{formatQtyLabel(p.packQuantity)}</p>
                       <p className="text-xs text-[#B5B5B5]/80">{p.category}</p>
                       <div className="flex items-center justify-between">
                         <span className="text-lg font-semibold text-[#3DDC84]">${p.price.toFixed(2)}</span>

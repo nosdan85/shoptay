@@ -15,6 +15,13 @@ const userSchema = new mongoose.Schema({
     linkToken: { type: String },
     linkTokenExpiresAt: { type: Date },
 
+    cartItems: [{
+        product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
+        quantity: { type: Number, default: 1, min: 1 }
+    }],
+    cartUpdatedAt: { type: Date, default: null },
+    ticketCreationLockUntil: { type: Date, default: null },
+
     joinedAt: { type: Date, default: Date.now }
 });
 

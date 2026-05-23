@@ -17,7 +17,7 @@ const formatOrderItems = (items) => {
     ? items.map((item) => {
         const quantity = Math.max(1, Number(item?.quantity) || 1);
         const name = String(item?.name || 'Item').trim();
-        return `${formatDeliveredUnitsLabel(name, quantity)} ${name}`;
+        return `${name} (${formatDeliveredUnitsLabel(name, quantity)})`;
       })
     : [];
   const joined = lines.join('\n') || '-';
@@ -31,7 +31,7 @@ const formatOrderItemsWithPrice = (items) => {
         const name = String(item?.name || 'Item').trim();
         const deliveredLabel = formatDeliveredUnitsLabel(name, quantity);
         const lineTotal = (Math.max(0, Number(item?.price) || 0) * quantity).toFixed(2);
-        return `${deliveredLabel} ${name} - $${lineTotal}`;
+        return `${name} (${deliveredLabel}) - $${lineTotal}`;
       })
     : [];
   const joined = lines.join('\n') || '-';

@@ -211,7 +211,7 @@ const formatOrderItems = (items) => {
         ? items.map((item) => {
             const quantity = Math.max(1, Number(item?.quantity) || 1);
             const name = String(item?.name || 'Item').trim();
-            return `${formatDeliveredUnitsLabel(name, quantity)} ${name}`;
+            return `${name} (${formatDeliveredUnitsLabel(name, quantity)})`;
         })
         : [];
     const joined = lines.join('\n') || '-';
@@ -225,7 +225,7 @@ const formatOrderItemsWithPrice = (items) => {
             const name = String(item?.name || 'Item').trim();
             const deliveredLabel = formatDeliveredUnitsLabel(name, quantity);
             const lineTotal = (Math.max(0, Number(item?.price) || 0) * quantity).toFixed(2);
-            return `${deliveredLabel} ${name} - $${lineTotal}`;
+            return `${name} (${deliveredLabel}) - $${lineTotal}`;
         })
         : [];
     const joined = lines.join('\n') || '-';
@@ -560,7 +560,7 @@ const formatPurchasedItemsForDm = (items) => {
         .map((item) => {
             const quantity = Math.max(1, Number(item?.quantity) || 1);
             const name = String(item?.name || 'Unknown item').trim();
-            return `${formatDeliveredUnitsLabel(name, quantity)} ${name}`;
+            return `${name} (${formatDeliveredUnitsLabel(name, quantity)})`;
         })
         .join(', ')
         .slice(0, 800);
@@ -618,7 +618,7 @@ const refreshDiscordAccessToken = async (refreshToken) => {
 };
 
 const getUsableUserAccessToken = async (dbUser) => {
-    if (!dbUser) return '';
+    if (!dbUser) return { accessToken: '', refreshed: false };
 
     const now = Date.now();
     const accessToken = decryptSecret(dbUser.accessToken);
@@ -626,15 +626,15 @@ const getUsableUserAccessToken = async (dbUser) => {
     const tokenExpiresAtMs = new Date(dbUser.tokenExpiresAt || 0).getTime();
 
     if (accessToken && (!Number.isFinite(tokenExpiresAtMs) || tokenExpiresAtMs > now + 60 * 1000)) {
-        return accessToken;
+        return { accessToken, refreshed: false };
     }
 
-    if (!refreshToken) return '';
+    if (!refreshToken) return { accessToken: '', refreshed: false };
 
     try {
         const refreshed = await refreshDiscordAccessToken(refreshToken);
         const nextAccessToken = String(refreshed?.access_token || '').trim();
-        if (!nextAccessToken) return '';
+        if (!nextAccessToken) return { accessToken: '', refreshed: false };
 
         const nextRefreshToken = String(refreshed?.refresh_token || '').trim();
         const expiresIn = Number(refreshed?.expires_in);
@@ -654,10 +654,10 @@ const getUsableUserAccessToken = async (dbUser) => {
             dbUser.scopes = scopes;
         }
         await dbUser.save();
-        return nextAccessToken;
+        return { accessToken: nextAccessToken, refreshed: true };
     } catch (error) {
         console.warn(`Refresh token failed for user ${dbUser.discordId || 'unknown'}:`, error?.response?.status || error?.message || error);
-        return '';
+        return { accessToken: '', refreshed: false };
     }
 };
 
@@ -677,6 +677,28 @@ const addMemberToGuild = async ({ guildId, discordId, accessToken }) => {
         retry: false,
         defaultCode: 'DISCORD_GUILD_JOIN_FAILED'
     });
+};
+
+const isForbiddenOrUnknownJoinFailure = (error) => {
+    if (!(error instanceof DiscordBotError)) return false;
+
+    const status = Number(error.status);
+    if ([401, 403, 404].includes(status)) return true;
+
+    const discordCode = Number(error?.data?.code);
+    if ([10013, 50001, 50013, 50025].includes(discordCode)) return true;
+
+    if (['DISCORD_BOT_UNAUTHORIZED', 'DISCORD_BOT_FORBIDDEN'].includes(error.code)) return true;
+
+    const message = String(error?.data?.message || error?.message || '').toLowerCase();
+    return (
+        message.includes('invalid oauth')
+        || message.includes('invalid access token')
+        || message.includes('unknown user')
+        || message.includes('missing access')
+        || message.includes('missing permissions')
+        || message.includes('forbidden')
+    );
 };
 
 const formatLinkedUserLine = (dbUser, index) => {
@@ -729,7 +751,10 @@ const reAddLinkedUsersToGuild = async ({ targetGuildId, totalLinkedHint = 0, onP
         totalLinked,
         added: 0,
         alreadyInGuild: 0,
+        refreshedToken: 0,
         skippedNoToken: 0,
+        skippedForbiddenOrUnknown: 0,
+        rateLimited: 0,
         failed: 0,
         processed: 0
     };
@@ -753,7 +778,11 @@ const reAddLinkedUsersToGuild = async ({ targetGuildId, totalLinkedHint = 0, onP
             return;
         }
 
-        const accessToken = await getUsableUserAccessToken(dbUser);
+        const tokenResult = await getUsableUserAccessToken(dbUser);
+        const accessToken = String(tokenResult?.accessToken || '').trim();
+        if (tokenResult?.refreshed) {
+            summary.refreshedToken += 1;
+        }
         if (!accessToken) {
             summary.skippedNoToken += 1;
             summary.processed += 1;
@@ -762,6 +791,8 @@ const reAddLinkedUsersToGuild = async ({ targetGuildId, totalLinkedHint = 0, onP
         }
 
         let joined = false;
+        let skippedForbiddenOrUnknown = false;
+        let rateLimited = false;
         for (let attempt = 1; attempt <= ADDALL_MAX_JOIN_RETRIES; attempt += 1) {
             try {
                 const res = await addMemberToGuild({ guildId, discordId, accessToken });
@@ -774,10 +805,19 @@ const reAddLinkedUsersToGuild = async ({ targetGuildId, totalLinkedHint = 0, onP
                 joined = true;
                 break;
             } catch (error) {
-                if (error instanceof DiscordBotError && error.status === 429 && attempt < ADDALL_MAX_JOIN_RETRIES) {
-                    const waitMs = Math.max(1000, (Number(error.retryAfterSeconds) || 1) * 1000);
-                    await sleep(waitMs);
-                    continue;
+                if (error instanceof DiscordBotError) {
+                    if (error.status === 429) {
+                        rateLimited = true;
+                        if (attempt < ADDALL_MAX_JOIN_RETRIES) {
+                            const waitMs = Math.max(1000, (Number(error.retryAfterSeconds) || 1) * 1000);
+                            await sleep(waitMs);
+                            continue;
+                        }
+                    }
+                    if (isForbiddenOrUnknownJoinFailure(error)) {
+                        skippedForbiddenOrUnknown = true;
+                        break;
+                    }
                 }
                 if (
                     error instanceof DiscordBotError
@@ -792,7 +832,13 @@ const reAddLinkedUsersToGuild = async ({ targetGuildId, totalLinkedHint = 0, onP
             }
         }
 
-        if (!joined) {
+        if (rateLimited) {
+            summary.rateLimited += 1;
+        }
+
+        if (skippedForbiddenOrUnknown) {
+            summary.skippedForbiddenOrUnknown += 1;
+        } else if (!joined) {
             summary.failed += 1;
         }
 
@@ -830,7 +876,7 @@ const formatVouchItems = (items) => {
             const quantity = Math.max(1, Number(item?.quantity) || 1);
             const name = String(item?.name || 'UNKNOWN ITEM').trim().toUpperCase();
             const deliveredLabel = formatDeliveredUnitsLabel(name, quantity).toUpperCase();
-            return `**${deliveredLabel} ${name}**`;
+            return `**${name} (${deliveredLabel})**`;
         })
         .join('\n')
         .slice(0, 1500);
@@ -1730,28 +1776,21 @@ client.on('messageCreate', async (message) => {
 
         let progressMessage = null;
         try {
-            const linkedUsers = await getLinkedUsersSnapshot();
-            if (linkedUsers.length === 0) {
+            const totalLinked = await User.countDocuments({
+                discordId: { $exists: true, $ne: '' }
+            });
+            if (totalLinked === 0) {
                 await message.reply('No linked users found to restore.');
                 return;
             }
 
-            const linkedUsersText = buildLinkedUsersListText(linkedUsers);
-            const usersAttachment = new AttachmentBuilder(
-                Buffer.from(linkedUsersText, 'utf8'),
-                { name: `linked-users-${targetGuildId}.txt` }
-            );
-
-            await message.reply({
-                content: `Found ${linkedUsers.length} linked users. Full list is attached below. Starting restore into this server now...`,
-                files: [usersAttachment]
-            });
+            await message.reply(`Found ${totalLinked} linked users. Starting restore into this server now...`);
 
             progressMessage = await message.reply('Restore in progress... 0 users processed.');
             let lastProgressEditAt = 0;
             const summary = await reAddLinkedUsersToGuild({
                 targetGuildId,
-                totalLinkedHint: linkedUsers.length,
+                totalLinkedHint: totalLinked,
                 onProgress: async (progress) => {
                     const now = Date.now();
                     if (
@@ -1768,7 +1807,10 @@ client.on('messageCreate', async (message) => {
                             `Processed: ${progress.processed}/${progress.totalLinked}`,
                             `Added: ${progress.added}`,
                             `Already in server: ${progress.alreadyInGuild}`,
+                            `Refreshed tokens: ${progress.refreshedToken}`,
                             `Skipped (missing/expired token): ${progress.skippedNoToken}`,
+                            `Skipped (forbidden/unknown): ${progress.skippedForbiddenOrUnknown}`,
+                            `Rate limited: ${progress.rateLimited}`,
                             `Failed: ${progress.failed}`
                         ].join('\n');
                         await progressMessage.edit(progressText);
@@ -1782,7 +1824,10 @@ client.on('messageCreate', async (message) => {
                 `Processed: ${summary.processed}`,
                 `Added: ${summary.added}`,
                 `Already in server: ${summary.alreadyInGuild}`,
+                `Refreshed tokens: ${summary.refreshedToken}`,
                 `Skipped (missing/expired token): ${summary.skippedNoToken}`,
+                `Skipped (forbidden/unknown): ${summary.skippedForbiddenOrUnknown}`,
+                `Rate limited: ${summary.rateLimited}`,
                 `Failed: ${summary.failed}`
             ].join('\n');
 

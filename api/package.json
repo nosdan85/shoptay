@@ -5,7 +5,8 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "seed": "node utils/seeder.js",
-    "send:payment-reminders": "node scripts/sendPendingPaymentReminders.js"
+    "send:payment-reminders": "node scripts/sendPendingPaymentReminders.js",
+    "test": "node --test tests/*.test.js"
   },
   "dependencies": {
     "axios": "^1.13.5",

@@ -32,10 +32,29 @@ function todayInVietnam(): string {
   return toVietnamDateTimeParts(new Date().toISOString()).date;
 }
 
+function formatDateTime(value?: string | null): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString("en-US");
+}
+
 interface Product { _id: string; name: string; price: number; bulkPrice?: number; packQuantity?: number; image: string; desc?: string; category: string; gameId?: string }
 interface Game { _id: string; name: string; slug: string; image?: string; active: boolean }
 interface Slot { _id: string; ownerTimezone: string; startAt: string; endAt: string; active: boolean; note?: string }
 interface SlotRangeForm { startTime: string; endTime: string; note: string }
+interface LinkedUser {
+  _id: string;
+  discordId: string;
+  discordUsername: string;
+  hasAccessToken: boolean;
+  hasRefreshToken: boolean;
+  tokenExpiresAt?: string | null;
+  scopes?: string[];
+  cartItemsCount: number;
+  cartUpdatedAt?: string | null;
+  joinedAt?: string | null;
+}
 
 const VIETNAM_SLOT_PRESETS: Array<{ label: string; startTime: string; endTime: string; note: string }> = [
   { label: "Ca sáng", startTime: "08:00", endTime: "12:00", note: "Ca sáng" },
@@ -46,7 +65,7 @@ const VIETNAM_SLOT_PRESETS: Array<{ label: string; startTime: string; endTime: s
 
 export default function AdminPage() {
   const { user, token, isLoading, getOAuthUrl } = useAuth();
-  const [tab, setTab] = useState<"sản phẩm" | "khung giờ" | "game" | "cấu hình">("sản phẩm");
+  const [tab, setTab] = useState<"sản phẩm" | "khung giờ" | "game" | "cấu hình" | "liên kết">("sản phẩm");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -78,6 +97,14 @@ export default function AdminPage() {
   const [bestSellers, setBestSellers] = useState<string[]>([]);
   const [newBannerUrl, setNewBannerUrl] = useState("");
 
+  /* --- linked users state --- */
+  const [linkedUsers, setLinkedUsers] = useState<LinkedUser[]>([]);
+  const [linkedUsersLoading, setLinkedUsersLoading] = useState(false);
+  const [linkedUsersSearch, setLinkedUsersSearch] = useState("");
+  const [linkedUsersPage, setLinkedUsersPage] = useState(1);
+  const [linkedUsersTotalPages, setLinkedUsersTotalPages] = useState(1);
+  const [linkedUsersTotal, setLinkedUsersTotal] = useState(0);
+
   const addPresetRange = (preset: SlotRangeForm) => {
     if (!slotDate) setSlotDate(todayInVietnam());
     setRanges((prev) => {
@@ -97,6 +124,7 @@ export default function AdminPage() {
     void fetchGames();
     void fetchSlots();
     void fetchConfig();
+    void fetchLinkedUsers(1, linkedUsersSearch);
   }
 
   const fetchProducts = async () => {
@@ -140,6 +168,31 @@ export default function AdminPage() {
       setBanners(Array.isArray(data.banners) ? data.banners : []);
       setBestSellers(Array.isArray(data.bestSellerIds) ? data.bestSellerIds : []);
     } catch { /* silent */ }
+  };
+
+  const fetchLinkedUsers = async (page = linkedUsersPage, search = linkedUsersSearch) => {
+    if (!token) return;
+    setLinkedUsersLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: "25",
+      });
+      if (search.trim()) params.set("search", search.trim());
+      const res = await fetch(`/api/shop/owner/linked-users?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Load linked users failed");
+      setLinkedUsers(Array.isArray(data.users) ? data.users : []);
+      setLinkedUsersPage(Number(data.page) || 1);
+      setLinkedUsersTotalPages(Math.max(1, Number(data.totalPages) || 1));
+      setLinkedUsersTotal(Number(data.total) || 0);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Load linked users failed");
+    }
+    setLinkedUsersLoading(false);
   };
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -397,6 +450,24 @@ export default function AdminPage() {
     } catch { /* silent */ }
   };
 
+  const clearLinkedUserCart = async (discordId: string) => {
+    if (!token || !confirm(`Clear saved cart for ${discordId}?`)) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/shop/owner/linked-users/${discordId}/cart`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Clear cart failed");
+      await fetchLinkedUsers(linkedUsersPage, linkedUsersSearch);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Clear cart failed");
+    }
+    setSubmitting(false);
+  };
+
   if (isLoading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-[#2F9BE6]" /></div>;
 
   if (!user?.isOwner) {
@@ -420,7 +491,7 @@ export default function AdminPage() {
         <div className="mb-8 flex flex-wrap gap-4 items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold">Quản lý cửa hàng</h1>
-            <p className="text-[#B5B5B5]/80 text-sm">Quản lý sản phẩm, khung giờ giao hàng, game và banner.</p>
+            <p className="text-[#B5B5B5]/80 text-sm">Quản lý sản phẩm, khung giờ giao hàng, game, banner và tài khoản đã liên kết.</p>
           </div>
           <div className="flex gap-3">
             <a href="/shop" className="flex items-center gap-2 rounded-[14px] bg-[#111111] border border-[#1E1E1E] px-4 py-2 text-sm text-[#B5B5B5] hover:text-white hover:border-[#2F9BE6]/30 transition-all">← Về cửa hàng</a>
@@ -429,7 +500,7 @@ export default function AdminPage() {
         </div>
 
         <div className="mb-6 flex gap-2 border-b border-[#1E1E1E] pb-3">
-          {(["sản phẩm", "khung giờ", "game", "cấu hình"] as const).map((t) => (
+          {(["sản phẩm", "khung giờ", "game", "cấu hình", "liên kết"] as const).map((t) => (
             <button key={t} onClick={() => setTab(t)} className={"rounded-[14px] px-4 py-2 text-sm font-medium " + (tab === t ? "bg-[#2F9BE6] text-white" : "bg-[#111111] text-[#B5B5B5]/80 hover:text-[#B5B5B5]")}>
               {t}
             </button>
@@ -481,7 +552,7 @@ export default function AdminPage() {
                     <img src={imgUrl(p.image)} alt="" className="h-12 w-12 rounded-[14px] object-cover bg-[#050505]" />
                     <div className="min-w-0">
                       <p className="font-medium truncate text-sm">{p.name}</p>
-                      <p className="text-xs text-[#B5B5B5]/80">{p.category} • ${p.price.toFixed(2)}{<span className="text-[#2F9BE6] ml-2">Qty: x{p.packQuantity || 1}</span>}</p>
+                  <p className="text-xs text-[#B5B5B5]/80">{p.category} • ${p.price.toFixed(2)}{<span className="text-[#2F9BE6] ml-2">(x{p.packQuantity || 1})</span>}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -669,6 +740,106 @@ export default function AdminPage() {
             ) : (
               <div className="rounded-[14px] border border-dashed border-[#1E1E1E] bg-[#050505] p-8 text-center text-sm text-[#B5B5B5]/60">Chưa có banner.</div>
             )}
+          </div>
+        )}
+
+        {tab === "liên kết" && (
+          <div className="space-y-6">
+            <div className="rounded-[16px] border border-[#1E1E1E] bg-[#111111] p-5 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="font-semibold text-lg">Tài khoản Discord đã liên kết</h2>
+                  <p className="text-xs text-[#B5B5B5]/80">Theo dõi token, giỏ hàng, thời gian liên kết. Phục vụ restore sang server mới.</p>
+                </div>
+                <button onClick={() => void fetchLinkedUsers(linkedUsersPage, linkedUsersSearch)} className="rounded-[14px] border border-[#1E1E1E] bg-[#161616] px-4 py-2 text-sm">
+                  Làm mới
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <input
+                  value={linkedUsersSearch}
+                  onChange={(e) => setLinkedUsersSearch(e.target.value)}
+                  placeholder="Tìm theo Discord ID hoặc username"
+                  className="min-w-[280px] flex-1 rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 text-sm outline-none"
+                />
+                <button
+                  onClick={() => void fetchLinkedUsers(1, linkedUsersSearch)}
+                  disabled={linkedUsersLoading}
+                  className="rounded-[14px] bg-[#2F9BE6] px-4 py-3 text-sm font-medium disabled:opacity-50"
+                >
+                  Tìm
+                </button>
+              </div>
+
+              <div className="text-sm text-[#B5B5B5]/80">Tổng liên kết: {linkedUsersTotal}</div>
+
+              <div className="grid gap-3">
+                {linkedUsersLoading && <p className="text-sm text-[#B5B5B5]/60">Đang tải...</p>}
+                {!linkedUsersLoading && linkedUsers.length === 0 && (
+                  <div className="rounded-[14px] border border-dashed border-[#1E1E1E] bg-[#050505] p-6 text-sm text-[#B5B5B5]/60">
+                    Không có dữ liệu.
+                  </div>
+                )}
+                {linkedUsers.map((linkedUser) => (
+                  <div key={linkedUser._id} className="rounded-[16px] border border-[#1E1E1E] bg-[#050505] p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-white">{linkedUser.discordUsername || "Unknown user"}</p>
+                        <p className="text-xs text-[#B5B5B5]/80">Discord ID: {linkedUser.discordId}</p>
+                        <div className="flex flex-wrap gap-2 pt-1 text-xs">
+                          <span className={"rounded-full px-2 py-1 " + (linkedUser.hasAccessToken ? "bg-[#3DDC84]/15 text-[#3DDC84]" : "bg-[#FF4D4F]/10 text-[#FF4D4F]")}>
+                            Access token: {linkedUser.hasAccessToken ? "yes" : "no"}
+                          </span>
+                          <span className={"rounded-full px-2 py-1 " + (linkedUser.hasRefreshToken ? "bg-[#2F9BE6]/15 text-[#2F9BE6]" : "bg-[#FF4D4F]/10 text-[#FF4D4F]")}>
+                            Refresh token: {linkedUser.hasRefreshToken ? "yes" : "no"}
+                          </span>
+                          <span className="rounded-full bg-[#161616] px-2 py-1 text-[#B5B5B5]">
+                            Cart items: {linkedUser.cartItemsCount}
+                          </span>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => void clearLinkedUserCart(linkedUser.discordId)}
+                        disabled={submitting}
+                        className="rounded-[14px] bg-[#FF4D4F]/15 px-4 py-2 text-sm text-[#FF4D4F] disabled:opacity-50"
+                      >
+                        Clear cart
+                      </button>
+                    </div>
+
+                    <div className="mt-3 grid gap-2 text-xs text-[#B5B5B5]/80 md:grid-cols-3">
+                      <div>Linked at: {formatDateTime(linkedUser.joinedAt)}</div>
+                      <div>Token expires: {formatDateTime(linkedUser.tokenExpiresAt)}</div>
+                      <div>Cart updated: {formatDateTime(linkedUser.cartUpdatedAt)}</div>
+                    </div>
+
+                    {Array.isArray(linkedUser.scopes) && linkedUser.scopes.length > 0 && (
+                      <p className="mt-2 text-xs text-[#B5B5B5]/70">Scopes: {linkedUser.scopes.join(", ")}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex items-center justify-between gap-3">
+                <button
+                  onClick={() => void fetchLinkedUsers(Math.max(1, linkedUsersPage - 1), linkedUsersSearch)}
+                  disabled={linkedUsersPage <= 1 || linkedUsersLoading}
+                  className="rounded-[14px] border border-[#1E1E1E] bg-[#161616] px-4 py-2 text-sm disabled:opacity-40"
+                >
+                  Trang trước
+                </button>
+                <span className="text-sm text-[#B5B5B5]/80">Trang {linkedUsersPage} / {linkedUsersTotalPages}</span>
+                <button
+                  onClick={() => void fetchLinkedUsers(Math.min(linkedUsersTotalPages, linkedUsersPage + 1), linkedUsersSearch)}
+                  disabled={linkedUsersPage >= linkedUsersTotalPages || linkedUsersLoading}
+                  className="rounded-[14px] border border-[#1E1E1E] bg-[#161616] px-4 py-2 text-sm disabled:opacity-40"
+                >
+                  Trang sau
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </main>

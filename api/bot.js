@@ -15,7 +15,7 @@ const User = require('./models/User');
 const Proof = require('./models/Proof');
 const ProofImage = require('./models/ProofImage');
 const { encryptSecret, decryptSecret } = require('./utils/tokenCrypto');
-const { formatDeliveredUnitsLabel } = require('./utils/itemQuantityDisplay');
+const { formatPurchasedUnitsLabel } = require('./utils/itemQuantityDisplay');
 
 const { log } = require('./utils/loggingService');
 
@@ -209,9 +209,8 @@ const sanitizeChannelName = (raw, fallbackPrefix = 'ticket') => {
 const formatOrderItems = (items) => {
     const lines = Array.isArray(items)
         ? items.map((item) => {
-            const quantity = Math.max(1, Number(item?.quantity) || 1);
             const name = String(item?.name || 'Item').trim();
-            return `${name} (${formatDeliveredUnitsLabel(name, quantity)})`;
+            return `${name} (${formatPurchasedUnitsLabel(item)})`;
         })
         : [];
     const joined = lines.join('\n') || '-';
@@ -223,7 +222,7 @@ const formatOrderItemsWithPrice = (items) => {
         ? items.map((item) => {
             const quantity = Math.max(1, Number(item?.quantity) || 1);
             const name = String(item?.name || 'Item').trim();
-            const deliveredLabel = formatDeliveredUnitsLabel(name, quantity);
+            const deliveredLabel = formatPurchasedUnitsLabel(item);
             const lineTotal = (Math.max(0, Number(item?.price) || 0) * quantity).toFixed(2);
             return `${name} (${deliveredLabel}) - $${lineTotal}`;
         })
@@ -558,9 +557,8 @@ const formatPurchasedItemsForDm = (items) => {
     if (!Array.isArray(items) || items.length === 0) return 'Unknown item';
     return items
         .map((item) => {
-            const quantity = Math.max(1, Number(item?.quantity) || 1);
             const name = String(item?.name || 'Unknown item').trim();
-            return `${name} (${formatDeliveredUnitsLabel(name, quantity)})`;
+            return `${name} (${formatPurchasedUnitsLabel(item)})`;
         })
         .join(', ')
         .slice(0, 800);
@@ -877,9 +875,8 @@ const formatVouchItems = (items) => {
     if (!Array.isArray(items) || items.length === 0) return '**1X UNKNOWN ITEM**';
     return items
         .map((item) => {
-            const quantity = Math.max(1, Number(item?.quantity) || 1);
             const name = String(item?.name || 'UNKNOWN ITEM').trim().toUpperCase();
-            const deliveredLabel = formatDeliveredUnitsLabel(name, quantity).toUpperCase();
+            const deliveredLabel = formatPurchasedUnitsLabel(item).toUpperCase();
             return `**${name} (${deliveredLabel})**`;
         })
         .join('\n')
@@ -899,12 +896,13 @@ const buildProofItems = (items) => {
         .map((item) => {
             const name = String(item?.name || '').trim();
             if (!name) return null;
-            const packQuantity = Math.max(1, Number(item?.quantity) || 1);
-            const deliveredLabel = formatDeliveredUnitsLabel(name, packQuantity);
-            const lineTotal = Math.max(0, Number(item?.price) || 0) * packQuantity;
+            const quantity = Math.max(1, Number(item?.quantity) || 1);
+            const deliveredLabel = formatPurchasedUnitsLabel(item);
+            const lineTotal = Math.max(0, Number(item?.price) || 0) * quantity;
             return {
                 name,
-                packQuantity,
+                packQuantity: Math.max(1, Number(item?.packQuantity) || 1),
+                quantity,
                 deliveredLabel,
                 lineTotal: Number.isFinite(lineTotal) ? Number(lineTotal.toFixed(2)) : 0
             };
@@ -1452,40 +1450,6 @@ const sendRobloxAccountMessage = async ({ channelId, order }) => {
         channelId,
         content: `**Roblox Account:** ${username}${userId ? ` (${userId})` : ''}`
     });
-};
-
-const syncOrderTicketChannels = async (order) => {
-    if (!order) return { changed: false };
-
-    const channelIds = [
-        String(order.channelId || '').trim(),
-        String(order.paypalTicketChannelId || '').trim(),
-        String(order.ltcTicketChannelId || '').trim()
-    ].filter(isSnowflake);
-
-    let changed = false;
-    for (const channelId of channelIds) {
-        try {
-            await botRequest({
-                method: 'get',
-                path: `/channels/${channelId}`,
-                timeout: 4000,
-                retry: false,
-                defaultCode: 'DISCORD_CHANNEL_LOOKUP_FAILED'
-            });
-        } catch (error) {
-            if (error instanceof DiscordBotError && error.status === 404) {
-                await resetOrderTicketStateByChannel(order, channelId).catch((resetError) => {
-                    console.error('Stale ticket reset error:', resetError?.message || resetError);
-                });
-                changed = true;
-                continue;
-            }
-            throw error;
-        }
-    }
-
-    return { changed };
 };
 
 const buildCopyButtons = (buttonConfigs = []) => {
@@ -2086,7 +2050,6 @@ module.exports = {
     createLTCTicket,
     checkUserInGuild,
     checkUserHasOwnerRole,
-    syncOrderTicketChannels,
     getOwnerId
 };
 

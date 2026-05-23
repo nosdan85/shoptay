@@ -30,6 +30,7 @@ const orderSchema = new mongoose.Schema({
         product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
         name: String,
         quantity: Number,
+        packQuantity: { type: Number, default: 1 },
         price: Number
     }],
     products: { type: [mongoose.Schema.Types.Mixed], default: [] },
@@ -82,6 +83,7 @@ orderSchema.pre('validate', function syncPaymentAliases(next) {
                 product: item.product,
                 name: item.name,
                 quantity: item.quantity,
+                packQuantity: item.packQuantity,
                 price: item.price
             }))
             : [];

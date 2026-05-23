@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const {
     formatCompactUnits,
     formatDeliveredUnitsLabel,
+    formatPurchasedUnitsLabel,
     getDeliveredUnits
 } = require('../utils/itemQuantityDisplay');
 
@@ -21,4 +22,9 @@ test('getDeliveredUnits multiplies mapped base units by pack quantity', () => {
 test('formatDeliveredUnitsLabel returns x-prefixed quantity text', () => {
     assert.equal(formatDeliveredUnitsLabel('Aura Crate', 2), 'x100');
     assert.equal(formatDeliveredUnitsLabel('Trait Reroll', 2), 'x1000k');
+});
+
+test('formatPurchasedUnitsLabel multiplies product pack quantity by order quantity', () => {
+    assert.equal(formatPurchasedUnitsLabel({ name: 'Aura Crate', packQuantity: 50, quantity: 2 }), 'x100');
+    assert.equal(formatPurchasedUnitsLabel({ name: 'Trait Reroll', packQuantity: 500000, quantity: 2 }), 'x1000k');
 });

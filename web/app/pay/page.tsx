@@ -9,6 +9,7 @@ import { formatPrice, getTimezoneInfo } from "@/lib/timezones";
 interface OrderItem {
   name: string;
   quantity: number;
+  packQuantity?: number;
   price: number;
 }
 
@@ -58,6 +59,12 @@ const PAYMENT_METHODS: PaymentMethod[] = [
   { label: "Cash App", value: "cashapp" },
   { label: "Litecoin", value: "ltc" }
 ];
+
+function formatPurchasedQtyLabel(item: OrderItem): string {
+  const packQty = Math.max(1, Number(item.packQuantity) || 1);
+  const orderQty = Math.max(1, Number(item.quantity) || 1);
+  return `x${packQty * orderQty}`;
+}
 
 function LoadingScreen() {
   return (
@@ -325,7 +332,7 @@ function PayContent() {
 
             {items.map((item, index) => (
               <div key={item.name + String(index)} className="flex justify-between gap-4 text-sm">
-                <span className="text-[#B5B5B5]/80">{item.quantity}x {item.name}</span>
+                <span className="text-[#B5B5B5]/80">{item.name} ({formatPurchasedQtyLabel(item)})</span>
                 <span className="text-[#B5B5B5] shrink-0">{formatPrice(item.price * item.quantity, timezoneInfo.currencyCode, timezoneInfo.currencySymbol)}</span>
               </div>
             ))}

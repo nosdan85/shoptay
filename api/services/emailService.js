@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const { formatPurchasedUnitsLabel } = require('../utils/itemQuantityDisplay');
 
 const normalizeEnvValue = (value) => {
     const text = String(value || '').trim();
@@ -55,9 +56,8 @@ const formatItems = (items) => {
         ? items
             .map((item) => {
                 const name = String(item?.name || '').trim();
-                const quantity = Number(item?.quantity || 1);
                 if (!name) return '';
-                return quantity > 1 ? `${name} x${quantity}` : name;
+                return `${name} (${formatPurchasedUnitsLabel(item)})`;
             })
             .filter(Boolean)
         : [];

@@ -39,8 +39,28 @@ function formatQtyLabel(quantity: number | undefined | null): string {
   return `(x${Math.max(1, Number(quantity) || 1)})`;
 }
 
+function formatPurchasedQtyLabel(item: { packQuantity?: number; quantity?: number }): string {
+  const packQty = Math.max(1, Number(item.packQuantity) || 1);
+  const orderQty = Math.max(1, Number(item.quantity) || 1);
+  return `(x${packQty * orderQty})`;
+}
+
 function formatProductNameWithQty(name: string, quantity: number | undefined | null): string {
   return `${name} ${formatQtyLabel(quantity)}`;
+}
+
+function formatPurchasedProductName(item: { name: string; packQuantity?: number; quantity?: number }): string {
+  return `${item.name} ${formatPurchasedQtyLabel(item)}`;
+}
+
+function formatSlotNote(note?: string): string {
+  const map: Record<string, string> = {
+    "Ca sáng": "Morning shift",
+    "Ca trưa": "Midday shift",
+    "Ca chiều": "Afternoon shift",
+    "Ca tối": "Evening shift",
+  };
+  return map[String(note || "").trim()] || String(note || "");
 }
 
 interface Product { _id: string; name: string; category: string; price: number; bulkPrice?: number; packQuantity?: number; image?: string; desc?: string; gameId?: string }
@@ -573,7 +593,7 @@ export default function ShopPage() {
                     {item.image ? <img src={imgUrl(item.image)} alt="" loading="lazy" className="h-full w-full object-cover" /> : <Package className="h-full w-full p-3 text-[#B5B5B5]/60" />}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="truncate text-sm font-medium leading-5">{formatProductNameWithQty(item.name, item.packQuantity)}</p>
+                    <p className="truncate text-sm font-medium leading-5">{formatPurchasedProductName(item)}</p>
                     <div className="mt-1 flex items-center gap-2">
                       <button onClick={() => updateQty(item._id, -1)} className="rounded bg-[#161616] p-1"><Minus className="h-3 w-3" /></button>
                       <span className="text-sm">{item.quantity}</span>
@@ -599,7 +619,7 @@ export default function ShopPage() {
 
       {(modalOpen || modalClosing) && selectedProduct && (
         <div className={"fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-0 " + (modalClosing ? "animate-fade-out" : "animate-fade-in")} onClick={closeProductModal}>
-          <div className={"relative mx-3 w-full max-w-[340px] max-h-[82dvh] overflow-hidden rounded-[20px] border border-[#1E1E1E] bg-[#0A0A0A] shadow-2xl " + (modalClosing ? "animate-modal-zoom-out" : "animate-modal-zoom-in")} onClick={(e) => e.stopPropagation()}>
+          <div className={"motion-panel relative mx-3 w-full max-w-[340px] max-h-[82dvh] overflow-hidden rounded-[20px] border border-[#1E1E1E] bg-[#0A0A0A] shadow-2xl " + (modalClosing ? "animate-modal-zoom-out" : "animate-modal-zoom-in")} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-[#1E1E1E] bg-[#0A0A0A] px-4 py-2.5">
               <h3 className="text-sm font-semibold text-white">Product Details</h3>
               <button onClick={closeProductModal} className="rounded-full bg-[#1E1E1E] p-2 active:scale-90"><X className="h-4 w-4" /></button>
@@ -652,11 +672,11 @@ export default function ShopPage() {
             <div className="flex gap-2">{(["roblox", "delivery", "ticket"] as const).map((s) => (
               <div key={s} className={"h-2 flex-1 rounded-full transition-colors " + (step === s ? "bg-[#49B6FF]" : (["roblox", "delivery", "ticket"].indexOf(step) > ["roblox", "delivery", "ticket"].indexOf(s) ? "bg-[#3DDC84]" : "bg-[#161616]"))} />
             ))}</div>
-            <div className="rounded-[24px] border border-[#1E1E1E] bg-[#111111] p-4 sm:p-6 space-y-4 animate-section-enter">
+            <div className="motion-panel rounded-[24px] border border-[#1E1E1E] bg-[#111111] p-4 sm:p-6 space-y-4 animate-section-enter">
               <div className="border-b border-[#1E1E1E] pb-3">
                 <p className="text-sm text-[#B5B5B5]">Order {orderId}</p>
                 <div className="mt-2 space-y-1">{cart.map((i) => (
-                  <div key={i._id} className="flex justify-between text-sm"><span>{formatProductNameWithQty(i.name, i.packQuantity)} x {i.quantity}</span><span className="text-[#B5B5B5]">${(i.price * i.quantity).toFixed(2)}</span></div>
+                  <div key={i._id} className="flex justify-between text-sm"><span>{formatPurchasedProductName(i)}</span><span className="text-[#B5B5B5]">${(i.price * i.quantity).toFixed(2)}</span></div>
                 ))}<div className="flex justify-between border-t border-[#1E1E1E] pt-2 font-semibold"><span>Total</span><span className="text-[#3DDC84]">${cartTotal.toFixed(2)}</span></div></div>
               </div>
               {step === "roblox" && (
@@ -674,7 +694,7 @@ export default function ShopPage() {
                         <button
                           onClick={() => void lookupRobloxUsername()}
                           disabled={submitting || !robloxUsernameInput.trim() || robloxUsernameInput.length < 3}
-                          className="w-full rounded-[14px] bg-[#2F9BE6] py-3 font-medium transition-all hover:bg-[#49B6FF] disabled:opacity-50"
+                          className="w-full rounded-[14px] bg-[#2F9BE6] py-3 font-medium transition-all hover:bg-[#49B6FF] primary-hover-glow disabled:opacity-50"
                         >
                           {submitting ? "Searching..." : "Lookup Account"}
                         </button>
@@ -717,7 +737,7 @@ export default function ShopPage() {
                         <button
                           onClick={() => void linkRobloxUsername()}
                           disabled={submitting}
-                          className="rounded-[14px] bg-[#3DDC84] py-3 font-medium transition-colors hover:bg-[#3DDC84]/90 disabled:opacity-50"
+                          className="rounded-[14px] bg-[#3DDC84] py-3 font-medium transition-colors hover:bg-[#3DDC84]/90 primary-hover-glow disabled:opacity-50"
                         >
                           Confirm
                         </button>
@@ -811,18 +831,18 @@ export default function ShopPage() {
                     {slots.map((s) => (
                       <button key={s.id} onClick={() => setPickedSlot(s.id)} className={"w-full rounded-[16px] border p-4 text-left transition-all " + (pickedSlot === s.id ? "border-[#2F9BE6] bg-[#49B6FF]/10" : "border-[#1E1E1E] bg-[#050505] hover:border-[#1E1E1E]")}>
                         <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-[#2F9BE6]" /><span className="text-sm font-medium">Your time: {s.customerStartText} - {s.customerEndText}</span></div>
-                        {s.note && <p className="mt-1 pl-6 text-xs text-[#2F9BE6]">{s.note}</p>}
+                        {s.note && <p className="mt-1 pl-6 text-xs text-[#2F9BE6]">{formatSlotNote(s.note)}</p>}
                       </button>
                     ))}
                   </div>
-                  <button onClick={() => void confirmSlot()} disabled={!pickedSlot || submitting} className="w-full rounded-[14px] bg-[#2F9BE6] py-3 font-medium disabled:opacity-50">{submitting ? "Saving..." : "Confirm time"}</button>
+                  <button onClick={() => void confirmSlot()} disabled={!pickedSlot || submitting} className="w-full rounded-[14px] bg-[#2F9BE6] py-3 font-medium primary-hover-glow disabled:opacity-50">{submitting ? "Saving..." : "Confirm time"}</button>
                 </div>
               )}
               {step === "ticket" && (
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold">Create Discord Ticket</h3>
                   {!ticketResult ? (
-                    <button onClick={() => void createTicket()} disabled={submitting} className="w-full rounded-[14px] bg-[#3DDC84] py-3 font-medium disabled:opacity-50">{submitting ? "Creating..." : "Create Ticket"}</button>
+                    <button onClick={() => void createTicket()} disabled={submitting} className="w-full rounded-[14px] bg-[#3DDC84] py-3 font-medium primary-hover-glow disabled:opacity-50">{submitting ? "Creating..." : "Create Ticket"}</button>
                   ) : (
                     <div className="space-y-3">
                       <div className="flex items-center gap-2 rounded-[16px] border border-[#3DDC84]/30 bg-[#3DDC84]/10 p-4"><CheckCircle2 className="h-5 w-5 text-[#3DDC84]" /><span className="text-sm">Ticket created!</span></div>
@@ -837,7 +857,7 @@ export default function ShopPage() {
 
         {step === "shop" && (
           <div className="space-y-8">
-            <div className="overflow-hidden rounded-[20px] border border-[#1E1E1E] bg-[#111111]/70 py-3 animate-section-enter">
+            <div className="motion-panel overflow-hidden rounded-[20px] border border-[#1E1E1E] bg-[#111111]/70 py-3 animate-section-enter">
               <div className="flex animate-[scroll_30s_linear_infinite] whitespace-nowrap">
                 {[...recentPurchases, ...recentPurchases].map((p, i) => (
                   <span key={i} className="mx-4 inline-flex items-center gap-2 text-sm text-[#B5B5B5] sm:mx-6">
@@ -887,7 +907,7 @@ export default function ShopPage() {
             </div>
 
             {banners.length > 0 && (
-              <div className="overflow-hidden rounded-[24px] border border-[#1E1E1E] animate-section-enter mb-8">
+              <div className="motion-panel overflow-hidden rounded-[24px] border border-[#1E1E1E] animate-section-enter mb-8">
                 <img src={imgUrl(banners[0])} alt="" className="w-full max-w-full h-auto object-cover max-h-[220px] sm:max-h-[320px] md:max-h-[400px]" />
               </div>
             )}

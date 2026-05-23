@@ -2251,6 +2251,7 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
                         product: item.product || null,
                         name: item.name || '',
                         quantity: Number(item.quantity || 1),
+                        packQuantity: Math.max(1, Number(item.packQuantity) || 1),
                         price: Number(item.price || 0)
                     }));
                     newOrder = new Order({
@@ -2367,6 +2368,7 @@ router.get('/order-payment-info', async (req, res) => {
                 ? order.items.map((item) => ({
                     name: String(item?.name || ''),
                     quantity: Number(item?.quantity || 1),
+                    packQuantity: Math.max(1, Number(item?.packQuantity) || 1),
                     price: Number(item?.price || 0)
                 }))
                 : [],

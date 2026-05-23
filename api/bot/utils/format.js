@@ -1,5 +1,5 @@
 const { normalizeEnvValue } = require('../config');
-const { formatDeliveredUnitsLabel } = require('../../utils/itemQuantityDisplay');
+const { formatPurchasedUnitsLabel } = require('../../utils/itemQuantityDisplay');
 const { truncateText } = require('./validation');
 
 const sanitizeChannelName = (raw, fallbackPrefix = 'ticket') => {
@@ -15,9 +15,8 @@ const sanitizeChannelName = (raw, fallbackPrefix = 'ticket') => {
 const formatOrderItems = (items) => {
   const lines = Array.isArray(items)
     ? items.map((item) => {
-        const quantity = Math.max(1, Number(item?.quantity) || 1);
         const name = String(item?.name || 'Item').trim();
-        return `${name} (${formatDeliveredUnitsLabel(name, quantity)})`;
+        return `${name} (${formatPurchasedUnitsLabel(item)})`;
       })
     : [];
   const joined = lines.join('\n') || '-';
@@ -29,7 +28,7 @@ const formatOrderItemsWithPrice = (items) => {
     ? items.map((item) => {
         const quantity = Math.max(1, Number(item?.quantity) || 1);
         const name = String(item?.name || 'Item').trim();
-        const deliveredLabel = formatDeliveredUnitsLabel(name, quantity);
+        const deliveredLabel = formatPurchasedUnitsLabel(item);
         const lineTotal = (Math.max(0, Number(item?.price) || 0) * quantity).toFixed(2);
         return `${name} (${deliveredLabel}) - $${lineTotal}`;
       })

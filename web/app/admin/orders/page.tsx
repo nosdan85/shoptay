@@ -14,7 +14,7 @@ type Order = {
   status?: string;
   paymentStatus?: string;
   createdAt?: string;
-  items?: Array<{ name?: string; quantity?: number }>;
+  items?: Array<{ name?: string; quantity?: number; packQuantity?: number }>;
   txnId?: string;
 };
 
@@ -29,6 +29,12 @@ const statusTone = (status?: string) => {
     default:
       return "bg-[#2F9BE6]/15 text-[#2F9BE6] border-blue-500/30";
   }
+};
+
+const formatOrderItem = (item: { name?: string; quantity?: number; packQuantity?: number }) => {
+  const packQty = Math.max(1, Number(item.packQuantity) || 1);
+  const orderQty = Math.max(1, Number(item.quantity) || 1);
+  return `${item.name || "Item"} (x${packQty * orderQty})`;
 };
 
 export default function AdminOrdersPage() {
@@ -202,7 +208,7 @@ export default function AdminOrdersPage() {
                 <div>
                   <div className="font-medium text-white">{order.orderId || order._id}</div>
                   <div className="mt-1 text-xs text-[#B5B5B5]/60">
-                    {(order.items || []).map((item) => `${item.quantity || 1}x ${item.name || "Item"}`).join(", ") || "No items"}
+                    {(order.items || []).map(formatOrderItem).join(", ") || "No items"}
                   </div>
                   <div className="mt-1 text-xs text-[#B5B5B5]/50">
                     {order.createdAt ? new Date(order.createdAt).toLocaleString() : "-"}

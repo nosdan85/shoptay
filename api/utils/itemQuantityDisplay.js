@@ -48,10 +48,27 @@ const formatDeliveredUnitsLabel = (itemName, packQuantity) => {
     return `x${formatCompactUnits(delivered)}`;
 };
 
+const getPurchasedUnits = ({ itemName = '', packQuantity = 0, quantity = 1 } = {}) => {
+    const orderQty = Math.max(1, Math.floor(Number(quantity) || 1));
+    const explicitPackQty = Math.floor(Number(packQuantity) || 0);
+    if (explicitPackQty > 0) return explicitPackQty * orderQty;
+    return getDeliveredUnits(itemName, orderQty);
+};
+
+const formatPurchasedUnitsLabel = (item = {}) => (
+    `x${formatCompactUnits(getPurchasedUnits({
+        itemName: item?.name,
+        packQuantity: item?.packQuantity,
+        quantity: item?.quantity
+    }))}`
+);
+
 module.exports = {
     normalizeItemKey,
     getBaseUnits,
     getDeliveredUnits,
     formatCompactUnits,
-    formatDeliveredUnitsLabel
+    formatDeliveredUnitsLabel,
+    getPurchasedUnits,
+    formatPurchasedUnitsLabel
 };

@@ -20,7 +20,6 @@ const {
     createLTCTicket,
     checkUserInGuild,
     checkUserHasOwnerRole,
-    syncOrderTicketChannels,
     DiscordBotError
 } = require('../bot');
 const { createPayPalOrder, capturePayPalOrder, createLTCInvoice } = require('../services/paymentService');
@@ -33,7 +32,6 @@ const { authRequired, getBearerToken, verifyAnyJwtToken } = require('../middlewa
 const { checkoutLimiter, discordAuthLimiter, ticketCreateLimiter, cartSyncLimiter } = require('../middleware/rateLimit');
 const { getDiscordGatewayStatus } = require('../config/discordGateway');
 const { encryptSecret } = require('../utils/tokenCrypto');
-const { ACTIVE_TICKET_MESSAGE, buildActiveTicketQuery } = require('../utils/orderGuards');
 const {
     normalizeCouponCode,
     isSupportedCouponCode,
@@ -1074,29 +1072,6 @@ const clearUserCart = async (discordId) => {
     );
 };
 
-const findUserActiveTicketOrder = async (discordId, excludeOrderId = '') => {
-    const cleanDiscordId = String(discordId || '').trim();
-    if (!cleanDiscordId) return null;
-    const order = await Order.findOne(buildActiveTicketQuery(cleanDiscordId, excludeOrderId))
-        .sort({ updatedAt: -1, createdAt: -1 })
-        .lean();
-    if (!order) return null;
-
-    if (typeof syncOrderTicketChannels === 'function') {
-        const syncResult = await syncOrderTicketChannels(order).catch((error) => {
-            console.warn('Active ticket sync failed:', error?.message || error);
-            return { changed: false };
-        });
-        if (syncResult?.changed) {
-            return Order.findOne(buildActiveTicketQuery(cleanDiscordId, excludeOrderId))
-                .sort({ updatedAt: -1, createdAt: -1 })
-                .lean();
-        }
-    }
-
-    return order;
-};
-
 const findUserCreatingTicketOrder = async (discordId, excludeOrderId = '') => {
     const cleanDiscordId = String(discordId || '').trim();
     if (!cleanDiscordId) return null;
@@ -1157,12 +1132,6 @@ const releaseUserTicketCreationLock = async (discordId, lockUntil = null) => {
         $unset: { ticketCreationLockUntil: 1 }
     });
 };
-
-const hasAnyOrderTicketChannel = (order) => Boolean(
-    String(order?.channelId || '').trim()
-    || String(order?.paypalTicketChannelId || '').trim()
-    || String(order?.ltcTicketChannelId || '').trim()
-);
 
 const joinGuildWithAccessToken = async (guildId, userId, accessToken) => {
     if (!guildId || !userId || !accessToken || !process.env.DISCORD_BOT_TOKEN) return false;
@@ -2240,15 +2209,6 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
 
         const dbUser = discordId ? await User.findOne({ discordId }).lean() : null;
 
-        const activeTicketOrder = await findUserActiveTicketOrder(discordId);
-        if (activeTicketOrder) {
-            return res.status(409).json({
-                error: ACTIVE_TICKET_MESSAGE,
-                code: 'ACTIVE_TICKET_EXISTS',
-                orderId: activeTicketOrder.orderId || ''
-            });
-        }
-
         const cartSummary = await calculateCartSummary({ cartItems, couponCodeRaw });
         if (cartSummary.error) {
             log.warn('[CHECKOUT] Cart summary error', {
@@ -3148,19 +3108,6 @@ router.post('/create-ticket-paypal-ff', authRequired, ticketCreateLimiter, async
             });
         }
 
-        if (hasAnyOrderTicketChannel(order)) {
-            return res.status(409).json({ error: ACTIVE_TICKET_MESSAGE, code: 'ACTIVE_TICKET_EXISTS' });
-        }
-
-        const activeTicketOrder = await findUserActiveTicketOrder(req.user.discordId, order.orderId);
-        if (activeTicketOrder) {
-            return res.status(409).json({
-                error: ACTIVE_TICKET_MESSAGE,
-                code: 'ACTIVE_TICKET_EXISTS',
-                orderId: activeTicketOrder.orderId || ''
-            });
-        }
-
         const userTicketLock = await acquireUserTicketCreationLock(req.user.discordId);
         if (!userTicketLock.user) {
             const creatingTicketOrder = await findUserCreatingTicketOrder(req.user.discordId, order.orderId);
@@ -3171,17 +3118,6 @@ router.post('/create-ticket-paypal-ff', authRequired, ticketCreateLimiter, async
                         'A ticket is already being created for your account. Please wait a moment.',
                         'USER_TICKET_CREATION_IN_PROGRESS'
                     ),
-                    email: instructions?.paypalEmail || process.env.PAYPAL_EMAIL || '',
-                    memoExpected: instructions?.memoExpected || buildMemoExpected(order)
-                });
-            }
-
-            const freshActiveTicketOrder = await findUserActiveTicketOrder(req.user.discordId, order.orderId);
-            if (freshActiveTicketOrder) {
-                return res.status(409).json({
-                    error: ACTIVE_TICKET_MESSAGE,
-                    code: 'ACTIVE_TICKET_EXISTS',
-                    orderId: freshActiveTicketOrder.orderId || '',
                     email: instructions?.paypalEmail || process.env.PAYPAL_EMAIL || '',
                     memoExpected: instructions?.memoExpected || buildMemoExpected(order)
                 });
@@ -3380,19 +3316,6 @@ router.post('/create-ticket-ltc', authRequired, ticketCreateLimiter, async (req,
             });
         }
 
-        if (hasAnyOrderTicketChannel(order)) {
-            return res.status(409).json({ error: ACTIVE_TICKET_MESSAGE, code: 'ACTIVE_TICKET_EXISTS' });
-        }
-
-        const activeTicketOrder = await findUserActiveTicketOrder(req.user.discordId, order.orderId);
-        if (activeTicketOrder) {
-            return res.status(409).json({
-                error: ACTIVE_TICKET_MESSAGE,
-                code: 'ACTIVE_TICKET_EXISTS',
-                orderId: activeTicketOrder.orderId || ''
-            });
-        }
-
         const userTicketLock = await acquireUserTicketCreationLock(req.user.discordId);
         if (!userTicketLock.user) {
             const creatingTicketOrder = await findUserCreatingTicketOrder(req.user.discordId, order.orderId);
@@ -3404,15 +3327,6 @@ router.post('/create-ticket-ltc', authRequired, ticketCreateLimiter, async (req,
                         'USER_TICKET_CREATION_IN_PROGRESS'
                     )
                 );
-            }
-
-            const freshActiveTicketOrder = await findUserActiveTicketOrder(req.user.discordId, order.orderId);
-            if (freshActiveTicketOrder) {
-                return res.status(409).json({
-                    error: ACTIVE_TICKET_MESSAGE,
-                    code: 'ACTIVE_TICKET_EXISTS',
-                    orderId: freshActiveTicketOrder.orderId || ''
-                });
             }
 
             return res.status(409).json({
@@ -3603,19 +3517,6 @@ router.post('/create-ticket', authRequired, ticketCreateLimiter, async (req, res
             });
         }
 
-        if (hasAnyOrderTicketChannel(order)) {
-            return res.status(409).json({ error: ACTIVE_TICKET_MESSAGE, code: 'ACTIVE_TICKET_EXISTS' });
-        }
-
-        const activeTicketOrder = await findUserActiveTicketOrder(req.user.discordId, order.orderId);
-        if (activeTicketOrder) {
-            return res.status(409).json({
-                error: ACTIVE_TICKET_MESSAGE,
-                code: 'ACTIVE_TICKET_EXISTS',
-                orderId: activeTicketOrder.orderId || ''
-            });
-        }
-
         const userTicketLock = await acquireUserTicketCreationLock(req.user.discordId);
         if (!userTicketLock.user) {
             const creatingTicketOrder = await findUserCreatingTicketOrder(req.user.discordId, order.orderId);
@@ -3627,15 +3528,6 @@ router.post('/create-ticket', authRequired, ticketCreateLimiter, async (req, res
                         'USER_TICKET_CREATION_IN_PROGRESS'
                     )
                 );
-            }
-
-            const freshActiveTicketOrder = await findUserActiveTicketOrder(req.user.discordId, order.orderId);
-            if (freshActiveTicketOrder) {
-                return res.status(409).json({
-                    error: ACTIVE_TICKET_MESSAGE,
-                    code: 'ACTIVE_TICKET_EXISTS',
-                    orderId: freshActiveTicketOrder.orderId || ''
-                });
             }
 
             return res.status(409).json({

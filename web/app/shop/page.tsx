@@ -150,7 +150,7 @@ function LogoLoader() {
 
         {/* Rolling Logo */}
         <div className="pointer-events-none absolute top-1/2 h-10 w-10 animate-[logoSync_2.5s_ease-in-out_infinite]">
-          <img src="/pictures/logo.png" alt="Loading" className="h-full w-full object-contain" />
+          <img src="/pictures/logo.png" alt="Loading" className="h-full w-full rounded-[10px] object-contain" />
         </div>
       </div>
 

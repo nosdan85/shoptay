@@ -1,6 +1,5 @@
-﻿import { NextRequest, NextResponse } from "next/server";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || process.env.API_BASE_URL || "http://localhost:5000";
+import { NextRequest, NextResponse } from "next/server";
+import { backendUrl } from "@/lib/backendApi";
 
 type RouteContext = { params: Promise<{ orderId: string }> };
 
@@ -10,20 +9,21 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     const token = request.headers.get("authorization") || "";
     const body = await request.json();
     const action = request.nextUrl.searchParams.get("action");
+    const encodedOrderId = encodeURIComponent(orderId);
 
     let endpoint = "";
     if (action === "link-roblox") {
-      endpoint = `${API_BASE_URL}/api/shop/orders/${orderId}/link-roblox`;
+      endpoint = backendUrl(`/api/shop/orders/${encodedOrderId}/link-roblox`);
     } else if (action === "delivery-slot") {
-      endpoint = `${API_BASE_URL}/api/shop/orders/${orderId}/delivery-slot`;
+      endpoint = backendUrl(`/api/shop/orders/${encodedOrderId}/delivery-slot`);
     } else if (action === "confirm-delivery") {
-      endpoint = `${API_BASE_URL}/api/shop/orders/${orderId}/confirm-delivery`;
+      endpoint = backendUrl(`/api/shop/orders/${encodedOrderId}/confirm-delivery`);
     } else if (action === "create-ticket") {
-      endpoint = `${API_BASE_URL}/api/shop/create-ticket`;
+      endpoint = backendUrl("/api/shop/create-ticket");
     } else if (action === "create-ticket-paypal-ff") {
-      endpoint = `${API_BASE_URL}/api/shop/create-ticket-paypal-ff`;
+      endpoint = backendUrl("/api/shop/create-ticket-paypal-ff");
     } else if (action === "create-ticket-ltc") {
-      endpoint = `${API_BASE_URL}/api/shop/create-ticket-ltc`;
+      endpoint = backendUrl("/api/shop/create-ticket-ltc");
     } else {
       return NextResponse.json({ error: "Unknown action" }, { status: 400 });
     }
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       },
       body: JSON.stringify(body),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({ error: "Backend returned an invalid response" }));
     return NextResponse.json(data, { status: res.status });
   } catch (error) {
     console.error("Order action API error:", error);

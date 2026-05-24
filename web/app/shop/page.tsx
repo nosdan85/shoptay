@@ -20,6 +20,7 @@ import {
   ChevronRight,
   ArrowLeft,
   ChevronDown,
+  LogIn,
 } from "lucide-react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
@@ -66,7 +67,19 @@ function formatSlotNote(note?: string): string {
 interface Product { _id: string; name: string; category: string; price: number; bulkPrice?: number; packQuantity?: number; image?: string; desc?: string; gameId?: string }
 interface CartItem extends Product { quantity: number }
 interface Game { _id: string; name: string; slug: string; image?: string }
-interface Slot { id: string; ownerStartText: string; ownerEndText: string; customerStartText: string; customerEndText: string; startAt: string; endAt: string; note?: string }
+interface Slot {
+  id: string;
+  ownerStartText: string;
+  ownerEndText: string;
+  customerStartText: string;
+  customerEndText: string;
+  customerDateKey: string;
+  customerDateLabel: string;
+  customerTimeLabel: string;
+  startAt: string;
+  endAt: string;
+  note?: string;
+}
 interface Purchase { username: string; items: string; price?: number }
 interface TicketResult { channelId: string; guildId?: string; url?: string }
 
@@ -74,6 +87,7 @@ type Step = "shop" | "roblox" | "delivery" | "ticket";
 type PriceSort = "none" | "low-high" | "high-low";
 
 const BEST_SELLERS_PER_PAGE = 4;
+const PENDING_CHECKOUT_KEY = "pendingCheckout";
 
 const ProductCard = memo(function ProductCard({
   product,
@@ -159,7 +173,7 @@ function LogoLoader() {
   );
 }
 export default function ShopPage() {
-  const { user, token } = useAuth();
+  const { user, token, getOAuthUrl } = useAuth();
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState<Product[]>([]);
   const [games, setGames] = useState<Game[]>([]);
@@ -184,8 +198,10 @@ export default function ShopPage() {
   const [tzSearch, setTzSearch] = useState("");
   const [expandedCountry, setExpandedCountry] = useState<string | null>(null);
   const [slots, setSlots] = useState<Slot[]>([]);
+  const [selectedSlotDate, setSelectedSlotDate] = useState("");
   const [pickedSlot, setPickedSlot] = useState<string | null>(null);
   const [ticketResult, setTicketResult] = useState<TicketResult | null>(null);
+  const [showVisitorNotice, setShowVisitorNotice] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [modalQty, setModalQty] = useState<string | number>(1);
@@ -199,6 +215,7 @@ export default function ShopPage() {
   const ticketInFlightRef = useRef(false);
   const lastActionRef = useRef(0);
   const searchDebounceRef = useRef<number | null>(null);
+  const resumeHandledRef = useRef(false);
 
   const ACTION_COOLDOWN_MS = 450;
   const canAct = () => { if (submitting || Date.now() - lastActionRef.current < ACTION_COOLDOWN_MS) return false; lastActionRef.current = Date.now(); return true; };
@@ -257,6 +274,13 @@ export default function ShopPage() {
   }, []);
 
   useEffect(() => {
+    void fetch("/api/shop/visitor-notice", { method: "POST", cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => setShowVisitorNotice(Boolean(data?.show)))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
     return () => {
       if (searchDebounceRef.current) window.clearTimeout(searchDebounceRef.current);
     };
@@ -265,6 +289,10 @@ export default function ShopPage() {
   useEffect(() => {
     if (!token || !user?.discordId) {
       remoteCartHydratedRef.current = false;
+      return;
+    }
+    if (typeof window !== "undefined" && window.sessionStorage.getItem(PENDING_CHECKOUT_KEY)) {
+      remoteCartHydratedRef.current = true;
       return;
     }
 
@@ -323,6 +351,28 @@ export default function ShopPage() {
     return () => window.clearTimeout(timeoutId);
   }, [cart, syncCartToAccount, token, user?.discordId]);
 
+  useEffect(() => {
+    if (resumeHandledRef.current || typeof window === "undefined") return;
+    const raw = window.sessionStorage.getItem(PENDING_CHECKOUT_KEY);
+    if (!raw) return;
+
+    try {
+      const pending = JSON.parse(raw) as { orderId?: string; cart?: CartItem[]; customerTz?: string };
+      if (!pending?.orderId) return;
+      resumeHandledRef.current = true;
+      queueMicrotask(() => {
+        setOrderId(String(pending.orderId));
+        setStep("roblox");
+        setCart(Array.isArray(pending.cart) ? pending.cart : []);
+        if (pending.customerTz) {
+          setCustomerTz(String(pending.customerTz));
+        }
+      });
+    } catch {
+      window.sessionStorage.removeItem(PENDING_CHECKOUT_KEY);
+    }
+  }, [token]);
+
   const activeSelectedGame = selectedGame && games.some((g) => g._id === selectedGame)
     ? selectedGame
     : null;
@@ -368,19 +418,57 @@ export default function ShopPage() {
     return found ? `${found.country} - ${found.label}` : `Detected - ${customerTz}`;
   }, [customerTz]);
 
+  const persistPendingCheckout = useCallback((nextOrderId: string, nextCart = cart, nextTz = customerTz) => {
+    if (typeof window === "undefined") return;
+    window.sessionStorage.setItem(PENDING_CHECKOUT_KEY, JSON.stringify({
+      orderId: nextOrderId,
+      cart: nextCart,
+      customerTz: nextTz,
+    }));
+  }, [cart, customerTz]);
+
+  const clearPendingCheckout = useCallback(() => {
+    if (typeof window === "undefined") return;
+    window.sessionStorage.removeItem(PENDING_CHECKOUT_KEY);
+  }, []);
+
+  const fetchSlotsForTimezone = useCallback(async (tzValue: string) => {
+    const res = await fetch(`/api/shop/delivery-slots?timezone=${encodeURIComponent(tzValue)}`, { cache: "no-store" });
+    const data = await res.json();
+    const nextSlots = Array.isArray(data?.slots) ? data.slots : [];
+    setSlots(nextSlots);
+    setPickedSlot(null);
+    setSelectedSlotDate((current) => {
+      if (current && nextSlots.some((slot: Slot) => slot.customerDateKey === current)) return current;
+      return String(nextSlots[0]?.customerDateKey || "");
+    });
+    return nextSlots;
+  }, []);
+
   const selectTimezone = (tzValue: string) => {
     setCustomerTz(tzValue);
     setTzSearch("");
     setExpandedCountry(null);
-    setPickedSlot(null);
-    void fetch(`/api/shop/delivery-slots?timezone=${encodeURIComponent(tzValue)}`, { cache: "no-store" })
-      .then((res) => res.json())
-      .then((data) => setSlots(Array.isArray(data?.slots) ? data.slots : []))
-      .catch(() => {});
+    void fetchSlotsForTimezone(tzValue).catch(() => {});
   };
 
   const cartTotal = useMemo(() => cart.reduce((s, i) => s + i.price * i.quantity, 0), [cart]);
   const cartCount = useMemo(() => cart.reduce((s, i) => s + i.quantity, 0), [cart]);
+  const slotDates = useMemo(() => {
+    const seen = new Set<string>();
+    return slots.filter((slot) => {
+      if (!slot.customerDateKey || seen.has(slot.customerDateKey)) return false;
+      seen.add(slot.customerDateKey);
+      return true;
+    }).map((slot) => ({
+      key: slot.customerDateKey,
+      label: slot.customerDateLabel || slot.customerDateKey,
+    }));
+  }, [slots]);
+  const visibleSlots = useMemo(
+    () => slots.filter((slot) => !selectedSlotDate || slot.customerDateKey === selectedSlotDate),
+    [selectedSlotDate, slots]
+  );
 
   const handleSearchChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value;
@@ -459,7 +547,6 @@ export default function ShopPage() {
 
   const doCheckout = async () => {
     if (!canAct()) return;
-    if (!user || !token) { setError("Login first"); return; }
     if (cart.length === 0 || submitting) return;
     if (checkoutInFlightRef.current) return;
     checkoutInFlightRef.current = true;
@@ -467,12 +554,16 @@ export default function ShopPage() {
     try {
       const res = await fetch("/api/shop/checkout", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ cartItems: cart.map((i) => ({ product: i._id, name: i.name, quantity: i.quantity, price: i.price })) }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Checkout failed");
       setOrderId(data.orderId);
+      persistPendingCheckout(data.orderId, cart, customerTz);
       setStep("roblox");
     } catch (e) { setError(e instanceof Error ? e.message : "Checkout failed"); }
     finally { setSubmitting(false); setCheckoutLoading(false); checkoutInFlightRef.current = false; }
@@ -496,7 +587,11 @@ export default function ShopPage() {
   };
 
   const linkRobloxUsername = async () => {
-    if (!robloxSearchResult || !orderId || !token) return;
+    if (!token) {
+      setError("Please login with Discord first.");
+      return;
+    }
+    if (!robloxSearchResult || !orderId) return;
     setSubmitting(true); setError(null);
     try {
       const payload = {
@@ -511,9 +606,7 @@ export default function ShopPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Link failed");
 
-      const sRes = await fetch(`/api/shop/delivery-slots?timezone=${encodeURIComponent(customerTz)}`, { cache: "no-store" });
-      const sData = await sRes.json();
-      setSlots(Array.isArray(sData?.slots) ? sData.slots : []);
+      await fetchSlotsForTimezone(customerTz);
       setStep("delivery");
     } catch (e) { setError(e instanceof Error ? e.message : "Link failed"); }
     finally { setSubmitting(false); }
@@ -551,6 +644,7 @@ export default function ShopPage() {
         ? `https://discord.com/channels/${data.guildId}/${data.channelId}`
         : data?.panelUrl || "";
       setTicketResult({ channelId: data.channelId, guildId: data.guildId, url: ticketUrl });
+      clearPendingCheckout();
       clearCartState();
       if (ticketUrl) window.location.href = ticketUrl;
     } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
@@ -568,6 +662,45 @@ export default function ShopPage() {
           <div className="flex flex-col items-center gap-3 rounded-[18px] border border-[#1E1E1E] bg-[#111111]/95 px-6 py-5 shadow-2xl animate-bounce-in">
             <Loader2 className="h-8 w-8 animate-spin text-[#2F9BE6]" />
             <p className="text-sm font-medium text-white">Processing checkout...</p>
+          </div>
+        </div>
+      )}
+
+      {showVisitorNotice && (
+        <div className="fixed inset-0 z-[180] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-md rounded-[20px] border border-[#1E1E1E] bg-[#111111] p-5 shadow-2xl animate-bounce-in">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-white">New here?</h2>
+                <p className="mt-2 text-sm leading-6 text-[#B5B5B5]">If you are new, please check our vouches before ordering.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowVisitorNotice(false)}
+                className="rounded-full bg-[#1E1E1E] p-2 text-white hover:bg-[#2A2A2A]"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowVisitorNotice(false);
+                  window.location.href = "/proofs";
+                }}
+                className="rounded-[14px] bg-[#2F9BE6] px-4 py-3 text-sm font-medium text-white primary-hover-glow"
+              >
+                View Proofs
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowVisitorNotice(false)}
+                className="rounded-[14px] bg-[#1E1E1E] px-4 py-3 text-sm font-medium text-white"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -681,6 +814,21 @@ export default function ShopPage() {
               </div>
               {step === "roblox" && (
                 <div className="space-y-4">
+                  <div className="rounded-[16px] border border-[#1E1E1E] bg-[#050505] p-4">
+                    <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold"><LogIn className="h-5 w-5" />Discord Login</h3>
+                    {token && user ? (
+                      <div className="rounded-[14px] border border-[#3DDC84]/25 bg-[#3DDC84]/10 px-4 py-3 text-sm text-[#3DDC84]">
+                        Logged in as {user.discordUsername}
+                      </div>
+                    ) : (
+                      <a
+                        href={getOAuthUrl("/shop")}
+                        className="block w-full rounded-[14px] bg-[#5865F2] py-3 text-center font-medium text-white transition-all hover:bg-[#6875ff]"
+                      >
+                        Login with Discord
+                      </a>
+                    )}
+                  </div>
                   {!robloxSearchResult ? (
                     <div className="space-y-4">
                       <h3 className="flex items-center gap-2 text-lg font-semibold"><User className="h-5 w-5" />Enter Roblox Username</h3>
@@ -736,10 +884,10 @@ export default function ShopPage() {
                         </button>
                         <button
                           onClick={() => void linkRobloxUsername()}
-                          disabled={submitting}
+                          disabled={submitting || !token}
                           className="rounded-[14px] bg-[#3DDC84] py-3 font-medium transition-colors hover:bg-[#3DDC84]/90 primary-hover-glow disabled:opacity-50"
                         >
-                          Confirm
+                          {token ? "Confirm" : "Login first"}
                         </button>
                       </div>
                     </div>
@@ -827,10 +975,32 @@ export default function ShopPage() {
                       })}
                     </div>
                   </div>
-                  <div className="space-y-2">{slots.length === 0 && <p className="text-sm text-[#B5B5B5]">No available delivery slots.</p>}
-                    {slots.map((s) => (
+                  <div className="space-y-3">
+                    {slotDates.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-xs uppercase tracking-wide text-[#B5B5B5]/80">Choose date</p>
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                          {slotDates.map((date) => (
+                            <button
+                              key={date.key}
+                              type="button"
+                              onClick={() => {
+                                setSelectedSlotDate(date.key);
+                                setPickedSlot(null);
+                              }}
+                              className={"rounded-[14px] border px-3 py-2 text-left text-sm transition-all " + (selectedSlotDate === date.key ? "border-[#2F9BE6] bg-[#49B6FF]/10 text-white" : "border-[#1E1E1E] bg-[#050505] text-[#B5B5B5] hover:border-[#2F9BE6]/40")}
+                            >
+                              {date.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {slots.length === 0 && <p className="text-sm text-[#B5B5B5]">No available delivery slots.</p>}
+                    {slots.length > 0 && visibleSlots.length === 0 && <p className="text-sm text-[#B5B5B5]">No available times for this date.</p>}
+                    {visibleSlots.map((s) => (
                       <button key={s.id} onClick={() => setPickedSlot(s.id)} className={"w-full rounded-[16px] border p-4 text-left transition-all " + (pickedSlot === s.id ? "border-[#2F9BE6] bg-[#49B6FF]/10" : "border-[#1E1E1E] bg-[#050505] hover:border-[#1E1E1E]")}>
-                        <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-[#2F9BE6]" /><span className="text-sm font-medium">Your time: {s.customerStartText} - {s.customerEndText}</span></div>
+                        <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-[#2F9BE6]" /><span className="text-sm font-medium">{s.customerTimeLabel || `${s.customerStartText} - ${s.customerEndText}`}</span></div>
                         {s.note && <p className="mt-1 pl-6 text-xs text-[#2F9BE6]">{formatSlotNote(s.note)}</p>}
                       </button>
                     ))}

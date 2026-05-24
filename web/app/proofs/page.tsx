@@ -17,6 +17,7 @@ import {
   Check,
   Copy,
   CheckCheck,
+  Upload,
 } from "lucide-react"
 import { formatPrice } from "@/lib/timezones"
 
@@ -57,6 +58,7 @@ export default function ProofsPage() {
   const [editingItems, setEditingItems] = useState<ProofItem[]>([])
   const [saving, setSaving] = useState(false)
   const [copiedProofId, setCopiedProofId] = useState<string | null>(null)
+  const [uploadingImage, setUploadingImage] = useState<string | null>(null)
 
   const fetchProofs = async (pageNum: number) => {
     setLoading(true)
@@ -202,6 +204,45 @@ export default function ProofsPage() {
     }
   }
 
+  const uploadProofImage = async (proofId: string, file: File | null, replaceIndex?: number) => {
+    if (!adminToken || !file) return
+    setUploadingImage(`${proofId}:${replaceIndex ?? "add"}`)
+    try {
+      const form = new FormData()
+      form.append("image", file)
+      if (replaceIndex !== undefined) form.append("replaceIndex", String(replaceIndex))
+      const res = await fetch(`/api/shop/proofs/${proofId}/images`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${adminToken}` },
+        body: form,
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || "Upload failed")
+      await fetchProofs(page)
+    } catch (error) {
+      console.error("Upload proof image failed:", error)
+    } finally {
+      setUploadingImage(null)
+    }
+  }
+
+  const deleteProofImage = async (proofId: string, imageIndex: number) => {
+    if (!adminToken || !confirm("Delete this proof image?")) return
+    setUploadingImage(`${proofId}:${imageIndex}`)
+    try {
+      const res = await fetch(`/api/shop/proofs/${proofId}/images/${imageIndex}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${adminToken}` },
+      })
+      if (!res.ok) throw new Error("Delete image failed")
+      await fetchProofs(page)
+    } catch (error) {
+      console.error("Delete proof image failed:", error)
+    } finally {
+      setUploadingImage(null)
+    }
+  }
+
   const copyRobloxName = async (proofId: string, robloxUsername?: string) => {
     if (!robloxUsername) return
     try {
@@ -310,19 +351,44 @@ export default function ProofsPage() {
                     {proof.imageUrls.length > 0 ? (
                       <div className={`mb-4 grid gap-2 ${getGalleryGridClass(proof.imageUrls.length)}`}>
                         {proof.imageUrls.slice(0, 2).map((url, imageIndex) => (
-                          <button
-                            key={imageIndex}
-                            type="button"
-                            onClick={() => openLightbox(idx, imageIndex)}
-                            className={`group relative overflow-hidden rounded-[14px] bg-[#161616]/60 ${getImageSpanClass(proof.imageUrls.length, imageIndex)}`}
-                          >
-                            <img
-                              src={url}
-                              alt={`Proof ${imageIndex + 1}`}
-                              className="h-auto max-h-[420px] w-full object-contain transition duration-200 group-hover:scale-[1.015] group-hover:opacity-90"
-                              loading="lazy"
-                            />
-                          </button>
+                          <div key={imageIndex} className={`group relative overflow-hidden rounded-[14px] bg-[#161616]/60 ${getImageSpanClass(proof.imageUrls.length, imageIndex)}`}>
+                            <button
+                              type="button"
+                              onClick={() => openLightbox(idx, imageIndex)}
+                              className="block w-full"
+                            >
+                              <img
+                                src={url}
+                                alt={`Proof ${imageIndex + 1}`}
+                                className="h-auto max-h-[420px] w-full object-contain transition duration-200 group-hover:scale-[1.015] group-hover:opacity-90"
+                                loading="lazy"
+                              />
+                            </button>
+                            {isAdmin && (
+                              <div className="absolute right-2 top-2 flex gap-1 opacity-100 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100">
+                                <label className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded bg-[#111111]/90 text-white hover:bg-[#2F9BE6]" title="Replace image">
+                                  {uploadingImage === `${proof.id}:${imageIndex}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                      void uploadProofImage(proof.id, e.target.files?.[0] || null, imageIndex)
+                                      e.currentTarget.value = ""
+                                    }}
+                                  />
+                                </label>
+                                <button
+                                  type="button"
+                                  onClick={() => void deleteProofImage(proof.id, imageIndex)}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded bg-[#111111]/90 text-white hover:bg-[#FF4D4F]"
+                                  title="Delete image"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         ))}
                       </div>
                     ) : (
@@ -372,6 +438,19 @@ export default function ProofsPage() {
 
                       {isAdmin && (
                         <div className="flex gap-1.5">
+                          <label className="inline-flex cursor-pointer items-center gap-1 rounded bg-[#1E1E1E] px-2 py-1.5 text-xs text-white transition-colors hover:bg-[#2F9BE6]" title="Add proof image">
+                            {uploadingImage === `${proof.id}:add` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                            Add
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                void uploadProofImage(proof.id, e.target.files?.[0] || null)
+                                e.currentTarget.value = ""
+                              }}
+                            />
+                          </label>
                           {isEditing ? (
                             <>
                               <button

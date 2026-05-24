@@ -15,7 +15,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (user: DiscordUser, token: string) => void;
   logout: () => void;
-  getOAuthUrl: () => string;
+  getOAuthUrl: (returnTo?: string) => string;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -56,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("discordToken");
   };
 
-  const getOAuthUrl = (): string => {
+  const getOAuthUrl = (returnTo?: string): string => {
     if (typeof window === "undefined") return "";
     const clientId = String(process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID || "").trim();
     const redirectUri =
@@ -71,6 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       response_type: "code",
       scope: "identify guilds.join",
     });
+    if (returnTo) params.set("state", encodeURIComponent(returnTo));
     return `https://discord.com/oauth2/authorize?${params.toString()}`;
   };
 

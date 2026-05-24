@@ -11,6 +11,7 @@ const Proof = require('../models/Proof');
 const ProofImage = require('../models/ProofImage');
 const WalletTransaction = require('../models/WalletTransaction');
 const DeliverySlot = require('../models/DeliverySlot');
+const VisitorNotice = require('../models/VisitorNotice');
 const Game = require('../models/Game');
 const ShopConfig = require('../models/ShopConfig');
 const {
@@ -80,6 +81,18 @@ const uploadProductImage = multer({
     storage: productImageStorage,
     fileFilter: productImageFilter,
     limits: { fileSize: PRODUCT_IMAGE_MAX_SIZE }
+});
+const uploadProofImage = multer({
+    storage: multer.memoryStorage(),
+    fileFilter: (req, file, cb) => {
+        const contentType = String(file.mimetype || '').toLowerCase();
+        const ext = path.extname(file.originalname || '').toLowerCase();
+        if (contentType.startsWith('image/') || PROOF_IMAGE_EXTENSIONS.includes(ext)) {
+            return cb(null, true);
+        }
+        return cb(new Error('Only image files are allowed.'), false);
+    },
+    limits: { fileSize: 8 * 1024 * 1024 }
 });
 
 
@@ -445,6 +458,15 @@ const getDiscordErrorMessage = (data) => {
     if (typeof data === 'string') return data.slice(0, 200);
     return data.error_description || data.message || data.error || '';
 };
+
+const normalizeProofImageUrls = (imageUrls) => Array.from(
+    new Set(
+        (Array.isArray(imageUrls) ? imageUrls : [])
+            .map((value) => String(value || '').trim())
+            .filter((value) => /^https?:\/\//i.test(value) || /^proof-image:\/\//i.test(value))
+            .slice(0, 12)
+    )
+);
 
 const normalizeRetryAfterToSeconds = (value) => {
     const n = Number(value);
@@ -1722,6 +1744,8 @@ router.delete('/proofs/:proofId', authRequired, async (req, res) => {
             return res.status(404).json({ error: 'Proof not found' });
         }
 
+        await ProofImage.deleteMany({ proofId });
+
         return res.json({ success: true, id: proofId });
     } catch (error) {
         console.error('Delete proof error:', error);
@@ -1762,9 +1786,18 @@ router.patch('/proofs/:proofId', authRequired, async (req, res) => {
         }
 
         const totalAmount = cleanItems.reduce((sum, item) => sum + item.lineTotal, 0);
+        const nextImageUrls = req.body?.imageUrls === undefined
+            ? undefined
+            : normalizeProofImageUrls(req.body.imageUrls);
         const updated = await Proof.findByIdAndUpdate(
             proofId,
-            { $set: { items: cleanItems, totalAmount } },
+            {
+                $set: {
+                    items: cleanItems,
+                    totalAmount,
+                    ...(nextImageUrls ? { imageUrls: nextImageUrls } : {})
+                }
+            },
             { new: true }
         ).lean();
 
@@ -1772,18 +1805,141 @@ router.patch('/proofs/:proofId', authRequired, async (req, res) => {
             return res.status(404).json({ error: 'Proof not found' });
         }
 
+        if (nextImageUrls) {
+            const maxPosition = Math.max(nextImageUrls.length - 1, -1);
+            await ProofImage.deleteMany({
+                proofId,
+                position: { $gt: maxPosition }
+            });
+        }
+
         return res.json({
             success: true,
             proof: {
                 id: String(updated._id || ''),
-                robloxUsername: String(proof?.robloxUsername || ''),
+                robloxUsername: String(updated.robloxUsername || ''),
                 totalAmount: Number(updated.totalAmount || 0),
-                items: Array.isArray(updated.items) ? updated.items : []
+                items: Array.isArray(updated.items) ? updated.items : [],
+                imageUrls: (Array.isArray(updated.imageUrls) ? updated.imageUrls : [])
+                    .map((_, index) => `/api/shop/proofs/${encodeURIComponent(String(updated._id || ''))}/images/${index}`)
             }
         });
     } catch (error) {
         console.error('Edit proof error:', error);
         return res.status(500).json({ error: 'Failed to edit proof' });
+    }
+});
+
+router.post('/proofs/:proofId/images', authRequired, uploadProofImage.single('image'), async (req, res) => {
+    try {
+        const discordId = String(req.user?.discordId || '').trim();
+        if (!discordId) return res.status(401).json({ error: 'Authentication required' });
+        const canEdit = await canAccessOwnerEndpoints(discordId);
+        if (!canEdit) return res.status(403).json({ error: 'Forbidden' });
+
+        const proofId = String(req.params?.proofId || '').trim();
+        if (!OBJECT_ID_PATTERN.test(proofId)) {
+            return res.status(400).json({ error: 'Invalid proof id' });
+        }
+        if (!req.file?.buffer?.length) {
+            return res.status(400).json({ error: 'Image file is required.' });
+        }
+
+        const proof = await Proof.findById(proofId);
+        if (!proof) return res.status(404).json({ error: 'Proof not found' });
+
+        const replaceIndex = Number(req.body?.replaceIndex);
+        const nextImageUrls = normalizeProofImageUrls(proof.imageUrls);
+        const targetPosition = Number.isInteger(replaceIndex) && replaceIndex >= 0 && replaceIndex < nextImageUrls.length
+            ? replaceIndex
+            : nextImageUrls.length;
+        let imageUrl = '';
+
+        try {
+            imageUrl = await uploadToImgbb(req.file.buffer, req.file.originalname || `proof_${proofId}.jpg`);
+            await ProofImage.deleteOne({ proofId, position: targetPosition });
+        } catch (uploadError) {
+            console.warn('ImgBB upload unavailable, storing proof image in MongoDB:', uploadError?.message || uploadError);
+            imageUrl = `proof-image://${proofId}/${targetPosition}/${Date.now()}`;
+            await ProofImage.findOneAndUpdate(
+                { proofId, position: targetPosition },
+                {
+                    $set: {
+                        orderId: String(proof.orderId || ''),
+                        contentType: normalizeProofImageContentType(req.file.mimetype),
+                        data: req.file.buffer,
+                        sourceUrl: imageUrl,
+                        updatedAt: new Date()
+                    },
+                    $setOnInsert: { createdAt: new Date() }
+                },
+                { upsert: true }
+            );
+        }
+
+        if (targetPosition < nextImageUrls.length) {
+            nextImageUrls[targetPosition] = imageUrl;
+        } else {
+            nextImageUrls.push(imageUrl);
+        }
+
+        proof.imageUrls = normalizeProofImageUrls(nextImageUrls);
+        await proof.save();
+
+        return res.json({
+            success: true,
+            imageUrls: proof.imageUrls.map((_, index) => `/api/shop/proofs/${encodeURIComponent(proofId)}/images/${index}`)
+        });
+    } catch (error) {
+        console.error('Upload proof image error:', error);
+        return res.status(500).json({ error: error.message || 'Failed to upload proof image' });
+    }
+});
+
+router.delete('/proofs/:proofId/images/:imageIndex', authRequired, async (req, res) => {
+    try {
+        const discordId = String(req.user?.discordId || '').trim();
+        if (!discordId) return res.status(401).json({ error: 'Authentication required' });
+        const canEdit = await canAccessOwnerEndpoints(discordId);
+        if (!canEdit) return res.status(403).json({ error: 'Forbidden' });
+
+        const proofId = String(req.params?.proofId || '').trim();
+        const imageIndex = Math.floor(Number(req.params?.imageIndex));
+        if (!OBJECT_ID_PATTERN.test(proofId) || !Number.isInteger(imageIndex) || imageIndex < 0) {
+            return res.status(400).json({ error: 'Invalid proof image id' });
+        }
+
+        const proof = await Proof.findById(proofId);
+        if (!proof) return res.status(404).json({ error: 'Proof not found' });
+
+        const nextImageUrls = normalizeProofImageUrls(proof.imageUrls);
+        if (imageIndex >= nextImageUrls.length) {
+            return res.status(404).json({ error: 'Proof image not found' });
+        }
+
+        nextImageUrls.splice(imageIndex, 1);
+        proof.imageUrls = nextImageUrls;
+        await proof.save();
+        await ProofImage.deleteOne({ proofId, position: imageIndex });
+        const imagesToShift = await ProofImage.find({ proofId, position: { $gt: imageIndex } })
+            .sort({ position: 1 });
+        for (const image of imagesToShift) {
+            image.position += 1000;
+            await image.save();
+        }
+        for (const image of imagesToShift) {
+            image.position -= 1001;
+            image.updatedAt = new Date();
+            await image.save();
+        }
+
+        return res.json({
+            success: true,
+            imageUrls: proof.imageUrls.map((_, index) => `/api/shop/proofs/${encodeURIComponent(proofId)}/images/${index}`)
+        });
+    } catch (error) {
+        console.error('Delete proof image error:', error);
+        return res.status(500).json({ error: 'Failed to delete proof image' });
     }
 });
 
@@ -2803,16 +2959,23 @@ router.get('/bot-status', async (req, res) => {
 
 const toDeliverySlotPayload = (slot, timezone = '') => {
     const customerTimezone = String(timezone || '').trim() || String(slot?.ownerTimezone || 'UTC');
+    const startAt = slot?.startAt || null;
+    const endAt = slot?.endAt || null;
     return {
         id: String(slot?._id || ''),
         ownerTimezone: String(slot?.ownerTimezone || ''),
         customerTimezone,
-        startAt: slot?.startAt || null,
-        endAt: slot?.endAt || null,
-        ownerStartText: formatDateInTimezone(slot?.startAt, slot?.ownerTimezone),
-        ownerEndText: formatDateInTimezone(slot?.endAt, slot?.ownerTimezone),
-        customerStartText: formatDateInTimezone(slot?.startAt, customerTimezone),
-        customerEndText: formatDateInTimezone(slot?.endAt, customerTimezone),
+        startAt,
+        endAt,
+        ownerStartText: formatDateInTimezone(startAt, slot?.ownerTimezone),
+        ownerEndText: formatDateInTimezone(endAt, slot?.ownerTimezone),
+        customerStartText: formatDateInTimezone(startAt, customerTimezone),
+        customerEndText: formatDateInTimezone(endAt, customerTimezone),
+        ownerDateKey: formatDateKeyInTimezone(startAt, slot?.ownerTimezone),
+        customerDateKey: formatDateKeyInTimezone(startAt, customerTimezone),
+        ownerDateLabel: formatDateLabelInTimezone(startAt, slot?.ownerTimezone),
+        customerDateLabel: formatDateLabelInTimezone(startAt, customerTimezone),
+        customerTimeLabel: formatTimeRangeInTimezone(startAt, endAt, customerTimezone),
         note: String(slot?.note || '')
     };
 };
@@ -2827,6 +2990,48 @@ const formatDateInTimezone = (value, timezone) => {
         }).format(new Date(value));
     } catch {
         return new Date(value).toISOString();
+    }
+};
+
+const formatDateKeyInTimezone = (value, timezone) => {
+    if (!value) return '';
+    try {
+        return new Intl.DateTimeFormat('en-CA', {
+            timeZone: String(timezone || 'UTC'),
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        }).format(new Date(value));
+    } catch {
+        return '';
+    }
+};
+
+const formatDateLabelInTimezone = (value, timezone) => {
+    if (!value) return '';
+    try {
+        return new Intl.DateTimeFormat('en-US', {
+            timeZone: String(timezone || 'UTC'),
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric'
+        }).format(new Date(value));
+    } catch {
+        return '';
+    }
+};
+
+const formatTimeRangeInTimezone = (startValue, endValue, timezone) => {
+    if (!startValue || !endValue) return '';
+    try {
+        const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: String(timezone || 'UTC'),
+            hour: 'numeric',
+            minute: '2-digit'
+        });
+        return `${formatter.format(new Date(startValue))} - ${formatter.format(new Date(endValue))}`;
+    } catch {
+        return '';
     }
 };
 
@@ -2951,6 +3156,26 @@ router.get('/delivery-slots', async (req, res) => {
     } catch (error) {
         console.error('Delivery slots fetch error:', error);
         return res.status(500).json({ error: 'Could not load delivery slots.' });
+    }
+});
+
+router.post('/visitor-notice', async (req, res) => {
+    try {
+        const rawIp = String(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || '')
+            .split(',')[0]
+            .trim();
+        const normalizedIp = rawIp || 'unknown';
+        const ipHash = crypto
+            .createHash('sha256')
+            .update(`${process.env.VISITOR_NOTICE_SALT || 'shoptay'}:${normalizedIp}`)
+            .digest('hex');
+        const existing = await VisitorNotice.findOne({ ipHash }).lean();
+        if (existing) return res.json({ show: false });
+        await VisitorNotice.create({ ipHash });
+        return res.json({ show: true });
+    } catch (error) {
+        console.error('Visitor notice error:', error);
+        return res.status(500).json({ error: 'Could not check visitor notice.' });
     }
 });
 

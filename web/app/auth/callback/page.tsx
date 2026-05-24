@@ -15,6 +15,7 @@ function AuthCallbackContent() {
   useEffect(() => {
     const handleAuth = async () => {
       const code = searchParams.get("code");
+      const state = searchParams.get("state");
       const oauthError = searchParams.get("error");
 
       if (oauthError) {
@@ -56,7 +57,8 @@ function AuthCallbackContent() {
 
         login(user, token);
         setStatus("Success! Redirecting...");
-        setTimeout(() => router.push("/"), 500);
+        const returnTo = state ? decodeURIComponent(state) : "/";
+        setTimeout(() => router.push(returnTo.startsWith("/") ? returnTo : "/"), 500);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Unknown error";
         setStatus("Discord login failed");

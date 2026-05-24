@@ -54,6 +54,17 @@ const buildPublicDeliverySlotQuery = (now = new Date()) => ({
     endAt: { $gte: now }
 });
 
+const isFutureDeliverySlotRange = ({ startAt, endAt }, now = new Date()) => {
+    const start = new Date(startAt);
+    const end = new Date(endAt);
+    const cutoff = new Date(now);
+    return Number.isFinite(start.getTime())
+        && Number.isFinite(end.getTime())
+        && Number.isFinite(cutoff.getTime())
+        && end > start
+        && end > cutoff;
+};
+
 const OBJECT_ID_PATTERN = /^[a-fA-F0-9]{24}$/;
 
 const normalizeDeliverySlotId = (value) => {
@@ -134,6 +145,7 @@ const splitSlotForTimezone = ({ id, startAt, endAt, timezone }) => {
 
 module.exports = {
     buildPublicDeliverySlotQuery,
+    isFutureDeliverySlotRange,
     normalizeDeliverySlotId,
     parseLocalDateTimeInZone,
     splitSlotForTimezone

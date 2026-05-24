@@ -56,6 +56,7 @@ const { buildCashAppPaymentInstructions } = require('../utils/paymentMethods');
 const { buildOrderPaymentInfoPayload, isPublicOrderAccessible } = require('../utils/orderPaymentInfo');
 const {
     buildPublicDeliverySlotQuery,
+    isFutureDeliverySlotRange,
     normalizeDeliverySlotId,
     parseLocalDateTimeInZone: parseDeliverySlotLocalDateTimeInZone,
     splitSlotForTimezone
@@ -4216,13 +4217,14 @@ router.post('/delivery-slots/bulk', authRequired, async (req, res) => {
         const dateStr = String(date).trim();
         const tz = String(ownerTimezone).trim();
         const created = [];
+        const now = new Date();
         for (const range of ranges) {
             const { startTime, endTime, note } = range || {};
             if (!startTime || !endTime) continue;
 
             const startAt = parseDeliverySlotLocalDateTimeInZone(dateStr, startTime, tz);
             const endAt = parseDeliverySlotLocalDateTimeInZone(dateStr, endTime, tz);
-            if (!Number.isFinite(startAt.getTime()) || !Number.isFinite(endAt.getTime()) || endAt <= startAt) continue;
+            if (!isFutureDeliverySlotRange({ startAt, endAt }, now)) continue;
 
             const slot = await DeliverySlot.create({
                 ownerDiscordId,
@@ -4232,6 +4234,10 @@ router.post('/delivery-slots/bulk', authRequired, async (req, res) => {
                 note: String(note || '').trim().slice(0, 500)
             });
             created.push(toDeliverySlotPayload(slot, tz));
+        }
+
+        if (created.length === 0) {
+            return res.status(400).json({ error: 'No valid future delivery slots were created.' });
         }
 
         return res.json({ slots: created });

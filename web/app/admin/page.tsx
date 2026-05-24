@@ -25,11 +25,9 @@ function toVietnamDateTimeParts(iso: string): { date: string; time: string } {
 }
 
 function toVietnamIso(date: string, time: string): string {
-  return new Date(`${date}T${time}:00+07:00`).toISOString();
-}
-
-function todayInVietnam(): string {
-  return toVietnamDateTimeParts(new Date().toISOString()).date;
+  const [year, month, day] = date.split("-").map(Number);
+  const [hour, minute] = time.split(":").map(Number);
+  return new Date(Date.UTC(year, month - 1, day, hour - 7, minute, 0, 0)).toISOString();
 }
 
 function formatDateTime(value?: string | null): string {
@@ -90,6 +88,40 @@ function hourToMinutes(value: string): number {
   return hour * 60 + minute;
 }
 
+function getNextVietnamHourlySlot(now = new Date()): { date: string; month: string; startTime: string; endTime: string } {
+  const vietnam = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+  const minute = vietnam.getUTCMinutes();
+  const second = vietnam.getUTCSeconds();
+  const ms = vietnam.getUTCMilliseconds();
+  const startHour = vietnam.getUTCHours() + (minute > 0 || second > 0 || ms > 0 ? 1 : 0);
+  const start = new Date(Date.UTC(
+    vietnam.getUTCFullYear(),
+    vietnam.getUTCMonth(),
+    vietnam.getUTCDate(),
+    startHour,
+    0,
+    0,
+    0
+  ));
+  const end = new Date(Date.UTC(
+    start.getUTCFullYear(),
+    start.getUTCMonth(),
+    start.getUTCDate(),
+    start.getUTCHours() + 1,
+    0,
+    0,
+    0
+  ));
+  const date = `${start.getUTCFullYear()}-${String(start.getUTCMonth() + 1).padStart(2, "0")}-${String(start.getUTCDate()).padStart(2, "0")}`;
+  const endTime = end.getUTCDate() !== start.getUTCDate() ? "24:00" : `${String(end.getUTCHours()).padStart(2, "0")}:00`;
+  return {
+    date,
+    month: date.slice(0, 7),
+    startTime: `${String(start.getUTCHours()).padStart(2, "0")}:00`,
+    endTime,
+  };
+}
+
 export default function AdminPage() {
   const { user, token, isLoading, getOAuthUrl } = useAuth();
   const [tab, setTab] = useState<"sản phẩm" | "khung giờ" | "game" | "cấu hình" | "liên kết">("sản phẩm");
@@ -111,12 +143,13 @@ export default function AdminPage() {
   const [gameForm, setGameForm] = useState({ name: "", slug: "", image: "", active: true });
 
   /* --- slots state --- */
+  const initialSlot = useMemo(() => getNextVietnamHourlySlot(), []);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
-  const [slotDate, setSlotDate] = useState(todayInVietnam());
-  const [slotMonth, setSlotMonth] = useState(todayInVietnam().slice(0, 7));
-  const [slotStartTime, setSlotStartTime] = useState("09:00");
-  const [slotEndTime, setSlotEndTime] = useState("10:00");
+  const [slotDate, setSlotDate] = useState(initialSlot.date);
+  const [slotMonth, setSlotMonth] = useState(initialSlot.month);
+  const [slotStartTime, setSlotStartTime] = useState(initialSlot.startTime);
+  const [slotEndTime, setSlotEndTime] = useState(initialSlot.endTime);
   const [slotNote, setSlotNote] = useState("");
   const [editingSlot, setEditingSlot] = useState<string | null>(null);
   const [slotEditForm, setSlotEditForm] = useState({ date: "", startTime: "", endTime: "", note: "", active: true });
@@ -303,6 +336,10 @@ export default function AdminPage() {
     if (!token || !slotDate) return;
     if (hourToMinutes(slotEndTime) <= hourToMinutes(slotStartTime)) {
       setError("Gio ket thuc phai sau gio bat dau");
+      return;
+    }
+    if (new Date(toVietnamIso(slotDate, slotEndTime)) <= new Date()) {
+      setError("Khung gio nay da qua. Hay chon gio trong tuong lai.");
       return;
     }
     setSubmitting(true); setError(null);

@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 const {
     buildPublicDeliverySlotQuery,
+    isFutureDeliverySlotRange,
     normalizeDeliverySlotId,
     parseLocalDateTimeInZone,
     splitSlotForTimezone
@@ -23,6 +24,19 @@ test('buildPublicDeliverySlotQuery returns all active future slots without owner
         endAt: { $gte: now }
     });
     assert.equal(Object.hasOwn(query, 'ownerDiscordId'), false);
+});
+
+test('isFutureDeliverySlotRange rejects slots whose end time has already passed', () => {
+    const now = new Date('2026-05-24T16:45:00.000Z');
+
+    assert.equal(isFutureDeliverySlotRange({
+        startAt: new Date('2026-05-24T02:00:00.000Z'),
+        endAt: new Date('2026-05-24T03:00:00.000Z')
+    }, now), false);
+    assert.equal(isFutureDeliverySlotRange({
+        startAt: new Date('2026-05-24T17:00:00.000Z'),
+        endAt: new Date('2026-05-24T18:00:00.000Z')
+    }, now), true);
 });
 
 test('normalizeDeliverySlotId accepts customer segment ids from the calendar UI', () => {

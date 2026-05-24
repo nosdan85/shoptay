@@ -799,7 +799,7 @@ export default function ShopPage() {
 
         {step !== "shop" && (
           <div className="mx-auto max-w-2xl space-y-6 animate-page-enter">
-            <button onClick={() => setStep("shop")} className="flex items-center gap-2 text-sm text-[#B5B5B5] hover:text-white transition-colors">
+            <button onClick={() => (() => { setStep("shop"); setOrderId(null); clearPendingCheckout(); })()} className="flex items-center gap-2 text-sm text-[#B5B5B5] hover:text-white transition-colors">
               <ArrowLeft className="h-4 w-4" /> Back to Shop
             </button>
             <div className="flex gap-2">{(["roblox", "delivery", "ticket"] as const).map((s) => (
@@ -1016,7 +1016,7 @@ export default function ShopPage() {
                   ) : (
                     <div className="space-y-3">
                       <div className="flex items-center gap-2 rounded-[16px] border border-[#3DDC84]/30 bg-[#3DDC84]/10 p-4"><CheckCircle2 className="h-5 w-5 text-[#3DDC84]" /><span className="text-sm">Ticket created!</span></div>
-                      <button onClick={() => { setStep("shop"); clearCartState(); setOrderId(null); setRobloxUsernameInput(""); setPickedSlot(null); setTicketResult(null); }} className="w-full rounded-[14px] bg-[#161616] py-3 text-sm">Continue Shopping</button>
+                      <button onClick={() => { (() => { setStep("shop"); setOrderId(null); clearPendingCheckout(); })(); clearCartState(); setOrderId(null); setRobloxUsernameInput(""); setPickedSlot(null); setTicketResult(null); }} className="w-full rounded-[14px] bg-[#161616] py-3 text-sm">Continue Shopping</button>
                     </div>
                   )}
                 </div>
@@ -1157,6 +1157,7 @@ export default function ShopPage() {
     </div>
   );
 }
+
 
 
 

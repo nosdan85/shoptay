@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
@@ -54,6 +54,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null);
     localStorage.removeItem("discordUser");
     localStorage.removeItem("discordToken");
+    if (typeof window !== "undefined") {
+      window.sessionStorage.removeItem("pendingCheckout");
+      window.localStorage.removeItem("pendingRoblox");
+    }
   };
 
   const getOAuthUrl = (returnTo?: string): string => {
@@ -89,3 +93,4 @@ export function useAuth() {
   }
   return context;
 }
+

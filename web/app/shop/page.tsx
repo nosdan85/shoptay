@@ -20,6 +20,9 @@ import {
   ChevronRight,
   ArrowLeft,
   ChevronDown,
+  Copy,
+  CreditCard,
+  QrCode,
 } from "lucide-react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
@@ -92,18 +95,56 @@ interface Slot {
   customerDateKey: string;
   customerDateLabel: string;
   customerTimeLabel: string;
+  customerSegments?: SlotSegment[];
   startAt: string;
   endAt: string;
   note?: string;
+}
+interface SlotSegment {
+  id: string;
+  slotId: string;
+  customerDateKey: string;
+  customerDateLabel: string;
+  customerTimeLabel: string;
 }
 interface Purchase { username: string; items: string; price?: number }
 interface TicketResult { channelId: string; guildId?: string; url?: string }
 
 type Step = "shop" | "roblox" | "delivery" | "ticket";
 type PriceSort = "none" | "low-high" | "high-low";
+type PaymentGuide = "paypal_ff" | "ltc";
 
 const BEST_SELLERS_PER_PAGE = 4;
 const PENDING_CHECKOUT_KEY = "pendingCheckout";
+const PAYPAL_EMAIL = "nguyenquanghuy111106@gmail.com";
+const LTC_ADDRESS = "ltc1ququ7e6ryccpnu7jgy0l4vukgc3mventxyulyge";
+const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function getMonthLabel(monthKey: string): string {
+  const [year, month] = monthKey.split("-").map(Number);
+  return new Date(year, month - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}
+
+function addMonths(monthKey: string, delta: number): string {
+  const [year, month] = monthKey.split("-").map(Number);
+  const next = new Date(year, month - 1 + delta, 1);
+  return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function buildCalendarDays(monthKey: string): Array<{ key: string; day: number; inMonth: boolean }> {
+  const [year, month] = monthKey.split("-").map(Number);
+  const first = new Date(year, month - 1, 1);
+  const start = new Date(year, month - 1, 1 - first.getDay());
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    return {
+      key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`,
+      day: date.getDate(),
+      inMonth: date.getMonth() === month - 1,
+    };
+  });
+}
 
 const ProductCard = memo(function ProductCard({
   product,
@@ -215,8 +256,11 @@ export default function ShopPage() {
   const [expandedCountry, setExpandedCountry] = useState<string | null>(null);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [selectedSlotDate, setSelectedSlotDate] = useState("");
+  const [deliveryMonth, setDeliveryMonth] = useState("");
   const [pickedSlot, setPickedSlot] = useState<string | null>(null);
   const [ticketResult, setTicketResult] = useState<TicketResult | null>(null);
+  const [selectedPaymentGuide, setSelectedPaymentGuide] = useState<PaymentGuide>("paypal_ff");
+  const [copiedPaymentValue, setCopiedPaymentValue] = useState<string | null>(null);
   const [showVisitorNotice, setShowVisitorNotice] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -471,8 +515,10 @@ export default function ShopPage() {
     setSlots(nextSlots);
     setPickedSlot(null);
     setSelectedSlotDate((current) => {
-      if (current && nextSlots.some((slot: Slot) => slot.customerDateKey === current)) return current;
-      return String(nextSlots[0]?.customerDateKey || "");
+      if (current && nextSlots.some((slot: Slot) => slot.customerDateKey === current || slot.customerSegments?.some((segment) => segment.customerDateKey === current))) return current;
+      const firstDate = String(nextSlots[0]?.customerSegments?.[0]?.customerDateKey || nextSlots[0]?.customerDateKey || "");
+      if (firstDate) setDeliveryMonth(firstDate.slice(0, 7));
+      return firstDate;
     });
     return nextSlots;
   }, []);
@@ -486,20 +532,40 @@ export default function ShopPage() {
 
   const cartTotal = useMemo(() => cart.reduce((s, i) => s + i.price * i.quantity, 0), [cart]);
   const cartCount = useMemo(() => cart.reduce((s, i) => s + i.quantity, 0), [cart]);
+  const slotSegments = useMemo(() => {
+    return slots.flatMap((slot) => {
+      const segments = Array.isArray(slot.customerSegments) && slot.customerSegments.length > 0
+        ? slot.customerSegments
+        : [{
+            id: `${slot.id}:${slot.customerDateKey}:0`,
+            slotId: slot.id,
+            customerDateKey: slot.customerDateKey,
+            customerDateLabel: slot.customerDateLabel,
+            customerTimeLabel: slot.customerTimeLabel || `${slot.customerStartText} - ${slot.customerEndText}`,
+          }];
+      return segments.map((segment) => ({
+        ...segment,
+        note: slot.note,
+      }));
+    });
+  }, [slots]);
+
   const slotDates = useMemo(() => {
     const seen = new Set<string>();
-    return slots.filter((slot) => {
-      if (!slot.customerDateKey || seen.has(slot.customerDateKey)) return false;
-      seen.add(slot.customerDateKey);
+    return slotSegments.filter((segment) => {
+      if (!segment.customerDateKey || seen.has(segment.customerDateKey)) return false;
+      seen.add(segment.customerDateKey);
       return true;
-    }).map((slot) => ({
-      key: slot.customerDateKey,
-      label: slot.customerDateLabel || slot.customerDateKey,
+    }).map((segment) => ({
+      key: segment.customerDateKey,
+      label: segment.customerDateLabel || segment.customerDateKey,
     }));
-  }, [slots]);
-  const visibleSlots = useMemo(
-    () => slots.filter((slot) => !selectedSlotDate || slot.customerDateKey === selectedSlotDate),
-    [selectedSlotDate, slots]
+  }, [slotSegments]);
+  const slotDateSet = useMemo(() => new Set(slotDates.map((date) => date.key)), [slotDates]);
+  const deliveryCalendarDays = useMemo(() => buildCalendarDays(deliveryMonth || selectedSlotDate.slice(0, 7) || new Date().toISOString().slice(0, 7)), [deliveryMonth, selectedSlotDate]);
+  const visibleSlotSegments = useMemo(
+    () => slotSegments.filter((segment) => !selectedSlotDate || segment.customerDateKey === selectedSlotDate),
+    [selectedSlotDate, slotSegments]
   );
 
   const handleSearchChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
@@ -659,16 +725,24 @@ export default function ShopPage() {
     finally { setSubmitting(false); }
   };
 
-  const createTicket = async () => {
+  const copyPaymentValue = async (value: string) => {
+    if (!value) return;
+    await navigator.clipboard.writeText(value);
+    setCopiedPaymentValue(value);
+    window.setTimeout(() => setCopiedPaymentValue((current) => current === value ? null : current), 1600);
+  };
+
+  const createTicket = async (method: PaymentGuide = selectedPaymentGuide) => {
     if (!canAct()) return;
     if (!orderId || !token || submitting) return;
     if (ticketInFlightRef.current) return;
+    const action = method === "ltc" ? "create-ticket-ltc" : "create-ticket-paypal-ff";
     ticketInFlightRef.current = true;
     setSubmitting(true); setError(null);
     try {
-      const res = await fetch(`/api/shop/orders/${orderId}?action=create-ticket`, {
+      const res = await fetch(`/api/shop/orders/${orderId}?action=${action}`, {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ orderId }),
+        body: JSON.stringify({ orderId, method }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed");
@@ -1010,30 +1084,53 @@ export default function ShopPage() {
                   </div>
                   <div className="space-y-3">
                     {slotDates.length > 0 && (
-                      <div className="space-y-2">
-                        <p className="text-xs uppercase tracking-wide text-[#B5B5B5]/80">Choose date</p>
-                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                          {slotDates.map((date) => (
-                            <button
-                              key={date.key}
-                              type="button"
-                              onClick={() => {
-                                setSelectedSlotDate(date.key);
-                                setPickedSlot(null);
-                              }}
-                              className={"rounded-[14px] border px-3 py-2 text-left text-sm transition-all " + (selectedSlotDate === date.key ? "border-[#2F9BE6] bg-[#49B6FF]/10 text-white" : "border-[#1E1E1E] bg-[#050505] text-[#B5B5B5] hover:border-[#2F9BE6]/40")}
-                            >
-                              {date.label}
-                            </button>
-                          ))}
+                      <div className="space-y-3 rounded-[16px] border border-[#1E1E1E] bg-[#050505] p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <button type="button" onClick={() => setDeliveryMonth((current) => addMonths(current || selectedSlotDate.slice(0, 7), -1))} className="rounded-[12px] bg-[#111111] p-2 text-[#B5B5B5] hover:text-white">
+                            <ChevronLeft className="h-4 w-4" />
+                          </button>
+                          <p className="text-sm font-semibold text-white">{getMonthLabel(deliveryMonth || selectedSlotDate.slice(0, 7))}</p>
+                          <button type="button" onClick={() => setDeliveryMonth((current) => addMonths(current || selectedSlotDate.slice(0, 7), 1))} className="rounded-[12px] bg-[#111111] p-2 text-[#B5B5B5] hover:text-white">
+                            <ChevronRight className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-medium text-[#B5B5B5]/70">
+                          {WEEKDAY_LABELS.map((day) => <div key={day}>{day}</div>)}
+                        </div>
+                        <div className="grid grid-cols-7 gap-1">
+                          {deliveryCalendarDays.map((day) => {
+                            const hasSlots = slotDateSet.has(day.key);
+                            return (
+                              <button
+                                key={day.key}
+                                type="button"
+                                onClick={() => {
+                                  if (!hasSlots) return;
+                                  setSelectedSlotDate(day.key);
+                                  setPickedSlot(null);
+                                }}
+                                disabled={!hasSlots}
+                                className={"relative h-10 rounded-[12px] text-sm font-medium transition-all " + (selectedSlotDate === day.key
+                                  ? "bg-[#2F9BE6] text-white"
+                                  : hasSlots
+                                    ? "bg-[#111111] text-white hover:bg-[#1E1E1E]"
+                                    : day.inMonth
+                                      ? "bg-transparent text-[#B5B5B5]/35"
+                                      : "bg-transparent text-[#B5B5B5]/20")}
+                              >
+                                {day.day}
+                                {hasSlots && selectedSlotDate !== day.key && <span className="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-[#3DDC84]" />}
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
                     {slots.length === 0 && <p className="text-sm text-[#B5B5B5]">No available delivery slots.</p>}
-                    {slots.length > 0 && visibleSlots.length === 0 && <p className="text-sm text-[#B5B5B5]">No available times for this date.</p>}
-                    {visibleSlots.map((s) => (
-                      <button key={s.id} onClick={() => setPickedSlot(s.id)} className={"w-full rounded-[16px] border p-4 text-left transition-all " + (pickedSlot === s.id ? "border-[#2F9BE6] bg-[#49B6FF]/10" : "border-[#1E1E1E] bg-[#050505] hover:border-[#1E1E1E]")}>
-                        <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-[#2F9BE6]" /><span className="text-sm font-medium">{s.customerTimeLabel || `${s.customerStartText} - ${s.customerEndText}`}</span></div>
+                    {slotSegments.length > 0 && visibleSlotSegments.length === 0 && <p className="text-sm text-[#B5B5B5]">No available times for this date.</p>}
+                    {visibleSlotSegments.map((s) => (
+                      <button key={s.id} onClick={() => setPickedSlot(s.slotId)} className={"w-full rounded-[16px] border p-4 text-left transition-all " + (pickedSlot === s.slotId ? "border-[#2F9BE6] bg-[#49B6FF]/10" : "border-[#1E1E1E] bg-[#050505] hover:border-[#1E1E1E]")}>
+                        <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-[#2F9BE6]" /><span className="text-sm font-medium">{s.customerTimeLabel}</span></div>
                         {s.note && <p className="mt-1 pl-6 text-xs text-[#2F9BE6]">{formatSlotNote(s.note)}</p>}
                       </button>
                     ))}
@@ -1043,9 +1140,88 @@ export default function ShopPage() {
               )}
               {step === "ticket" && (
                 <div className="space-y-4">
-                  <h3 className="text-lg font-semibold">Create Discord Ticket</h3>
+                  <h3 className="text-lg font-semibold">Select Payment Method</h3>
                   {!ticketResult ? (
-                    <button onClick={() => void createTicket()} disabled={submitting} className="w-full rounded-[14px] bg-[#3DDC84] py-3 font-medium primary-hover-glow disabled:opacity-50">{submitting ? "Creating..." : "Create Ticket"}</button>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPaymentGuide("paypal_ff")}
+                          className={"flex items-center justify-center gap-2 rounded-[14px] border px-4 py-3 text-sm font-medium transition-all " + (selectedPaymentGuide === "paypal_ff" ? "border-[#2F9BE6] bg-[#49B6FF]/10 text-white" : "border-[#1E1E1E] bg-[#050505] text-[#B5B5B5] hover:text-white")}
+                        >
+                          <CreditCard className="h-4 w-4" />
+                          PayPal
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPaymentGuide("ltc")}
+                          className={"flex items-center justify-center gap-2 rounded-[14px] border px-4 py-3 text-sm font-medium transition-all " + (selectedPaymentGuide === "ltc" ? "border-[#2F9BE6] bg-[#49B6FF]/10 text-white" : "border-[#1E1E1E] bg-[#050505] text-[#B5B5B5] hover:text-white")}
+                        >
+                          <QrCode className="h-4 w-4" />
+                          Litecoin
+                        </button>
+                      </div>
+
+                      <div className="rounded-[16px] border border-[#1E1E1E] bg-[#050505] p-4 space-y-4">
+                        {selectedPaymentGuide === "paypal_ff" ? (
+                          <>
+                            <div className="space-y-1">
+                              <h4 className="text-base font-semibold text-white">PayPal Payment Guide</h4>
+                              <p className="text-sm text-[#B5B5B5]">Payment Method: <span className="font-semibold text-white">Friends and Family</span></p>
+                              <p className="text-sm text-[#B5B5B5]">Payment Amount: <span className="font-semibold text-[#3DDC84]">${cartTotal.toFixed(2)}</span></p>
+                            </div>
+                            <div>
+                              <p className="mb-2 text-sm text-[#B5B5B5]">Send to</p>
+                              <div className="flex gap-2">
+                                <div className="min-w-0 flex-1 break-all rounded-[14px] border border-[#1E1E1E] bg-[#111111] px-3 py-3 font-mono text-sm text-white">{PAYPAL_EMAIL}</div>
+                                <button type="button" onClick={() => void copyPaymentValue(PAYPAL_EMAIL)} className="rounded-[14px] bg-[#1E1E1E] px-3 text-white">
+                                  {copiedPaymentValue === PAYPAL_EMAIL ? <CheckCircle2 className="h-4 w-4 text-[#3DDC84]" /> : <Copy className="h-4 w-4" />}
+                                </button>
+                              </div>
+                            </div>
+                            <div className="space-y-2 text-sm leading-6 text-[#B5B5B5]">
+                              <p><span className="font-semibold text-white">1.</span> Select <span className="font-semibold text-white">Friends and Family</span> as the payment method.</p>
+                              <p><span className="font-semibold text-white">2.</span> Send <span className="font-semibold text-white">${cartTotal.toFixed(2)}</span> to the PayPal email address above.</p>
+                              <p><span className="font-semibold text-white">3.</span> After completing the payment, click the <span className="font-semibold text-white">Create Ticket</span> button below.</p>
+                              <p><span className="font-semibold text-white">4.</span> Send your payment screenshot in the ticket after it opens.</p>
+                            </div>
+                            <div className="rounded-[14px] border border-[#FF4D4F]/30 bg-[#FF4D4F]/10 p-3 text-sm text-[#FFB3B3]">
+                              Payments sent using Goods and Services instead of Friends and Family are not eligible for a refund.
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="space-y-1">
+                              <h4 className="text-base font-semibold text-white">LTC Payment Guide</h4>
+                              <p className="text-sm text-[#B5B5B5]">Payment Method: <span className="font-semibold text-white">Litecoin (LTC)</span></p>
+                              <p className="text-sm text-[#B5B5B5]">Payment Amount: <span className="font-semibold text-[#3DDC84]">${cartTotal.toFixed(2)}</span></p>
+                            </div>
+                            <div>
+                              <p className="mb-2 text-sm text-[#B5B5B5]">Payment Address</p>
+                              <div className="flex gap-2">
+                                <div className="min-w-0 flex-1 break-all rounded-[14px] border border-[#1E1E1E] bg-[#111111] px-3 py-3 font-mono text-sm text-white">{LTC_ADDRESS}</div>
+                                <button type="button" onClick={() => void copyPaymentValue(LTC_ADDRESS)} className="rounded-[14px] bg-[#1E1E1E] px-3 text-white">
+                                  {copiedPaymentValue === LTC_ADDRESS ? <CheckCircle2 className="h-4 w-4 text-[#3DDC84]" /> : <Copy className="h-4 w-4" />}
+                                </button>
+                              </div>
+                            </div>
+                            <img src="/pictures/payments/ltc.png" alt="Litecoin QR code" className="h-44 w-44 rounded-[14px] border border-[#1E1E1E] bg-white p-2" />
+                            <div className="space-y-2 text-sm leading-6 text-[#B5B5B5]">
+                              <p><span className="font-semibold text-white">1.</span> Select <span className="font-semibold text-white">Litecoin (LTC)</span> as the payment method.</p>
+                              <p><span className="font-semibold text-white">2.</span> Send <span className="font-semibold text-white">${cartTotal.toFixed(2)}</span> worth of LTC to the wallet address above, or scan the QR code.</p>
+                              <p><span className="font-semibold text-white">3.</span> After completing the payment, click the <span className="font-semibold text-white">Create Ticket</span> button below.</p>
+                              <p><span className="font-semibold text-white">4.</span> Send your payment screenshot in the ticket after it opens.</p>
+                            </div>
+                            <div className="rounded-[14px] border border-[#FF4D4F]/30 bg-[#FF4D4F]/10 p-3 text-sm text-[#FFB3B3]">
+                              Please double-check the wallet address before sending. Crypto payments are non-refundable once confirmed on the blockchain.
+                            </div>
+                          </>
+                        )}
+                      </div>
+                      <button onClick={() => void createTicket(selectedPaymentGuide)} disabled={submitting} className="w-full rounded-[14px] bg-[#3DDC84] py-3 font-medium primary-hover-glow disabled:opacity-50">
+                        {submitting ? "Creating..." : selectedPaymentGuide === "ltc" ? "Create LTC Ticket" : "Create PayPal Ticket"}
+                      </button>
+                    </div>
                   ) : (
                     <div className="space-y-3">
                       <div className="flex items-center gap-2 rounded-[16px] border border-[#3DDC84]/30 bg-[#3DDC84]/10 p-4"><CheckCircle2 className="h-5 w-5 text-[#3DDC84]" /><span className="text-sm">Ticket created!</span></div>

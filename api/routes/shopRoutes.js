@@ -51,6 +51,14 @@ const fs = require('fs');
 const { uploadToImgbb } = require('../utils/imgbbService');
 const { log } = require('../utils/loggingService');
 const { formatPurchasedUnitsLabel } = require('../utils/itemQuantityDisplay');
+const { isOwnerDiscordId } = require('../utils/ownerAccess');
+const { buildCashAppPaymentInstructions } = require('../utils/paymentMethods');
+const { buildOrderPaymentInfoPayload, isPublicOrderAccessible } = require('../utils/orderPaymentInfo');
+const {
+    buildPublicDeliverySlotQuery,
+    parseLocalDateTimeInZone: parseDeliverySlotLocalDateTimeInZone,
+    splitSlotForTimezone
+} = require('../utils/deliverySlots');
 
 // Redis cache + Bull queue
 const { cacheGet, cacheSet, cacheDel } = require('../cache/redis');
@@ -1185,6 +1193,7 @@ const getOwnedOrder = async (orderId, discordId) => {
 const getPublicOrder = async (orderId) => {
     const order = await Order.findOne({ orderId });
     if (!order) return { order: null, status: 404, error: 'Order not found' };
+    if (!isPublicOrderAccessible(order)) return { order: null, status: 401, error: 'Authentication required' };
     return { order, status: 200, error: null };
 };
 const acquireOrderTicketLock = async ({ orderId, discordId }) => {
@@ -1356,13 +1365,7 @@ const releaseLtcTicketLockAsFailed = async (orderId, discordId, lockUntil, messa
     );
 };
 
-const canAccessOwnerEndpoints = async (discordId) => {
-    if (!discordId) return false;
-    const ownerId = process.env.DISCORD_OWNER_ID || '';
-    const adminIds = ['1146730730060271736', '1005326332001009784'];
-    if (adminIds.includes(discordId)) return true;
-    return ownerId && discordId === ownerId;
-};
+const canAccessOwnerEndpoints = async (discordId) => isOwnerDiscordId(discordId);
 
 const getOptionalRequestUser = (req) => {
     const token = getBearerToken(req);
@@ -2976,6 +2979,12 @@ const toDeliverySlotPayload = (slot, timezone = '') => {
         ownerDateLabel: formatDateLabelInTimezone(startAt, slot?.ownerTimezone),
         customerDateLabel: formatDateLabelInTimezone(startAt, customerTimezone),
         customerTimeLabel: formatTimeRangeInTimezone(startAt, endAt, customerTimezone),
+        customerSegments: splitSlotForTimezone({
+            id: String(slot?._id || ''),
+            startAt,
+            endAt,
+            timezone: customerTimezone
+        }),
         note: String(slot?.note || '')
     };
 };
@@ -3038,33 +3047,6 @@ const formatTimeRangeInTimezone = (startValue, endValue, timezone) => {
 const buildConfirmCouponCode = (orderId) => {
     const suffix = crypto.randomBytes(3).toString('hex').toUpperCase();
     return normalizeCouponCode(`NOS5-${String(orderId || '').replace(/[^a-zA-Z0-9]/g, '').slice(-6)}-${suffix}`);
-};
-
-/**
- * Parse a local date+time string as a UTC Date using a named IANA timezone.
- * The `dateStr` is in YYYY-MM-DD format; `timeStr` is HH:MM (24-hour).
- * Returns a Date representing that local moment in time (UTC milliseconds).
- */
-const parseLocalDateTimeInZone = (dateStr, timeStr, timezone) => {
-    try {
-        const [year, month, day] = dateStr.split('-').map(Number);
-        const [hour, minute] = timeStr.split(':').map(Number);
-        const localDate = new Date(year, month - 1, day, hour, minute, 0, 0);
-
-        // Get the offset by formatting a reference moment in both UTC and target timezone
-        const ref = new Date(Date.UTC(localDate.getUTCFullYear(), localDate.getUTCMonth(), localDate.getUTCDate(), 12, 0, 0));
-        const utcStr = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit', hour12: false })
-            .format(ref);
-        const tzStr = new Intl.DateTimeFormat('en-US', { timeZone: timezone, hour: '2-digit', minute: '2-digit', hour12: false })
-            .format(ref);
-        const utcMinutes = Number(utcStr.split(':')[0]) * 60 + Number(utcStr.split(':')[1]);
-        const tzMinutes = Number(tzStr.split(':')[0]) * 60 + Number(tzStr.split(':')[1]);
-        const offsetMinutes = tzMinutes - utcMinutes;
-
-        return new Date(localDate.getTime() - offsetMinutes * 60 * 1000);
-    } catch {
-        return new Date(`${dateStr}T${timeStr}`);
-    }
 };
 
 router.get('/roblox/search', async (req, res) => {
@@ -3148,10 +3130,10 @@ router.post('/orders/:orderId/link-roblox', authRequired, async (req, res) => {
 router.get('/delivery-slots', async (req, res) => {
     try {
         const timezone = String(req.query?.timezone || 'UTC').trim();
-        const slots = await DeliverySlot.find({
-            active: true,
-            endAt: { $gte: new Date() }
-        }).sort({ startAt: 1 }).limit(100).lean();
+        const slots = await DeliverySlot.find(buildPublicDeliverySlotQuery(new Date()))
+            .sort({ startAt: 1 })
+            .limit(100)
+            .lean();
         return res.json({ slots: slots.map((slot) => toDeliverySlotPayload(slot, timezone)) });
     } catch (error) {
         console.error('Delivery slots fetch error:', error);
@@ -4231,8 +4213,8 @@ router.post('/delivery-slots/bulk', authRequired, async (req, res) => {
             const { startTime, endTime, note } = range || {};
             if (!startTime || !endTime) continue;
 
-            const startAt = parseLocalDateTimeInZone(dateStr, startTime, tz);
-            const endAt = parseLocalDateTimeInZone(dateStr, endTime, tz);
+            const startAt = parseDeliverySlotLocalDateTimeInZone(dateStr, startTime, tz);
+            const endAt = parseDeliverySlotLocalDateTimeInZone(dateStr, endTime, tz);
             if (!Number.isFinite(startAt.getTime()) || !Number.isFinite(endAt.getTime()) || endAt <= startAt) continue;
 
             const slot = await DeliverySlot.create({

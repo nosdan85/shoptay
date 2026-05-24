@@ -20,6 +20,10 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       endpoint = `${API_BASE_URL}/api/shop/orders/${orderId}/confirm-delivery`;
     } else if (action === "create-ticket") {
       endpoint = `${API_BASE_URL}/api/shop/create-ticket`;
+    } else if (action === "create-ticket-paypal-ff") {
+      endpoint = `${API_BASE_URL}/api/shop/create-ticket-paypal-ff`;
+    } else if (action === "create-ticket-ltc") {
+      endpoint = `${API_BASE_URL}/api/shop/create-ticket-ltc`;
     } else {
       return NextResponse.json({ error: "Unknown action" }, { status: 400 });
     }

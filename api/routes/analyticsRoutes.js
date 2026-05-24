@@ -1,36 +1,9 @@
 const express = require('express');
-const jwt = require('jsonwebtoken');
 const Order = require('../models/Order');
 const Proof = require('../models/Proof');
+const { requireOwnerOrAdmin } = require('../middleware/ownerAuth');
 
 const router = express.Router();
-
-const getToken = (req) => {
-    const authHeader = req.headers.authorization || '';
-    if (authHeader.startsWith('Bearer ')) {
-        return authHeader.slice('Bearer '.length).trim();
-    }
-    return req.header('x-auth-token');
-};
-
-const getAdminJwtSecret = () => process.env.JWT_ADMIN_SECRET || process.env.JWT_SECRET || '';
-
-const adminAuth = (req, res, next) => {
-    const token = getToken(req);
-    if (!token) return res.status(401).json({ message: 'No token' });
-
-    const secret = getAdminJwtSecret();
-    if (!secret) return res.status(500).json({ message: 'JWT admin secret missing' });
-
-    try {
-        const decoded = jwt.verify(token, secret);
-        if (decoded.role !== 'admin') throw new Error('Not admin');
-        req.user = decoded;
-        return next();
-    } catch {
-        return res.status(401).json({ message: 'Token invalid' });
-    }
-};
 
 const getPeriodStarts = () => {
     const now = new Date();
@@ -65,7 +38,7 @@ const sumSales = async (startDate) => {
     };
 };
 
-router.use(adminAuth);
+router.use(requireOwnerOrAdmin);
 
 router.get('/sales', async (_req, res) => {
     try {

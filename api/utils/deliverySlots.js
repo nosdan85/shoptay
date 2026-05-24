@@ -54,6 +54,13 @@ const buildPublicDeliverySlotQuery = (now = new Date()) => ({
     endAt: { $gte: now }
 });
 
+const OBJECT_ID_PATTERN = /^[a-fA-F0-9]{24}$/;
+
+const normalizeDeliverySlotId = (value) => {
+    const baseId = String(value || '').trim().split(':')[0] || '';
+    return OBJECT_ID_PATTERN.test(baseId) ? baseId : '';
+};
+
 const pad2 = (value) => String(value).padStart(2, '0');
 
 const formatDateKeyInTimezone = (value, timezone) => {
@@ -127,6 +134,7 @@ const splitSlotForTimezone = ({ id, startAt, endAt, timezone }) => {
 
 module.exports = {
     buildPublicDeliverySlotQuery,
+    normalizeDeliverySlotId,
     parseLocalDateTimeInZone,
     splitSlotForTimezone
 };

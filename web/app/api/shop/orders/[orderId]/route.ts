@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { backendUrl } from "@/lib/backendApi";
+import { backendUrl, noStoreHeaders } from "@/lib/backendApi";
 
 type RouteContext = { params: Promise<{ orderId: string }> };
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function POST(request: NextRequest, { params }: RouteContext) {
   try {
@@ -25,7 +28,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     } else if (action === "create-ticket-ltc") {
       endpoint = backendUrl("/api/shop/create-ticket-ltc");
     } else {
-      return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+      return NextResponse.json({ error: "Unknown action" }, { status: 400, headers: noStoreHeaders() });
     }
 
     const res = await fetch(endpoint, {
@@ -37,9 +40,9 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       body: JSON.stringify(body),
     });
     const data = await res.json().catch(() => ({ error: "Backend returned an invalid response" }));
-    return NextResponse.json(data, { status: res.status });
+    return NextResponse.json(data, { status: res.status, headers: noStoreHeaders() });
   } catch (error) {
     console.error("Order action API error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500, headers: noStoreHeaders() });
   }
 }

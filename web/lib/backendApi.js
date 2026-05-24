@@ -8,4 +8,13 @@ function backendUrl(path) {
   return `${getApiBaseUrl()}${cleanPath}`;
 }
 
-module.exports = { backendUrl, getApiBaseUrl };
+function noStoreHeaders(extra = {}) {
+  return {
+    "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+    Pragma: "no-cache",
+    Expires: "0",
+    ...extra,
+  };
+}
+
+module.exports = { backendUrl, getApiBaseUrl, noStoreHeaders };

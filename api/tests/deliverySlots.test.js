@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 const {
     buildPublicDeliverySlotQuery,
+    normalizeDeliverySlotId,
     parseLocalDateTimeInZone,
     splitSlotForTimezone
 } = require('../utils/deliverySlots');
@@ -22,6 +23,14 @@ test('buildPublicDeliverySlotQuery returns all active future slots without owner
         endAt: { $gte: now }
     });
     assert.equal(Object.hasOwn(query, 'ownerDiscordId'), false);
+});
+
+test('normalizeDeliverySlotId accepts customer segment ids from the calendar UI', () => {
+    const slotId = '507f1f77bcf86cd799439011';
+
+    assert.equal(normalizeDeliverySlotId(`${slotId}:2026-05-25:1`), slotId);
+    assert.equal(normalizeDeliverySlotId(slotId), slotId);
+    assert.equal(normalizeDeliverySlotId('not-a-slot:2026-05-25:1'), '');
 });
 
 test('splitSlotForTimezone splits customer display at local midnight', () => {
@@ -64,6 +73,32 @@ test('splitSlotForTimezone places post-midnight segment on the next customer dat
             slotId: 'slot-2',
             customerDateKey: '2026-05-25',
             customerDateLabel: 'Mon, May 25',
+            customerTimeLabel: '12:00 AM - 1:00 AM'
+        }
+    ]);
+});
+
+test('splitSlotForTimezone keeps Asia/Seoul slots available when Vietnam hours cross local midnight', () => {
+    const segments = splitSlotForTimezone({
+        id: '507f1f77bcf86cd799439011',
+        startAt: new Date('2026-05-25T14:00:00.000Z'),
+        endAt: new Date('2026-05-25T16:00:00.000Z'),
+        timezone: 'Asia/Seoul'
+    });
+
+    assert.deepEqual(segments, [
+        {
+            id: '507f1f77bcf86cd799439011:2026-05-25:0',
+            slotId: '507f1f77bcf86cd799439011',
+            customerDateKey: '2026-05-25',
+            customerDateLabel: 'Mon, May 25',
+            customerTimeLabel: '11:00 PM - 12:00 AM'
+        },
+        {
+            id: '507f1f77bcf86cd799439011:2026-05-26:1',
+            slotId: '507f1f77bcf86cd799439011',
+            customerDateKey: '2026-05-26',
+            customerDateLabel: 'Tue, May 26',
             customerTimeLabel: '12:00 AM - 1:00 AM'
         }
     ]);

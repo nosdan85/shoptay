@@ -56,6 +56,7 @@ const { buildCashAppPaymentInstructions } = require('../utils/paymentMethods');
 const { buildOrderPaymentInfoPayload, isPublicOrderAccessible } = require('../utils/orderPaymentInfo');
 const {
     buildPublicDeliverySlotQuery,
+    normalizeDeliverySlotId,
     parseLocalDateTimeInZone: parseDeliverySlotLocalDateTimeInZone,
     splitSlotForTimezone
 } = require('../utils/deliverySlots');
@@ -3129,6 +3130,9 @@ router.post('/orders/:orderId/link-roblox', authRequired, async (req, res) => {
 
 router.get('/delivery-slots', async (req, res) => {
     try {
+        res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.set('Pragma', 'no-cache');
+        res.set('Expires', '0');
         const timezone = String(req.query?.timezone || 'UTC').trim();
         const slots = await DeliverySlot.find(buildPublicDeliverySlotQuery(new Date()))
             .sort({ startAt: 1 })
@@ -3192,9 +3196,12 @@ router.post('/delivery-slots', authRequired, async (req, res) => {
 
 router.post('/orders/:orderId/delivery-slot', authRequired, async (req, res) => {
     try {
+        res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.set('Pragma', 'no-cache');
+        res.set('Expires', '0');
         const orderId = String(req.params?.orderId || '').trim();
         const discordId = String(req.user?.discordId || '').trim();
-        const slotId = String(req.body?.slotId || '').trim();
+        const slotId = normalizeDeliverySlotId(req.body?.slotId);
         const customerTimezone = String(req.body?.customerTimezone || 'UTC').trim();
         if (!OBJECT_ID_PATTERN.test(slotId)) return res.status(400).json({ error: 'Invalid delivery slot.' });
 

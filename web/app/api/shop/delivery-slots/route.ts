@@ -1,6 +1,8 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { backendUrl, noStoreHeaders } from "@/lib/backendApi";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || process.env.API_BASE_URL || "http://localhost:5000";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,10 +10,9 @@ export async function GET(request: NextRequest) {
     const timezone = request.nextUrl.searchParams.get("timezone") || "";
     const manage = request.nextUrl.searchParams.get("manage");
 
-    // Public customer endpoint when timezone is provided, owner manage endpoint otherwise
     const endpoint = manage === "1" && token
-      ? `${API_BASE_URL}/api/shop/delivery-slots/manage`
-      : `${API_BASE_URL}/api/shop/delivery-slots${timezone ? `?timezone=${encodeURIComponent(timezone)}` : ""}`;
+      ? backendUrl("/api/shop/delivery-slots/manage")
+      : backendUrl(`/api/shop/delivery-slots${timezone ? `?timezone=${encodeURIComponent(timezone)}` : ""}`);
 
     const res = await fetch(endpoint, {
       method: "GET",
@@ -22,10 +23,10 @@ export async function GET(request: NextRequest) {
       cache: "no-store",
     });
     const data = await res.json();
-    return NextResponse.json(data, { status: res.status });
+    return NextResponse.json(data, { status: res.status, headers: noStoreHeaders() });
   } catch (error) {
     console.error("Delivery slots API error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500, headers: noStoreHeaders() });
   }
 }
 
@@ -33,18 +34,19 @@ export async function POST(request: NextRequest) {
   try {
     const token = request.headers.get("authorization") || "";
     const body = await request.json();
-    const res = await fetch(`${API_BASE_URL}/api/shop/delivery-slots/bulk`, {
+    const res = await fetch(backendUrl("/api/shop/delivery-slots/bulk"), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         ...(token ? { Authorization: token } : {}),
       },
       body: JSON.stringify(body),
+      cache: "no-store",
     });
     const data = await res.json();
-    return NextResponse.json(data, { status: res.status });
+    return NextResponse.json(data, { status: res.status, headers: noStoreHeaders() });
   } catch (error) {
     console.error("Create delivery slots API error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500, headers: noStoreHeaders() });
   }
 }

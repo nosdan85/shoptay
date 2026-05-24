@@ -146,6 +146,10 @@ function buildCalendarDays(monthKey: string): Array<{ key: string; day: number; 
   });
 }
 
+function normalizeDeliverySlotId(value: string | null): string {
+  return String(value || "").trim().split(":")[0] || "";
+}
+
 const ProductCard = memo(function ProductCard({
   product,
   index,
@@ -716,7 +720,7 @@ export default function ShopPage() {
     try {
       const res = await fetch(`/api/shop/orders/${orderId}?action=delivery-slot`, {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ slotId: pickedSlot, customerTimezone: customerTz }),
+        body: JSON.stringify({ slotId: normalizeDeliverySlotId(pickedSlot), customerTimezone: customerTz }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed");

@@ -26,6 +26,14 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        source: "/api/:path*",
+        headers: [
+          { key: "Cache-Control", value: "no-store, no-cache, must-revalidate, proxy-revalidate" },
+          { key: "Pragma", value: "no-cache" },
+          { key: "Expires", value: "0" },
+        ],
+      },
+      {
         source: "/pictures/:path*",
         headers: [
           { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
@@ -35,12 +43,6 @@ const nextConfig: NextConfig = {
         source: "/public/:path*",
         headers: [
           { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
-        ],
-      },
-      {
-        source: "/:path*",
-        headers: [
-          { key: "Cache-Control", value: "public, max-age=3600, s-maxage=86400" },
         ],
       },
     ];

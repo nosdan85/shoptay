@@ -38,6 +38,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
         ...(token ? { Authorization: token } : {}),
       },
       body: JSON.stringify(body),
+      cache: "no-store",
     });
     const data = await res.json().catch(() => ({ error: "Backend returned an invalid response" }));
     return NextResponse.json(data, { status: res.status, headers: noStoreHeaders() });

@@ -20,10 +20,10 @@ import {
   ChevronRight,
   ArrowLeft,
   ChevronDown,
-  LogIn,
 } from "lucide-react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const VISITOR_NOTICE_DISMISSED_KEY = "visitorNoticeDismissed";
 
 function imgUrl(src: string | undefined | null): string {
   if (!src) return "";
@@ -62,6 +62,22 @@ function formatSlotNote(note?: string): string {
     "Ca tối": "Evening shift",
   };
   return map[String(note || "").trim()] || String(note || "");
+}
+
+function DiscordIcon({ className = "h-5 w-5" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={className} fill="currentColor">
+      <path d="M20.32 4.37A19.8 19.8 0 0 0 15.36 2.8a13.7 13.7 0 0 0-.64 1.32 18.4 18.4 0 0 0-5.44 0 12.9 12.9 0 0 0-.65-1.32 19.7 19.7 0 0 0-4.95 1.57C.55 9.03-.32 13.58.1 18.07a19.9 19.9 0 0 0 6.08 3.08 14.5 14.5 0 0 0 1.3-2.1 12.8 12.8 0 0 1-2.05-.98c.17-.13.34-.26.5-.4a14.1 14.1 0 0 0 12.14 0l.5.4c-.65.39-1.33.72-2.05.98.38.74.82 1.44 1.3 2.1a19.8 19.8 0 0 0 6.08-3.08c.5-5.2-.86-9.7-3.58-13.7ZM8.02 15.31c-1.18 0-2.15-1.08-2.15-2.41 0-1.34.95-2.42 2.15-2.42s2.17 1.1 2.15 2.42c0 1.33-.95 2.41-2.15 2.41Zm7.96 0c-1.18 0-2.15-1.08-2.15-2.41 0-1.34.95-2.42 2.15-2.42s2.17 1.1 2.15 2.42c0 1.33-.95 2.41-2.15 2.41Z" />
+    </svg>
+  );
+}
+
+function RobloxIcon({ className = "h-5 w-5" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={className} fill="currentColor">
+      <path d="M7.1 2 22 6.1 17.9 22 2 17.9 6.1 2h1Zm3.72 7.2-1.62 5.98 5.98 1.62 1.62-5.98-5.98-1.62Zm1.28 2.6 2.1.57-.57 2.1-2.1-.57.57-2.1Z" />
+    </svg>
+  );
 }
 
 interface Product { _id: string; name: string; category: string; price: number; bulkPrice?: number; packQuantity?: number; image?: string; desc?: string; gameId?: string }
@@ -173,7 +189,7 @@ function LogoLoader() {
   );
 }
 export default function ShopPage() {
-  const { user, token, getOAuthUrl } = useAuth();
+  const { user, token, isLoading: authLoading, getOAuthUrl } = useAuth();
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState<Product[]>([]);
   const [games, setGames] = useState<Game[]>([]);
@@ -274,9 +290,13 @@ export default function ShopPage() {
   }, []);
 
   useEffect(() => {
+    if (typeof window !== "undefined" && window.localStorage.getItem(VISITOR_NOTICE_DISMISSED_KEY) === "1") return;
     void fetch("/api/shop/visitor-notice", { method: "POST", cache: "no-store" })
       .then((res) => res.json())
-      .then((data) => setShowVisitorNotice(Boolean(data?.show)))
+      .then((data) => {
+        if (typeof window !== "undefined" && window.localStorage.getItem(VISITOR_NOTICE_DISMISSED_KEY) === "1") return;
+        setShowVisitorNotice(Boolean(data?.show));
+      })
       .catch(() => {});
   }, []);
 
@@ -314,6 +334,11 @@ export default function ShopPage() {
       controller.abort();
     };
   }, [fetchRemoteCart, saveCart, token, user?.discordId]);
+
+  useEffect(() => {
+    if (authLoading || token) return;
+    queueMicrotask(() => { saveCart([], { skipRemoteSync: true }); remoteCartHydratedRef.current = false; });
+  }, [authLoading, saveCart, token]);
 
   useEffect(() => {
     if (!token || !user?.discordId) return;
@@ -430,6 +455,13 @@ export default function ShopPage() {
   const clearPendingCheckout = useCallback(() => {
     if (typeof window === "undefined") return;
     window.sessionStorage.removeItem(PENDING_CHECKOUT_KEY);
+  }, []);
+
+  const dismissVisitorNotice = useCallback(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(VISITOR_NOTICE_DISMISSED_KEY, "1");
+    }
+    setShowVisitorNotice(false);
   }, []);
 
   const fetchSlotsForTimezone = useCallback(async (tzValue: string) => {
@@ -676,7 +708,7 @@ export default function ShopPage() {
               </div>
               <button
                 type="button"
-                onClick={() => setShowVisitorNotice(false)}
+                onClick={dismissVisitorNotice}
                 className="rounded-full bg-[#1E1E1E] p-2 text-white hover:bg-[#2A2A2A]"
               >
                 <X className="h-5 w-5" />
@@ -686,7 +718,7 @@ export default function ShopPage() {
               <button
                 type="button"
                 onClick={() => {
-                  setShowVisitorNotice(false);
+                  dismissVisitorNotice();
                   window.location.href = "/proofs";
                 }}
                 className="rounded-[14px] bg-[#2F9BE6] px-4 py-3 text-sm font-medium text-white primary-hover-glow"
@@ -695,7 +727,7 @@ export default function ShopPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setShowVisitorNotice(false)}
+                onClick={dismissVisitorNotice}
                 className="rounded-[14px] bg-[#1E1E1E] px-4 py-3 text-sm font-medium text-white"
               >
                 Close
@@ -815,7 +847,7 @@ export default function ShopPage() {
               {step === "roblox" && (
                 <div className="space-y-4">
                   <div className="rounded-[16px] border border-[#1E1E1E] bg-[#050505] p-4">
-                    <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold"><LogIn className="h-5 w-5" />Discord Login</h3>
+                    <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold text-white"><DiscordIcon className="h-5 w-5 text-[#5865F2]" />Discord Login</h3>
                     {token && user ? (
                       <div className="rounded-[14px] border border-[#3DDC84]/25 bg-[#3DDC84]/10 px-4 py-3 text-sm text-[#3DDC84]">
                         Logged in as {user.discordUsername}
@@ -823,15 +855,16 @@ export default function ShopPage() {
                     ) : (
                       <a
                         href={getOAuthUrl("/shop")}
-                        className="block w-full rounded-[14px] bg-[#5865F2] py-3 text-center font-medium text-white transition-all hover:bg-[#6875ff]"
+                        className="flex w-full items-center justify-center gap-2 rounded-[14px] bg-[#5865F2] py-3 text-center font-medium text-white transition-all hover:bg-[#6875ff]"
                       >
+                        <DiscordIcon className="h-5 w-5" />
                         Login with Discord
                       </a>
                     )}
                   </div>
                   {!robloxSearchResult ? (
                     <div className="space-y-4">
-                      <h3 className="flex items-center gap-2 text-lg font-semibold"><User className="h-5 w-5" />Enter Roblox Username</h3>
+                      <h3 className="flex items-center gap-2 text-lg font-semibold"><RobloxIcon className="h-5 w-5 text-white" />Enter Roblox Username</h3>
                       <div className="flex flex-col gap-3">
                         <input
                           value={robloxUsernameInput}
@@ -851,7 +884,7 @@ export default function ShopPage() {
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      <h3 className="flex items-center gap-2 text-lg font-semibold"><User className="h-5 w-5" />Verify Roblox Account</h3>
+                      <h3 className="flex items-center gap-2 text-lg font-semibold"><RobloxIcon className="h-5 w-5 text-white" />Verify Roblox Account</h3>
                       <p className="text-sm text-[#B5B5B5]">Is this your Roblox account?</p>
                       <div className="flex items-center gap-4 rounded-[16px] border border-[#1E1E1E] bg-[#050505] p-4">
                         <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-full bg-[#161616]">
@@ -1157,6 +1190,9 @@ export default function ShopPage() {
     </div>
   );
 }
+
+
+
 
 
 

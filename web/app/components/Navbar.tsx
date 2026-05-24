@@ -60,6 +60,15 @@ export default function Navbar({ cartCount = 0, showCart = false, onCartClick }:
     }, 500);
   };
 
+  const clearCheckoutResume = () => {
+    try {
+      window.sessionStorage.removeItem("pendingCheckout");
+      window.localStorage.removeItem("pendingRoblox");
+    } catch {
+      // ignore
+    }
+  };
+
   const getAvatarUrl = (user: { avatar?: string; discordId: string }) => {
     if (!user.avatar) return null;
     return `https://cdn.discordapp.com/avatars/${user.discordId}/${user.avatar}.png?size=64`;
@@ -74,7 +83,7 @@ export default function Navbar({ cartCount = 0, showCart = false, onCartClick }:
     `}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-full flex items-center justify-between">
         {/* Logo */}
-        <Link href="/shop" className="flex items-center gap-3 group">
+        <Link href="/shop" onClick={clearCheckoutResume} className="flex items-center gap-3 group">
           <img 
             src="/pictures/site-logo.png" 
             alt="NOS" 
@@ -89,6 +98,7 @@ export default function Navbar({ cartCount = 0, showCart = false, onCartClick }:
         <div className="hidden md:flex items-center gap-1">
           <Link 
             href="/shop" 
+            onClick={clearCheckoutResume}
             className="relative px-3 py-2 text-[#B5B5B5] hover:text-white transition-colors duration-200 font-medium text-sm group"
           >
             Shop
@@ -202,7 +212,10 @@ export default function Navbar({ cartCount = 0, showCart = false, onCartClick }:
           <div className="max-h-[calc(100dvh-68px)] min-h-[calc(100dvh-68px)] overflow-y-auto px-4 py-6 flex flex-col gap-2">
             <Link
               href="/shop"
-              onClick={() => setMobileMenuOpen(false)}
+              onClick={() => {
+                clearCheckoutResume();
+                setMobileMenuOpen(false);
+              }}
               className="flex items-center rounded-2xl bg-[#111111] px-5 py-4 text-lg font-semibold text-white transition-all active:scale-[0.98]"
             >
               Shop
@@ -270,3 +283,7 @@ export default function Navbar({ cartCount = 0, showCart = false, onCartClick }:
     </nav>
   );
 }
+
+
+
+

@@ -57,7 +57,7 @@ interface PaymentMethod {
 const PAYMENT_METHODS: PaymentMethod[] = [
   { label: "PayPal F&F", value: "paypal_ff" },
   { label: "Cash App", value: "cashapp" },
-  { label: "Litecoin", value: "ltc" }
+  { label: "Litecoin (Recommended)", value: "ltc" }
 ];
 
 function formatPurchasedQtyLabel(item: OrderItem): string {

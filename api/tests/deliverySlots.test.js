@@ -3,9 +3,12 @@ const assert = require('node:assert/strict');
 
 const {
     buildPublicDeliverySlotQuery,
+    buildSelectableDeliverySlotQuery,
+    buildHourlyChoicePoints,
     isFutureDeliverySlotRange,
     normalizeDeliverySlotId,
     parseLocalDateTimeInZone,
+    resolveSelectedDeliveryWindow,
     splitSlotForTimezone
 } = require('../utils/deliverySlots');
 
@@ -20,6 +23,18 @@ test('buildPublicDeliverySlotQuery returns all active future slots without owner
     const query = buildPublicDeliverySlotQuery(now);
 
     assert.deepEqual(query, {
+        active: true,
+        endAt: { $gte: now }
+    });
+    assert.equal(Object.hasOwn(query, 'ownerDiscordId'), false);
+});
+
+test('buildSelectableDeliverySlotQuery only allows active future slots without owner filtering', () => {
+    const now = new Date('2026-05-24T12:00:00.000Z');
+    const query = buildSelectableDeliverySlotQuery('507f1f77bcf86cd799439011', now);
+
+    assert.deepEqual(query, {
+        _id: '507f1f77bcf86cd799439011',
         active: true,
         endAt: { $gte: now }
     });
@@ -45,6 +60,42 @@ test('normalizeDeliverySlotId accepts customer segment ids from the calendar UI'
     assert.equal(normalizeDeliverySlotId(`${slotId}:2026-05-25:1`), slotId);
     assert.equal(normalizeDeliverySlotId(slotId), slotId);
     assert.equal(normalizeDeliverySlotId('not-a-slot:2026-05-25:1'), '');
+});
+
+test('buildHourlyChoicePoints exposes each selectable hour including the segment end', () => {
+    const points = buildHourlyChoicePoints({
+        startAt: new Date('2026-05-25T15:00:00.000Z'),
+        endAt: new Date('2026-05-25T17:00:00.000Z')
+    });
+
+    assert.deepEqual(points, [
+        '2026-05-25T15:00:00.000Z',
+        '2026-05-25T16:00:00.000Z',
+        '2026-05-25T17:00:00.000Z'
+    ]);
+});
+
+test('resolveSelectedDeliveryWindow requires two selectable points inside the segment', () => {
+    const result = resolveSelectedDeliveryWindow({
+        segmentStartAt: '2026-05-25T15:00:00.000Z',
+        segmentEndAt: '2026-05-25T17:00:00.000Z',
+        requestedStartAt: '2026-05-25T16:00:00.000Z',
+        requestedEndAt: '2026-05-25T15:00:00.000Z'
+    });
+
+    assert.equal(result.customerStartAt.toISOString(), '2026-05-25T15:00:00.000Z');
+    assert.equal(result.customerEndAt.toISOString(), '2026-05-25T16:00:00.000Z');
+});
+
+test('resolveSelectedDeliveryWindow rejects non-hour points outside the selectable set', () => {
+    const result = resolveSelectedDeliveryWindow({
+        segmentStartAt: '2026-05-25T15:00:00.000Z',
+        segmentEndAt: '2026-05-25T17:00:00.000Z',
+        requestedStartAt: '2026-05-25T15:30:00.000Z',
+        requestedEndAt: '2026-05-25T16:00:00.000Z'
+    });
+
+    assert.equal(result, null);
 });
 
 test('splitSlotForTimezone splits customer display at local midnight', () => {

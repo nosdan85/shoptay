@@ -54,6 +54,12 @@ const buildPublicDeliverySlotQuery = (now = new Date()) => ({
     endAt: { $gte: now }
 });
 
+const buildSelectableDeliverySlotQuery = (slotId, now = new Date()) => ({
+    _id: slotId,
+    active: true,
+    endAt: { $gte: now }
+});
+
 const isFutureDeliverySlotRange = ({ startAt, endAt }, now = new Date()) => {
     const start = new Date(startAt);
     const end = new Date(endAt);
@@ -63,6 +69,54 @@ const isFutureDeliverySlotRange = ({ startAt, endAt }, now = new Date()) => {
         && Number.isFinite(cutoff.getTime())
         && end > start
         && end > cutoff;
+};
+
+const ONE_HOUR_MS = 60 * 60 * 1000;
+
+const buildHourlyChoicePoints = ({ startAt, endAt }) => {
+    const start = new Date(startAt);
+    const end = new Date(endAt);
+    if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) {
+        return [];
+    }
+
+    const points = [];
+    for (let value = start.getTime(), index = 0; value < end.getTime() && index < 48; value += ONE_HOUR_MS, index += 1) {
+        points.push(new Date(value).toISOString());
+    }
+    points.push(end.toISOString());
+    return Array.from(new Set(points));
+};
+
+const resolveSelectedDeliveryWindow = ({
+    segmentStartAt,
+    segmentEndAt,
+    requestedStartAt,
+    requestedEndAt
+}) => {
+    const segmentStart = new Date(segmentStartAt);
+    const segmentEnd = new Date(segmentEndAt);
+    const first = new Date(requestedStartAt);
+    const second = new Date(requestedEndAt);
+    if (![segmentStart, segmentEnd, first, second].every((date) => Number.isFinite(date.getTime()))) {
+        return null;
+    }
+    if (segmentEnd <= segmentStart || first.getTime() === second.getTime()) {
+        return null;
+    }
+
+    const allowed = new Set(buildHourlyChoicePoints({ startAt: segmentStart, endAt: segmentEnd }));
+    if (!allowed.has(first.toISOString()) || !allowed.has(second.toISOString())) {
+        return null;
+    }
+
+    const customerStartAt = first < second ? first : second;
+    const customerEndAt = first < second ? second : first;
+    if (customerStartAt < segmentStart || customerEndAt > segmentEnd || customerEndAt <= customerStartAt) {
+        return null;
+    }
+
+    return { customerStartAt, customerEndAt };
 };
 
 const OBJECT_ID_PATTERN = /^[a-fA-F0-9]{24}$/;
@@ -146,9 +200,12 @@ const splitSlotForTimezone = ({ id, startAt, endAt, timezone }) => {
 };
 
 module.exports = {
+    buildHourlyChoicePoints,
     buildPublicDeliverySlotQuery,
+    buildSelectableDeliverySlotQuery,
     isFutureDeliverySlotRange,
     normalizeDeliverySlotId,
     parseLocalDateTimeInZone,
+    resolveSelectedDeliveryWindow,
     splitSlotForTimezone
 };

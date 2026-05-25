@@ -57,9 +57,11 @@ const { buildCashAppPaymentInstructions } = require('../utils/paymentMethods');
 const { buildOrderPaymentInfoPayload, isPublicOrderAccessible } = require('../utils/orderPaymentInfo');
 const {
     buildPublicDeliverySlotQuery,
+    buildSelectableDeliverySlotQuery,
     isFutureDeliverySlotRange,
     normalizeDeliverySlotId,
     parseLocalDateTimeInZone: parseDeliverySlotLocalDateTimeInZone,
+    resolveSelectedDeliveryWindow,
     splitSlotForTimezone
 } = require('../utils/deliverySlots');
 
@@ -3266,7 +3268,7 @@ router.post('/delivery-slots', authRequired, async (req, res) => {
         const startAt = new Date(req.body?.startAt);
         const endAt = new Date(req.body?.endAt);
         const note = String(req.body?.note || '').trim().slice(0, 500);
-        if (!Number.isFinite(startAt.getTime()) || !Number.isFinite(endAt.getTime()) || endAt <= startAt) {
+        if (!isFutureDeliverySlotRange({ startAt, endAt }, new Date())) {
             return res.status(400).json({ error: 'Invalid delivery slot time range.' });
         }
 
@@ -3300,16 +3302,20 @@ router.post('/orders/:orderId/delivery-slot', authRequired, async (req, res) => 
         if (!order) return res.status(status).json({ error });
         // Payment check removed - delivery slot selection allowed before payment
 
-        const slot = await DeliverySlot.findOne({ _id: slotId, active: true });
+        const slot = await DeliverySlot.findOne(buildSelectableDeliverySlotQuery(slotId, new Date()));
         if (!slot) return res.status(404).json({ error: 'Delivery slot not found.' });
 
         const slotPayload = toDeliverySlotPayload(slot, customerTimezone);
         const selectedSegment = Array.isArray(slotPayload.customerSegments)
             ? slotPayload.customerSegments.find((segment) => segment.id === requestedSlotId)
             : null;
-        const customerStartAt = selectedSegment?.customerStartAt ? new Date(selectedSegment.customerStartAt) : slot.startAt;
-        const customerEndAt = selectedSegment?.customerEndAt ? new Date(selectedSegment.customerEndAt) : slot.endAt;
-        if (!Number.isFinite(customerStartAt.getTime()) || !Number.isFinite(customerEndAt.getTime()) || customerEndAt <= customerStartAt) {
+        const deliveryWindow = resolveSelectedDeliveryWindow({
+            segmentStartAt: selectedSegment?.customerStartAt || slot.startAt,
+            segmentEndAt: selectedSegment?.customerEndAt || slot.endAt,
+            requestedStartAt: req.body?.customerStartAt,
+            requestedEndAt: req.body?.customerEndAt
+        });
+        if (!deliveryWindow) {
             return res.status(400).json({ error: 'Invalid delivery slot segment.' });
         }
 
@@ -3318,8 +3324,8 @@ router.post('/orders/:orderId/delivery-slot', authRequired, async (req, res) => 
         order.deliveryOwnerStartAt = slot.startAt;
         order.deliveryOwnerEndAt = slot.endAt;
         order.deliveryCustomerTimezone = customerTimezone;
-        order.deliveryCustomerStartAt = customerStartAt;
-        order.deliveryCustomerEndAt = customerEndAt;
+        order.deliveryCustomerStartAt = deliveryWindow.customerStartAt;
+        order.deliveryCustomerEndAt = deliveryWindow.customerEndAt;
         await order.save();
 
         return res.json({ success: true, slot: slotPayload, selectedSegment: selectedSegment || null });
@@ -4447,6 +4453,9 @@ router.patch('/delivery-slots/:id', authRequired, async (req, res) => {
             slot.endAt = endAt;
         }
         if (slot.endAt <= slot.startAt) return res.status(400).json({ error: 'End time must be after start time.' });
+        if (slot.active && !isFutureDeliverySlotRange({ startAt: slot.startAt, endAt: slot.endAt }, new Date())) {
+            return res.status(400).json({ error: 'Active delivery slots must end in the future.' });
+        }
         await slot.save();
 
         return res.json({

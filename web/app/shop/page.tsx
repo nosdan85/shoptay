@@ -171,6 +171,35 @@ function buildCalendarDays(monthKey: string): Array<{ key: string; day: number; 
   });
 }
 
+function formatHourChoice(value: string, timezone: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone || "UTC",
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(new Date(value));
+  } catch {
+    return new Date(value).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  }
+}
+
+function buildHourChoices(segment: SlotSegment, timezone: string): Array<{ value: string; label: string }> {
+  const start = new Date(segment.customerStartAt || "");
+  const end = new Date(segment.customerEndAt || "");
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) return [];
+
+  const hourMs = 60 * 60 * 1000;
+  const values: string[] = [];
+  for (let value = start.getTime(), index = 0; value < end.getTime() && index < 48; value += hourMs, index += 1) {
+    values.push(new Date(value).toISOString());
+  }
+  values.push(end.toISOString());
+  return Array.from(new Set(values)).map((value) => ({
+    value,
+    label: formatHourChoice(value, timezone),
+  }));
+}
+
 const ProductCard = memo(function ProductCard({
   product,
   index,
@@ -284,6 +313,7 @@ export default function ShopPage() {
   const [selectedSlotDate, setSelectedSlotDate] = useState("");
   const [deliveryMonth, setDeliveryMonth] = useState("");
   const [pickedSlot, setPickedSlot] = useState<string | null>(null);
+  const [pickedSlotHours, setPickedSlotHours] = useState<string[]>([]);
   const [ticketResult, setTicketResult] = useState<TicketResult | null>(null);
   const [selectedPaymentGuide, setSelectedPaymentGuide] = useState<PaymentGuide>("paypal_ff");
   const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null);
@@ -551,6 +581,7 @@ export default function ShopPage() {
     const todayKey = getDateKeyInTimezone(tzValue);
     setSlots(nextSlots);
     setPickedSlot(null);
+    setPickedSlotHours([]);
     setSelectedSlotDate((current) => {
       if (current && nextSlots.some((slot: Slot) => slot.customerDateKey === current || slot.customerSegments?.some((segment) => segment.customerDateKey === current))) return current;
       const firstDate = String(nextSlots[0]?.customerSegments?.[0]?.customerDateKey || nextSlots[0]?.customerDateKey || todayKey);
@@ -564,6 +595,8 @@ export default function ShopPage() {
     setCustomerTz(tzValue);
     setTzSearch("");
     setExpandedCountry(null);
+    setPickedSlot(null);
+    setPickedSlotHours([]);
     void fetchSlotsForTimezone(tzValue).catch(() => {});
   };
 
@@ -608,6 +641,7 @@ export default function ShopPage() {
     () => slotSegments.filter((segment) => !selectedSlotDate || segment.customerDateKey === selectedSlotDate),
     [selectedSlotDate, slotSegments]
   );
+  const hasPickedTwoHours = pickedSlotHours.length === 2;
   const checkoutItems = checkoutSummary?.items?.length ? checkoutSummary.items : cart;
   const checkoutTotal = Number.isFinite(Number(checkoutSummary?.totalAmount)) ? Number(checkoutSummary?.totalAmount) : cartTotal;
 
@@ -762,18 +796,36 @@ export default function ShopPage() {
   };
 
   const confirmSlot = async () => {
-    if (!pickedSlot || !orderId || !token) return;
+    if (!pickedSlot || pickedSlotHours.length !== 2 || !orderId || !token) return;
     setSubmitting(true); setError(null);
     try {
       const res = await fetch(`/api/shop/orders/${orderId}?action=delivery-slot`, {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ slotId: pickedSlot, customerTimezone: customerTz }),
+        body: JSON.stringify({
+          slotId: pickedSlot,
+          customerTimezone: customerTz,
+          customerStartAt: pickedSlotHours[0],
+          customerEndAt: pickedSlotHours[1],
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed");
       setStep("ticket");
     } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
     finally { setSubmitting(false); }
+  };
+
+  const toggleSlotHour = (segmentId: string, value: string) => {
+    if (pickedSlot !== segmentId) {
+      setPickedSlot(segmentId);
+      setPickedSlotHours([value]);
+      return;
+    }
+    setPickedSlotHours((currentHours) => {
+      if (currentHours.includes(value)) return currentHours.filter((item) => item !== value);
+      if (currentHours.length >= 2) return [value];
+      return [...currentHours, value];
+    });
   };
 
   const copyPaymentValue = async (value: string) => {
@@ -1179,6 +1231,7 @@ export default function ShopPage() {
                                 if (!day.inMonth) return;
                                 setSelectedSlotDate(day.key);
                                 setPickedSlot(null);
+                                setPickedSlotHours([]);
                               }}
                               disabled={!day.inMonth}
                               className={"relative h-10 rounded-[12px] text-sm font-medium transition-all " + (selectedSlotDate === day.key
@@ -1196,15 +1249,37 @@ export default function ShopPage() {
                         })}
                       </div>
                     </div>
+                    <p className="text-sm text-[#B5B5B5]">Please select exactly 2 hours.</p>
                     {visibleSlotSegments.length === 0 && <p className="text-sm text-[#B5B5B5]">No available times for this date.</p>}
-                    {visibleSlotSegments.map((s) => (
-                      <button key={s.id} onClick={() => setPickedSlot(s.id)} className={"w-full rounded-[16px] border p-4 text-left transition-all " + (pickedSlot === s.id ? "border-[#2F9BE6] bg-[#49B6FF]/10" : "border-[#1E1E1E] bg-[#050505] hover:border-[#1E1E1E]")}>
-                        <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-[#2F9BE6]" /><span className="text-sm font-medium">{s.customerTimeLabel}</span></div>
-                        {s.note && <p className="mt-1 pl-6 text-xs text-[#2F9BE6]">{formatSlotNote(s.note)}</p>}
-                      </button>
-                    ))}
+                    {visibleSlotSegments.map((s) => {
+                      const hourChoices = buildHourChoices(s, customerTz);
+                      const isPickedSegment = pickedSlot === s.id;
+                      return (
+                        <div key={s.id} className={"w-full rounded-[16px] border p-4 text-left transition-all " + (isPickedSegment ? "border-[#2F9BE6] bg-[#49B6FF]/10" : "border-[#1E1E1E] bg-[#050505]")}>
+                          <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-[#2F9BE6]" /><span className="text-sm font-medium">{s.customerTimeLabel}</span></div>
+                          {s.note && <p className="mt-1 pl-6 text-xs text-[#2F9BE6]">{formatSlotNote(s.note)}</p>}
+                          <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                            {hourChoices.map((choice) => {
+                              const selected = isPickedSegment && pickedSlotHours.includes(choice.value);
+                              return (
+                                <button
+                                  key={choice.value}
+                                  type="button"
+                                  onClick={() => toggleSlotHour(s.id, choice.value)}
+                                  className={"rounded-[12px] border px-3 py-2 text-sm font-medium transition-all " + (selected
+                                    ? "border-[#2F9BE6] bg-[#2F9BE6] text-white"
+                                    : "border-[#1E1E1E] bg-[#111111] text-[#B5B5B5] hover:text-white")}
+                                >
+                                  {choice.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <button onClick={() => void confirmSlot()} disabled={!pickedSlot || submitting} className="w-full rounded-[14px] bg-[#2F9BE6] py-3 font-medium primary-hover-glow disabled:opacity-50">{submitting ? "Saving..." : "Confirm time"}</button>
+                  <button onClick={() => void confirmSlot()} disabled={!pickedSlot || !hasPickedTwoHours || submitting} className="w-full rounded-[14px] bg-[#2F9BE6] py-3 font-medium primary-hover-glow disabled:opacity-50">{submitting ? "Saving..." : "Confirm time"}</button>
                 </div>
               )}
               {step === "ticket" && (
@@ -1227,7 +1302,7 @@ export default function ShopPage() {
                           className={"flex items-center justify-center gap-2 rounded-[14px] border px-4 py-3 text-sm font-medium transition-all " + (selectedPaymentGuide === "ltc" ? "border-[#2F9BE6] bg-[#49B6FF]/10 text-white" : "border-[#1E1E1E] bg-[#050505] text-[#B5B5B5] hover:text-white")}
                         >
                           <QrCode className="h-4 w-4" />
-                          Litecoin
+                          Litecoin (Recommended)
                         </button>
                       </div>
 

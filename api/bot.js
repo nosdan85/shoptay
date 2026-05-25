@@ -1206,13 +1206,16 @@ const updatePaymentProofLogDone = async ({ order, doneBy }) => {
         doneBy,
         doneAt: new Date()
     });
-    const existingImageUrl = message.embeds?.[0]?.image?.url || '';
+    const existingImageUrl = message.embeds?.[0]?.image?.proxyURL || message.embeds?.[0]?.image?.url || '';
     const proofEmbed = payload.embeds?.[0];
     if (existingImageUrl && proofEmbed && typeof proofEmbed.setImage === 'function') {
         proofEmbed.setImage(existingImageUrl);
     }
 
-    await message.edit(payload);
+    await message.edit({
+        ...payload,
+        attachments: []
+    });
     return true;
 };
 

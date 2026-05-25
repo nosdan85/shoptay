@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 const {
     buildPaymentProofLogPayload,
+    formatDiscordTimestamp,
     getTicketUrl,
     isPaymentLogConfigured
 } = require('../utils/paymentProofLog');
@@ -35,4 +36,30 @@ test('buildPaymentProofLogPayload includes order summary and not done status', (
     assert.equal(payload.embeds[0].data.title, 'Payment proof - NM_1');
     assert.match(payload.embeds[0].data.fields.find((field) => field.name === 'Status').value, /Not done/);
     assert.match(payload.embeds[0].data.fields.find((field) => field.name === 'Ticket').value, /discord.com\/channels\/111\/222/);
+});
+
+test('buildPaymentProofLogPayload formats done time with Discord date and clock timestamps', () => {
+    const payload = buildPaymentProofLogPayload({
+        order: {
+            orderId: 'nm_2',
+            robloxUsername: 'PlayerTwo',
+            discordUsername: 'staff',
+            discordId: '999',
+            totalAmount: 2,
+            items: [{ name: 'Item', quantity: 1, packQuantity: 1, price: 2 }]
+        },
+        method: 'ltc',
+        ticketGuildId: '111',
+        ticketChannelId: '222',
+        status: 'done',
+        doneBy: '1234567890',
+        doneAt: new Date('2026-05-25T03:20:33.000Z')
+    });
+
+    const status = payload.embeds[0].data.fields.find((field) => field.name === 'Status').value;
+    assert.match(status, /Done by <@1234567890> at <t:1779679233:f> \(<t:1779679233:T>\)/);
+});
+
+test('formatDiscordTimestamp returns date and time precision', () => {
+    assert.equal(formatDiscordTimestamp(new Date('2026-05-25T03:20:33.000Z')), '<t:1779679233:f> (<t:1779679233:T>)');
 });

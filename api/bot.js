@@ -1170,13 +1170,13 @@ const sendPaymentProofLog = async ({ order, method, ticketChannelId, proofFile }
     if (proofEmbed && typeof proofEmbed.setImage === 'function') {
         proofEmbed.setImage(`attachment://${attachmentName}`);
     }
+    const proofAttachment = new AttachmentBuilder(proofFile.buffer, {
+        name: attachmentName,
+        description: `Payment proof for ${safeOrderId}`
+    });
     const sent = await channel.send({
         ...payload,
-        files: [{
-            attachment: proofFile.buffer,
-            name: attachmentName,
-            contentType: proofFile.mimetype
-        }]
+        files: [proofAttachment]
     });
 
     return {

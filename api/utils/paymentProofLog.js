@@ -36,6 +36,13 @@ const getMethodLabel = (method) => {
     return 'PayPal Friends & Family';
 };
 
+const formatDiscordTimestamp = (value) => {
+    const ms = new Date(value || Date.now()).getTime();
+    if (!Number.isFinite(ms)) return '';
+    const seconds = Math.floor(ms / 1000);
+    return `<t:${seconds}:f> (<t:${seconds}:T>)`;
+};
+
 const buildPaymentProofLogPayload = ({
     order,
     method,
@@ -47,7 +54,7 @@ const buildPaymentProofLogPayload = ({
 }) => {
     const ticketUrl = getTicketUrl(ticketGuildId, ticketChannelId);
     const statusText = status === 'done'
-        ? `Done${doneBy ? ` by <@${doneBy}>` : ''}${doneAt ? ` at ${new Date(doneAt).toISOString()}` : ''}`
+        ? `Done${doneBy ? ` by <@${doneBy}>` : ''}${doneAt ? ` at ${formatDiscordTimestamp(doneAt)}` : ''}`
         : 'Not done';
 
     const embed = new EmbedBuilder()
@@ -69,6 +76,7 @@ const buildPaymentProofLogPayload = ({
 
 module.exports = {
     buildPaymentProofLogPayload,
+    formatDiscordTimestamp,
     getPaymentLogConfig,
     getTicketUrl,
     isPaymentLogConfigured

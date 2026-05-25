@@ -2478,6 +2478,7 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
             discountPercent: newOrder.discountPercent || 0,
             couponCode: newOrder.couponCode || '',
             totalAmount: newOrder.totalAmount,
+            items: newOrder.items || [],
             customerEmail: '',
             paymentMethod: 'paypal_ff',
             paymentStatus: 'pending',
@@ -3202,7 +3203,8 @@ router.post('/orders/:orderId/delivery-slot', authRequired, async (req, res) => 
         res.set('Expires', '0');
         const orderId = String(req.params?.orderId || '').trim();
         const discordId = String(req.user?.discordId || '').trim();
-        const slotId = normalizeDeliverySlotId(req.body?.slotId);
+        const requestedSlotId = String(req.body?.slotId || '').trim();
+        const slotId = normalizeDeliverySlotId(requestedSlotId);
         const customerTimezone = String(req.body?.customerTimezone || 'UTC').trim();
         if (!OBJECT_ID_PATTERN.test(slotId)) return res.status(400).json({ error: 'Invalid delivery slot.' });
 
@@ -3213,16 +3215,26 @@ router.post('/orders/:orderId/delivery-slot', authRequired, async (req, res) => 
         const slot = await DeliverySlot.findOne({ _id: slotId, active: true });
         if (!slot) return res.status(404).json({ error: 'Delivery slot not found.' });
 
+        const slotPayload = toDeliverySlotPayload(slot, customerTimezone);
+        const selectedSegment = Array.isArray(slotPayload.customerSegments)
+            ? slotPayload.customerSegments.find((segment) => segment.id === requestedSlotId)
+            : null;
+        const customerStartAt = selectedSegment?.customerStartAt ? new Date(selectedSegment.customerStartAt) : slot.startAt;
+        const customerEndAt = selectedSegment?.customerEndAt ? new Date(selectedSegment.customerEndAt) : slot.endAt;
+        if (!Number.isFinite(customerStartAt.getTime()) || !Number.isFinite(customerEndAt.getTime()) || customerEndAt <= customerStartAt) {
+            return res.status(400).json({ error: 'Invalid delivery slot segment.' });
+        }
+
         order.deliverySlotId = slot._id;
         order.deliveryOwnerTimezone = slot.ownerTimezone;
         order.deliveryOwnerStartAt = slot.startAt;
         order.deliveryOwnerEndAt = slot.endAt;
         order.deliveryCustomerTimezone = customerTimezone;
-        order.deliveryCustomerStartAt = slot.startAt;
-        order.deliveryCustomerEndAt = slot.endAt;
+        order.deliveryCustomerStartAt = customerStartAt;
+        order.deliveryCustomerEndAt = customerEndAt;
         await order.save();
 
-        return res.json({ success: true, slot: toDeliverySlotPayload(slot, customerTimezone) });
+        return res.json({ success: true, slot: slotPayload, selectedSegment: selectedSegment || null });
     } catch (error) {
         console.error('Select delivery slot error:', error);
         return res.status(500).json({ error: 'Could not select delivery slot.' });

@@ -103,12 +103,21 @@ interface Slot {
 interface SlotSegment {
   id: string;
   slotId: string;
+  customerStartAt?: string;
+  customerEndAt?: string;
   customerDateKey: string;
   customerDateLabel: string;
   customerTimeLabel: string;
 }
 interface Purchase { username: string; items: string; price?: number }
 interface TicketResult { channelId: string; guildId?: string; url?: string }
+interface CheckoutSummary {
+  subtotalAmount: number;
+  discountAmount: number;
+  discountPercent: number;
+  totalAmount: number;
+  items: Array<{ product?: string; _id?: string; name: string; quantity: number; packQuantity?: number; price: number }>;
+}
 
 type Step = "shop" | "roblox" | "delivery" | "ticket";
 type PriceSort = "none" | "low-high" | "high-low";
@@ -144,10 +153,6 @@ function buildCalendarDays(monthKey: string): Array<{ key: string; day: number; 
       inMonth: date.getMonth() === month - 1,
     };
   });
-}
-
-function normalizeDeliverySlotId(value: string | null): string {
-  return String(value || "").trim().split(":")[0] || "";
 }
 
 const ProductCard = memo(function ProductCard({
@@ -254,6 +259,7 @@ export default function ShopPage() {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
+  const [checkoutSummary, setCheckoutSummary] = useState<CheckoutSummary | null>(null);
   const [robloxUsernameInput, setRobloxUsernameInput] = useState("");
   const [customerTz, setCustomerTz] = useState(detectUserTimezone());
   const [tzSearch, setTzSearch] = useState("");
@@ -430,13 +436,14 @@ export default function ShopPage() {
     if (!raw) return;
 
     try {
-      const pending = JSON.parse(raw) as { orderId?: string; cart?: CartItem[]; customerTz?: string };
+      const pending = JSON.parse(raw) as { orderId?: string; cart?: CartItem[]; customerTz?: string; checkoutSummary?: CheckoutSummary };
       if (!pending?.orderId) return;
       resumeHandledRef.current = true;
       queueMicrotask(() => {
         setOrderId(String(pending.orderId));
         setStep("roblox");
         setCart(Array.isArray(pending.cart) ? pending.cart : []);
+        setCheckoutSummary(pending.checkoutSummary || null);
         if (pending.customerTz) {
           setCustomerTz(String(pending.customerTz));
         }
@@ -491,14 +498,15 @@ export default function ShopPage() {
     return found ? `${found.country} - ${found.label}` : `Detected - ${customerTz}`;
   }, [customerTz]);
 
-  const persistPendingCheckout = useCallback((nextOrderId: string, nextCart = cart, nextTz = customerTz) => {
+  const persistPendingCheckout = useCallback((nextOrderId: string, nextCart = cart, nextTz = customerTz, nextSummary = checkoutSummary) => {
     if (typeof window === "undefined") return;
     window.sessionStorage.setItem(PENDING_CHECKOUT_KEY, JSON.stringify({
       orderId: nextOrderId,
       cart: nextCart,
       customerTz: nextTz,
+      checkoutSummary: nextSummary,
     }));
-  }, [cart, customerTz]);
+  }, [cart, checkoutSummary, customerTz]);
 
   const clearPendingCheckout = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -543,6 +551,8 @@ export default function ShopPage() {
         : [{
             id: `${slot.id}:${slot.customerDateKey}:0`,
             slotId: slot.id,
+            customerStartAt: slot.startAt,
+            customerEndAt: slot.endAt,
             customerDateKey: slot.customerDateKey,
             customerDateLabel: slot.customerDateLabel,
             customerTimeLabel: slot.customerTimeLabel || `${slot.customerStartText} - ${slot.customerEndText}`,
@@ -571,6 +581,8 @@ export default function ShopPage() {
     () => slotSegments.filter((segment) => !selectedSlotDate || segment.customerDateKey === selectedSlotDate),
     [selectedSlotDate, slotSegments]
   );
+  const checkoutItems = checkoutSummary?.items?.length ? checkoutSummary.items : cart;
+  const checkoutTotal = Number.isFinite(Number(checkoutSummary?.totalAmount)) ? Number(checkoutSummary?.totalAmount) : cartTotal;
 
   const handleSearchChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value;
@@ -664,8 +676,16 @@ export default function ShopPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Checkout failed");
+      const nextSummary: CheckoutSummary = {
+        subtotalAmount: Number(data.subtotalAmount || 0),
+        discountAmount: Number(data.discountAmount || 0),
+        discountPercent: Number(data.discountPercent || 0),
+        totalAmount: Number(data.totalAmount || 0),
+        items: Array.isArray(data.items) ? data.items : cart,
+      };
       setOrderId(data.orderId);
-      persistPendingCheckout(data.orderId, cart, customerTz);
+      setCheckoutSummary(nextSummary);
+      persistPendingCheckout(data.orderId, cart, customerTz, nextSummary);
       setStep("roblox");
     } catch (e) { setError(e instanceof Error ? e.message : "Checkout failed"); }
     finally { setSubmitting(false); setCheckoutLoading(false); checkoutInFlightRef.current = false; }
@@ -720,7 +740,7 @@ export default function ShopPage() {
     try {
       const res = await fetch(`/api/shop/orders/${orderId}?action=delivery-slot`, {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ slotId: normalizeDeliverySlotId(pickedSlot), customerTimezone: customerTz }),
+        body: JSON.stringify({ slotId: pickedSlot, customerTimezone: customerTz }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed");
@@ -909,7 +929,7 @@ export default function ShopPage() {
 
         {step !== "shop" && (
           <div className="mx-auto max-w-2xl space-y-6 animate-page-enter">
-            <button onClick={() => (() => { setStep("shop"); setOrderId(null); clearPendingCheckout(); })()} className="flex items-center gap-2 text-sm text-[#B5B5B5] hover:text-white transition-colors">
+            <button onClick={() => (() => { setStep("shop"); setOrderId(null); setCheckoutSummary(null); clearPendingCheckout(); })()} className="flex items-center gap-2 text-sm text-[#B5B5B5] hover:text-white transition-colors">
               <ArrowLeft className="h-4 w-4" /> Back to Shop
             </button>
             <div className="flex gap-2">{(["roblox", "delivery", "ticket"] as const).map((s) => (
@@ -918,9 +938,9 @@ export default function ShopPage() {
             <div className="motion-panel rounded-[24px] border border-[#1E1E1E] bg-[#111111] p-4 sm:p-6 space-y-4 animate-section-enter">
               <div className="border-b border-[#1E1E1E] pb-3">
                 <p className="text-sm text-[#B5B5B5]">Order {orderId}</p>
-                <div className="mt-2 space-y-1">{cart.map((i) => (
-                  <div key={i._id} className="flex justify-between text-sm"><span>{formatPurchasedProductName(i)}</span><span className="text-[#B5B5B5]">${(i.price * i.quantity).toFixed(2)}</span></div>
-                ))}<div className="flex justify-between border-t border-[#1E1E1E] pt-2 font-semibold"><span>Total</span><span className="text-[#3DDC84]">${cartTotal.toFixed(2)}</span></div></div>
+                <div className="mt-2 space-y-1">{checkoutItems.map((i) => (
+                  <div key={String(i._id || ("product" in i ? i.product : "") || i.name)} className="flex justify-between text-sm"><span>{formatPurchasedProductName(i)}</span><span className="text-[#B5B5B5]">${(Number(i.price || 0) * Number(i.quantity || 1)).toFixed(2)}</span></div>
+                ))}<div className="flex justify-between border-t border-[#1E1E1E] pt-2 font-semibold"><span>Total</span><span className="text-[#3DDC84]">${checkoutTotal.toFixed(2)}</span></div></div>
               </div>
               {step === "roblox" && (
                 <div className="space-y-4">
@@ -1133,7 +1153,7 @@ export default function ShopPage() {
                     {slots.length === 0 && <p className="text-sm text-[#B5B5B5]">No available delivery slots.</p>}
                     {slotSegments.length > 0 && visibleSlotSegments.length === 0 && <p className="text-sm text-[#B5B5B5]">No available times for this date.</p>}
                     {visibleSlotSegments.map((s) => (
-                      <button key={s.id} onClick={() => setPickedSlot(s.slotId)} className={"w-full rounded-[16px] border p-4 text-left transition-all " + (pickedSlot === s.slotId ? "border-[#2F9BE6] bg-[#49B6FF]/10" : "border-[#1E1E1E] bg-[#050505] hover:border-[#1E1E1E]")}>
+                      <button key={s.id} onClick={() => setPickedSlot(s.id)} className={"w-full rounded-[16px] border p-4 text-left transition-all " + (pickedSlot === s.id ? "border-[#2F9BE6] bg-[#49B6FF]/10" : "border-[#1E1E1E] bg-[#050505] hover:border-[#1E1E1E]")}>
                         <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-[#2F9BE6]" /><span className="text-sm font-medium">{s.customerTimeLabel}</span></div>
                         {s.note && <p className="mt-1 pl-6 text-xs text-[#2F9BE6]">{formatSlotNote(s.note)}</p>}
                       </button>
@@ -1172,7 +1192,7 @@ export default function ShopPage() {
                             <div className="space-y-1">
                               <h4 className="text-base font-semibold text-white">PayPal Payment Guide</h4>
                               <p className="text-sm text-[#B5B5B5]">Payment Method: <span className="font-semibold text-white">Friends and Family</span></p>
-                              <p className="text-sm text-[#B5B5B5]">Payment Amount: <span className="font-semibold text-[#3DDC84]">${cartTotal.toFixed(2)}</span></p>
+                              <p className="text-sm text-[#B5B5B5]">Payment Amount: <span className="font-semibold text-[#3DDC84]">${checkoutTotal.toFixed(2)}</span></p>
                             </div>
                             <div>
                               <p className="mb-2 text-sm text-[#B5B5B5]">Send to</p>
@@ -1185,7 +1205,7 @@ export default function ShopPage() {
                             </div>
                             <div className="space-y-2 text-sm leading-6 text-[#B5B5B5]">
                               <p><span className="font-semibold text-white">1.</span> Select <span className="font-semibold text-white">Friends and Family</span> as the payment method.</p>
-                              <p><span className="font-semibold text-white">2.</span> Send <span className="font-semibold text-white">${cartTotal.toFixed(2)}</span> to the PayPal email address above.</p>
+                              <p><span className="font-semibold text-white">2.</span> Send <span className="font-semibold text-white">${checkoutTotal.toFixed(2)}</span> to the PayPal email address above.</p>
                               <p><span className="font-semibold text-white">3.</span> After completing the payment, click the <span className="font-semibold text-white">Create Ticket</span> button below.</p>
                               <p><span className="font-semibold text-white">4.</span> Send your payment screenshot in the ticket after it opens.</p>
                             </div>
@@ -1198,7 +1218,7 @@ export default function ShopPage() {
                             <div className="space-y-1">
                               <h4 className="text-base font-semibold text-white">LTC Payment Guide</h4>
                               <p className="text-sm text-[#B5B5B5]">Payment Method: <span className="font-semibold text-white">Litecoin (LTC)</span></p>
-                              <p className="text-sm text-[#B5B5B5]">Payment Amount: <span className="font-semibold text-[#3DDC84]">${cartTotal.toFixed(2)}</span></p>
+                              <p className="text-sm text-[#B5B5B5]">Payment Amount: <span className="font-semibold text-[#3DDC84]">${checkoutTotal.toFixed(2)}</span></p>
                             </div>
                             <div>
                               <p className="mb-2 text-sm text-[#B5B5B5]">Payment Address</p>
@@ -1212,7 +1232,7 @@ export default function ShopPage() {
                             <img src="/pictures/payments/ltc.png" alt="Litecoin QR code" className="h-44 w-44 rounded-[14px] border border-[#1E1E1E] bg-white p-2" />
                             <div className="space-y-2 text-sm leading-6 text-[#B5B5B5]">
                               <p><span className="font-semibold text-white">1.</span> Select <span className="font-semibold text-white">Litecoin (LTC)</span> as the payment method.</p>
-                              <p><span className="font-semibold text-white">2.</span> Send <span className="font-semibold text-white">${cartTotal.toFixed(2)}</span> worth of LTC to the wallet address above, or scan the QR code.</p>
+                              <p><span className="font-semibold text-white">2.</span> Send <span className="font-semibold text-white">${checkoutTotal.toFixed(2)}</span> worth of LTC to the wallet address above, or scan the QR code.</p>
                               <p><span className="font-semibold text-white">3.</span> After completing the payment, click the <span className="font-semibold text-white">Create Ticket</span> button below.</p>
                               <p><span className="font-semibold text-white">4.</span> Send your payment screenshot in the ticket after it opens.</p>
                             </div>
@@ -1229,7 +1249,7 @@ export default function ShopPage() {
                   ) : (
                     <div className="space-y-3">
                       <div className="flex items-center gap-2 rounded-[16px] border border-[#3DDC84]/30 bg-[#3DDC84]/10 p-4"><CheckCircle2 className="h-5 w-5 text-[#3DDC84]" /><span className="text-sm">Ticket created!</span></div>
-                      <button onClick={() => { (() => { setStep("shop"); setOrderId(null); clearPendingCheckout(); })(); clearCartState(); setOrderId(null); setRobloxUsernameInput(""); setPickedSlot(null); setTicketResult(null); }} className="w-full rounded-[14px] bg-[#161616] py-3 text-sm">Continue Shopping</button>
+                      <button onClick={() => { (() => { setStep("shop"); setOrderId(null); setCheckoutSummary(null); clearPendingCheckout(); })(); clearCartState(); setOrderId(null); setRobloxUsernameInput(""); setPickedSlot(null); setTicketResult(null); }} className="w-full rounded-[14px] bg-[#161616] py-3 text-sm">Continue Shopping</button>
                     </div>
                   )}
                 </div>

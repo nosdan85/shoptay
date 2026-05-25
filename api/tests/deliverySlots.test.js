@@ -59,6 +59,8 @@ test('splitSlotForTimezone splits customer display at local midnight', () => {
         {
             id: 'slot-1:2026-05-25:0',
             slotId: 'slot-1',
+            customerStartAt: '2026-05-25T06:00:00.000Z',
+            customerEndAt: '2026-05-25T08:00:00.000Z',
             customerDateKey: '2026-05-25',
             customerDateLabel: 'Mon, May 25',
             customerTimeLabel: '1:00 PM - 3:00 PM'
@@ -78,6 +80,8 @@ test('splitSlotForTimezone places post-midnight segment on the next customer dat
         {
             id: 'slot-2:2026-05-24:0',
             slotId: 'slot-2',
+            customerStartAt: '2026-05-25T06:00:00.000Z',
+            customerEndAt: '2026-05-25T07:00:00.000Z',
             customerDateKey: '2026-05-24',
             customerDateLabel: 'Sun, May 24',
             customerTimeLabel: '11:00 PM - 12:00 AM'
@@ -85,6 +89,8 @@ test('splitSlotForTimezone places post-midnight segment on the next customer dat
         {
             id: 'slot-2:2026-05-25:1',
             slotId: 'slot-2',
+            customerStartAt: '2026-05-25T07:00:00.000Z',
+            customerEndAt: '2026-05-25T08:00:00.000Z',
             customerDateKey: '2026-05-25',
             customerDateLabel: 'Mon, May 25',
             customerTimeLabel: '12:00 AM - 1:00 AM'
@@ -104,6 +110,8 @@ test('splitSlotForTimezone keeps Asia/Seoul slots available when Vietnam hours c
         {
             id: '507f1f77bcf86cd799439011:2026-05-25:0',
             slotId: '507f1f77bcf86cd799439011',
+            customerStartAt: '2026-05-25T14:00:00.000Z',
+            customerEndAt: '2026-05-25T15:00:00.000Z',
             customerDateKey: '2026-05-25',
             customerDateLabel: 'Mon, May 25',
             customerTimeLabel: '11:00 PM - 12:00 AM'
@@ -111,6 +119,8 @@ test('splitSlotForTimezone keeps Asia/Seoul slots available when Vietnam hours c
         {
             id: '507f1f77bcf86cd799439011:2026-05-26:1',
             slotId: '507f1f77bcf86cd799439011',
+            customerStartAt: '2026-05-25T15:00:00.000Z',
+            customerEndAt: '2026-05-25T16:00:00.000Z',
             customerDateKey: '2026-05-26',
             customerDateLabel: 'Tue, May 26',
             customerTimeLabel: '12:00 AM - 1:00 AM'

@@ -131,6 +131,8 @@ const splitSlotForTimezone = ({ id, startAt, endAt, timezone }) => {
         segments.push({
             id: `${slotId}:${dateKey}:${index}`,
             slotId,
+            customerStartAt: segmentStart.toISOString(),
+            customerEndAt: segmentEnd.toISOString(),
             customerDateKey: dateKey,
             customerDateLabel: formatDateLabelInTimezone(segmentStart, tz),
             customerTimeLabel: formatTimeRangeInTimezone(segmentStart, segmentEnd, tz)

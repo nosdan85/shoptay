@@ -24,6 +24,12 @@ function toVietnamDateTimeParts(iso: string): { date: string; time: string } {
   };
 }
 
+function addDaysToDateKey(dateKey: string, days: number): string {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const next = new Date(Date.UTC(year, month - 1, day + days, 12, 0, 0, 0));
+  return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}-${String(next.getUTCDate()).padStart(2, "0")}`;
+}
+
 function toVietnamIso(date: string, time: string): string {
   const [year, month, day] = date.split("-").map(Number);
   const [hour, minute] = time.split(":").map(Number);
@@ -86,6 +92,25 @@ function hourToMinutes(value: string): number {
   const [hour, minute] = String(value || "").split(":").map(Number);
   if (!Number.isFinite(hour) || !Number.isFinite(minute)) return -1;
   return hour * 60 + minute;
+}
+
+function getVietnamSlotParts(startIso: string, endIso: string): {
+  date: string;
+  startTime: string;
+  endTime: string;
+  endDate: string;
+  crossesMidnight: boolean;
+} {
+  const start = toVietnamDateTimeParts(startIso);
+  const end = toVietnamDateTimeParts(endIso);
+  const endsAtNextMidnight = end.time === "00:00" && end.date === addDaysToDateKey(start.date, 1);
+  return {
+    date: start.date,
+    startTime: start.time,
+    endTime: endsAtNextMidnight ? "24:00" : end.time,
+    endDate: end.date,
+    crossesMidnight: end.date !== start.date,
+  };
 }
 
 function getNextVietnamHourlySlot(now = new Date()): { date: string; month: string; startTime: string; endTime: string } {
@@ -370,7 +395,7 @@ export default function AdminPage() {
     () => (slot: Slot) => {
       try {
         const start = new Date(slot.startAt);
-        const end = new Date(slot.endAt);
+        const slotParts = getVietnamSlotParts(slot.startAt, slot.endAt);
         const dateText = new Intl.DateTimeFormat("vi-VN", {
           timeZone: slot.ownerTimezone,
           weekday: "short",
@@ -378,19 +403,8 @@ export default function AdminPage() {
           day: "numeric",
           year: "numeric",
         }).format(start);
-        const startText = new Intl.DateTimeFormat("vi-VN", {
-          timeZone: slot.ownerTimezone,
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-        }).format(start);
-        const endText = new Intl.DateTimeFormat("vi-VN", {
-          timeZone: slot.ownerTimezone,
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-        }).format(end);
-        return `${dateText} • ${startText} - ${endText} • Giờ VN (GMT+7)`;
+        const endDateSuffix = slotParts.crossesMidnight && slotParts.endTime !== "24:00" ? ` (${slotParts.endDate})` : "";
+        return `${dateText} • ${slotParts.startTime} - ${slotParts.endTime}${endDateSuffix} • Giờ VN (GMT+7)`;
       } catch {
         return `${slot.startAt} - ${slot.endAt}`;
       }
@@ -431,13 +445,12 @@ export default function AdminPage() {
   };
 
   const startEditSlot = (slot: Slot) => {
-    const start = toVietnamDateTimeParts(slot.startAt);
-    const end = toVietnamDateTimeParts(slot.endAt);
+    const slotParts = getVietnamSlotParts(slot.startAt, slot.endAt);
     setEditingSlot(slot._id);
     setSlotEditForm({
-      date: start.date,
-      startTime: start.time,
-      endTime: end.time,
+      date: slotParts.date,
+      startTime: slotParts.startTime,
+      endTime: slotParts.endTime,
       note: slot.note || "",
       active: slot.active,
     });
@@ -445,6 +458,10 @@ export default function AdminPage() {
 
   const saveSlotEdit = async () => {
     if (!token || !editingSlot || !slotEditForm.date || !slotEditForm.startTime || !slotEditForm.endTime) return;
+    if (hourToMinutes(slotEditForm.endTime) <= hourToMinutes(slotEditForm.startTime)) {
+      setError("Gio ket thuc phai sau gio bat dau");
+      return;
+    }
     setSubmitting(true); setError(null);
     try {
       const res = await fetch(`/api/shop/delivery-slots/${editingSlot}`, {
@@ -745,8 +762,18 @@ export default function AdminPage() {
                     <div className="space-y-3 animate-fade-in">
                       <div className="grid gap-2 md:grid-cols-3">
                         <div className="space-y-1"><label className="text-xs text-[#B5B5B5]/60">Ngày</label><input type="date" value={slotEditForm.date} onChange={(e) => setSlotEditForm((p) => ({ ...p, date: e.target.value }))} className="w-full rounded border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm outline-none" /></div>
-                        <div className="space-y-1"><label className="text-xs text-[#B5B5B5]/60">Từ giờ</label><input type="time" value={slotEditForm.startTime} onChange={(e) => setSlotEditForm((p) => ({ ...p, startTime: e.target.value }))} className="w-full rounded border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm outline-none" /></div>
-                        <div className="space-y-1"><label className="text-xs text-[#B5B5B5]/60">Đến giờ</label><input type="time" value={slotEditForm.endTime} onChange={(e) => setSlotEditForm((p) => ({ ...p, endTime: e.target.value }))} className="w-full rounded border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm outline-none" /></div>
+                        <div className="space-y-1">
+                          <label className="text-xs text-[#B5B5B5]/60">Từ giờ</label>
+                          <select value={slotEditForm.startTime} onChange={(e) => setSlotEditForm((p) => ({ ...p, startTime: e.target.value }))} className="w-full rounded border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm outline-none">
+                            {HOUR_OPTIONS.slice(0, -1).map((time) => <option key={time} value={time}>{time}</option>)}
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs text-[#B5B5B5]/60">Đến giờ</label>
+                          <select value={slotEditForm.endTime} onChange={(e) => setSlotEditForm((p) => ({ ...p, endTime: e.target.value }))} className="w-full rounded border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm outline-none">
+                            {HOUR_OPTIONS.slice(1).map((time) => <option key={time} value={time}>{time}</option>)}
+                          </select>
+                        </div>
                       </div>
                       <input placeholder="Ghi chú (tùy chọn)" value={slotEditForm.note} onChange={(e) => setSlotEditForm((p) => ({ ...p, note: e.target.value }))} className="w-full rounded border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm outline-none" />
                       <label className="flex items-center gap-2 text-sm text-[#B5B5B5]">

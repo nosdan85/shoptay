@@ -6,6 +6,7 @@ const {
     buildSelectableDeliverySlotQuery,
     buildHourlyChoicePoints,
     isFutureDeliverySlotRange,
+    isValidLocalHourTime,
     normalizeDeliverySlotId,
     parseLocalDateTimeInZone,
     resolveSelectedDeliveryWindow,
@@ -27,6 +28,15 @@ test('buildPublicDeliverySlotQuery returns all active future slots without owner
         endAt: { $gte: now }
     });
     assert.equal(Object.hasOwn(query, 'ownerDiscordId'), false);
+});
+
+test('isValidLocalHourTime accepts only whole-hour admin slot boundaries', () => {
+    assert.equal(isValidLocalHourTime('00:00', { allowMidnightEnd: true }), true);
+    assert.equal(isValidLocalHourTime('24:00', { allowMidnightEnd: true }), true);
+    assert.equal(isValidLocalHourTime('24:00'), false);
+    assert.equal(isValidLocalHourTime('23:00'), true);
+    assert.equal(isValidLocalHourTime('23:30'), false);
+    assert.equal(isValidLocalHourTime('25:00', { allowMidnightEnd: true }), false);
 });
 
 test('buildSelectableDeliverySlotQuery only allows active future slots without owner filtering', () => {

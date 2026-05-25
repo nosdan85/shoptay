@@ -59,6 +59,7 @@ const {
     buildPublicDeliverySlotQuery,
     buildSelectableDeliverySlotQuery,
     isFutureDeliverySlotRange,
+    isValidLocalHourTime,
     normalizeDeliverySlotId,
     parseLocalDateTimeInZone: parseDeliverySlotLocalDateTimeInZone,
     resolveSelectedDeliveryWindow,
@@ -4375,6 +4376,7 @@ router.post('/delivery-slots/bulk', authRequired, async (req, res) => {
         for (const range of ranges) {
             const { startTime, endTime, note } = range || {};
             if (!startTime || !endTime) continue;
+            if (!isValidLocalHourTime(startTime) || !isValidLocalHourTime(endTime, { allowMidnightEnd: true })) continue;
 
             const startAt = parseDeliverySlotLocalDateTimeInZone(dateStr, startTime, tz);
             const endAt = parseDeliverySlotLocalDateTimeInZone(dateStr, endTime, tz);

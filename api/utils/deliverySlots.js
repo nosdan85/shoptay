@@ -49,6 +49,16 @@ const parseLocalDateTimeInZone = (dateStr, timeStr, timezone) => {
     return new Date(guessMs);
 };
 
+const isValidLocalHourTime = (value, options = {}) => {
+    const match = String(value || '').trim().match(/^(\d{2}):(\d{2})$/);
+    if (!match) return false;
+    const hour = Number(match[1]);
+    const minute = Number(match[2]);
+    if (!Number.isInteger(hour) || !Number.isInteger(minute) || minute !== 0) return false;
+    if (hour === 24) return Boolean(options.allowMidnightEnd);
+    return hour >= 0 && hour <= 23;
+};
+
 const buildPublicDeliverySlotQuery = (now = new Date()) => ({
     active: true,
     endAt: { $gte: now }
@@ -204,6 +214,7 @@ module.exports = {
     buildPublicDeliverySlotQuery,
     buildSelectableDeliverySlotQuery,
     isFutureDeliverySlotRange,
+    isValidLocalHourTime,
     normalizeDeliverySlotId,
     parseLocalDateTimeInZone,
     resolveSelectedDeliveryWindow,

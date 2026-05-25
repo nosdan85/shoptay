@@ -140,6 +140,22 @@ function addMonths(monthKey: string, delta: number): string {
   return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`;
 }
 
+function getDateKeyInTimezone(timezone: string, value = new Date()): string {
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: timezone || "UTC",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(value);
+    const year = parts.find((part) => part.type === "year")?.value;
+    const month = parts.find((part) => part.type === "month")?.value;
+    const day = parts.find((part) => part.type === "day")?.value;
+    if (year && month && day) return `${year}-${month}-${day}`;
+  } catch {}
+  return value.toISOString().slice(0, 10);
+}
+
 function buildCalendarDays(monthKey: string): Array<{ key: string; day: number; inMonth: boolean }> {
   const [year, month] = monthKey.split("-").map(Number);
   const first = new Date(year, month - 1, 1);
@@ -524,12 +540,13 @@ export default function ShopPage() {
     const res = await fetch(`/api/shop/delivery-slots?timezone=${encodeURIComponent(tzValue)}`, { cache: "no-store" });
     const data = await res.json();
     const nextSlots = Array.isArray(data?.slots) ? data.slots : [];
+    const todayKey = getDateKeyInTimezone(tzValue);
     setSlots(nextSlots);
     setPickedSlot(null);
     setSelectedSlotDate((current) => {
       if (current && nextSlots.some((slot: Slot) => slot.customerDateKey === current || slot.customerSegments?.some((segment) => segment.customerDateKey === current))) return current;
-      const firstDate = String(nextSlots[0]?.customerSegments?.[0]?.customerDateKey || nextSlots[0]?.customerDateKey || "");
-      if (firstDate) setDeliveryMonth(firstDate.slice(0, 7));
+      const firstDate = String(nextSlots[0]?.customerSegments?.[0]?.customerDateKey || nextSlots[0]?.customerDateKey || todayKey);
+      setDeliveryMonth(firstDate.slice(0, 7));
       return firstDate;
     });
     return nextSlots;
@@ -576,7 +593,9 @@ export default function ShopPage() {
     }));
   }, [slotSegments]);
   const slotDateSet = useMemo(() => new Set(slotDates.map((date) => date.key)), [slotDates]);
-  const deliveryCalendarDays = useMemo(() => buildCalendarDays(deliveryMonth || selectedSlotDate.slice(0, 7) || new Date().toISOString().slice(0, 7)), [deliveryMonth, selectedSlotDate]);
+  const fallbackDeliveryDate = useMemo(() => getDateKeyInTimezone(customerTz), [customerTz]);
+  const deliveryMonthKey = deliveryMonth || selectedSlotDate.slice(0, 7) || fallbackDeliveryDate.slice(0, 7);
+  const deliveryCalendarDays = useMemo(() => buildCalendarDays(deliveryMonthKey), [deliveryMonthKey]);
   const visibleSlotSegments = useMemo(
     () => slotSegments.filter((segment) => !selectedSlotDate || segment.customerDateKey === selectedSlotDate),
     [selectedSlotDate, slotSegments]
@@ -1107,51 +1126,48 @@ export default function ShopPage() {
                     </div>
                   </div>
                   <div className="space-y-3">
-                    {slotDates.length > 0 && (
-                      <div className="space-y-3 rounded-[16px] border border-[#1E1E1E] bg-[#050505] p-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <button type="button" onClick={() => setDeliveryMonth((current) => addMonths(current || selectedSlotDate.slice(0, 7), -1))} className="rounded-[12px] bg-[#111111] p-2 text-[#B5B5B5] hover:text-white">
-                            <ChevronLeft className="h-4 w-4" />
-                          </button>
-                          <p className="text-sm font-semibold text-white">{getMonthLabel(deliveryMonth || selectedSlotDate.slice(0, 7))}</p>
-                          <button type="button" onClick={() => setDeliveryMonth((current) => addMonths(current || selectedSlotDate.slice(0, 7), 1))} className="rounded-[12px] bg-[#111111] p-2 text-[#B5B5B5] hover:text-white">
-                            <ChevronRight className="h-4 w-4" />
-                          </button>
-                        </div>
-                        <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-medium text-[#B5B5B5]/70">
-                          {WEEKDAY_LABELS.map((day) => <div key={day}>{day}</div>)}
-                        </div>
-                        <div className="grid grid-cols-7 gap-1">
-                          {deliveryCalendarDays.map((day) => {
-                            const hasSlots = slotDateSet.has(day.key);
-                            return (
-                              <button
-                                key={day.key}
-                                type="button"
-                                onClick={() => {
-                                  if (!hasSlots) return;
-                                  setSelectedSlotDate(day.key);
-                                  setPickedSlot(null);
-                                }}
-                                disabled={!hasSlots}
-                                className={"relative h-10 rounded-[12px] text-sm font-medium transition-all " + (selectedSlotDate === day.key
-                                  ? "bg-[#2F9BE6] text-white"
-                                  : hasSlots
-                                    ? "bg-[#111111] text-white hover:bg-[#1E1E1E]"
-                                    : day.inMonth
-                                      ? "bg-transparent text-[#B5B5B5]/35"
-                                      : "bg-transparent text-[#B5B5B5]/20")}
-                              >
-                                {day.day}
-                                {hasSlots && selectedSlotDate !== day.key && <span className="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-[#3DDC84]" />}
-                              </button>
-                            );
-                          })}
-                        </div>
+                    <div className="space-y-3 rounded-[16px] border border-[#1E1E1E] bg-[#050505] p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <button type="button" onClick={() => setDeliveryMonth((current) => addMonths(current || deliveryMonthKey, -1))} className="rounded-[12px] bg-[#111111] p-2 text-[#B5B5B5] hover:text-white">
+                          <ChevronLeft className="h-4 w-4" />
+                        </button>
+                        <p className="text-sm font-semibold text-white">{getMonthLabel(deliveryMonthKey)}</p>
+                        <button type="button" onClick={() => setDeliveryMonth((current) => addMonths(current || deliveryMonthKey, 1))} className="rounded-[12px] bg-[#111111] p-2 text-[#B5B5B5] hover:text-white">
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
                       </div>
-                    )}
-                    {slots.length === 0 && <p className="text-sm text-[#B5B5B5]">No available delivery slots.</p>}
-                    {slotSegments.length > 0 && visibleSlotSegments.length === 0 && <p className="text-sm text-[#B5B5B5]">No available times for this date.</p>}
+                      <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-medium text-[#B5B5B5]/70">
+                        {WEEKDAY_LABELS.map((day) => <div key={day}>{day}</div>)}
+                      </div>
+                      <div className="grid grid-cols-7 gap-1">
+                        {deliveryCalendarDays.map((day) => {
+                          const hasSlots = slotDateSet.has(day.key);
+                          return (
+                            <button
+                              key={day.key}
+                              type="button"
+                              onClick={() => {
+                                if (!day.inMonth) return;
+                                setSelectedSlotDate(day.key);
+                                setPickedSlot(null);
+                              }}
+                              disabled={!day.inMonth}
+                              className={"relative h-10 rounded-[12px] text-sm font-medium transition-all " + (selectedSlotDate === day.key
+                                ? "bg-[#2F9BE6] text-white"
+                                : hasSlots
+                                  ? "bg-[#111111] text-white hover:bg-[#1E1E1E]"
+                                  : day.inMonth
+                                    ? "bg-[#080808] text-[#B5B5B5] hover:bg-[#111111]"
+                                    : "bg-transparent text-[#B5B5B5]/20")}
+                            >
+                              {day.day}
+                              {hasSlots && selectedSlotDate !== day.key && <span className="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-[#3DDC84]" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    {visibleSlotSegments.length === 0 && <p className="text-sm text-[#B5B5B5]">No available times for this date.</p>}
                     {visibleSlotSegments.map((s) => (
                       <button key={s.id} onClick={() => setPickedSlot(s.id)} className={"w-full rounded-[16px] border p-4 text-left transition-all " + (pickedSlot === s.id ? "border-[#2F9BE6] bg-[#49B6FF]/10" : "border-[#1E1E1E] bg-[#050505] hover:border-[#1E1E1E]")}>
                         <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-[#2F9BE6]" /><span className="text-sm font-medium">{s.customerTimeLabel}</span></div>

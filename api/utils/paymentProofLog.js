@@ -36,11 +36,19 @@ const getMethodLabel = (method) => {
     return 'PayPal Friends & Family';
 };
 
-const formatDiscordTimestamp = (value) => {
+const formatVietnamDateTime = (value) => {
     const ms = new Date(value || Date.now()).getTime();
     if (!Number.isFinite(ms)) return '';
-    const seconds = Math.floor(ms / 1000);
-    return `<t:${seconds}:f> (<t:${seconds}:T>)`;
+    return new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hourCycle: 'h23'
+    }).format(new Date(ms)).replace(',', '');
 };
 
 const buildPaymentProofLogPayload = ({
@@ -54,7 +62,7 @@ const buildPaymentProofLogPayload = ({
 }) => {
     const ticketUrl = getTicketUrl(ticketGuildId, ticketChannelId);
     const statusText = status === 'done'
-        ? `Done${doneBy ? ` by <@${doneBy}>` : ''}${doneAt ? ` at ${formatDiscordTimestamp(doneAt)}` : ''}`
+        ? `Done${doneBy ? ` by <@${doneBy}>` : ''}${doneAt ? ` at ${formatVietnamDateTime(doneAt)} Vietnam time` : ''}`
         : 'Not done';
 
     const embed = new EmbedBuilder()
@@ -76,7 +84,7 @@ const buildPaymentProofLogPayload = ({
 
 module.exports = {
     buildPaymentProofLogPayload,
-    formatDiscordTimestamp,
+    formatVietnamDateTime,
     getPaymentLogConfig,
     getTicketUrl,
     isPaymentLogConfigured

@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 const {
     buildPaymentProofLogPayload,
-    formatDiscordTimestamp,
+    formatVietnamDateTime,
     getTicketUrl,
     isPaymentLogConfigured
 } = require('../utils/paymentProofLog');
@@ -38,7 +38,7 @@ test('buildPaymentProofLogPayload includes order summary and not done status', (
     assert.match(payload.embeds[0].data.fields.find((field) => field.name === 'Ticket').value, /discord.com\/channels\/111\/222/);
 });
 
-test('buildPaymentProofLogPayload formats done time with Discord date and clock timestamps', () => {
+test('buildPaymentProofLogPayload formats done time in Vietnam timezone', () => {
     const payload = buildPaymentProofLogPayload({
         order: {
             orderId: 'nm_2',
@@ -57,9 +57,9 @@ test('buildPaymentProofLogPayload formats done time with Discord date and clock 
     });
 
     const status = payload.embeds[0].data.fields.find((field) => field.name === 'Status').value;
-    assert.match(status, /Done by <@1234567890> at <t:1779679233:f> \(<t:1779679233:T>\)/);
+    assert.match(status, /Done by <@1234567890> at 25\/05\/2026 10:20:33 Vietnam time/);
 });
 
-test('formatDiscordTimestamp returns date and time precision', () => {
-    assert.equal(formatDiscordTimestamp(new Date('2026-05-25T03:20:33.000Z')), '<t:1779679233:f> (<t:1779679233:T>)');
+test('formatVietnamDateTime returns date and time precision in Vietnam timezone', () => {
+    assert.equal(formatVietnamDateTime(new Date('2026-05-25T03:20:33.000Z')), '25/05/2026 10:20:33');
 });

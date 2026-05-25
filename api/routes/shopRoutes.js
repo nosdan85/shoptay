@@ -19,6 +19,7 @@ const {
     createWalletDeliveryTicket,
     createPayPalFFTicket,
     createLTCTicket,
+    sendPaymentProofLog,
     checkUserInGuild,
     checkUserHasOwnerRole,
     DiscordBotError
@@ -104,6 +105,35 @@ const uploadProofImage = multer({
     },
     limits: { fileSize: 8 * 1024 * 1024 }
 });
+
+const PAYMENT_PROOF_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.gif'];
+const paymentProofUpload = multer({
+    storage: multer.memoryStorage(),
+    fileFilter: (req, file, cb) => {
+        const contentType = String(file?.mimetype || '').toLowerCase();
+        const ext = path.extname(file?.originalname || '').toLowerCase();
+        if (/^image\/(png|jpe?g|webp|gif)$/i.test(contentType) || PAYMENT_PROOF_IMAGE_EXTENSIONS.includes(ext)) {
+            return cb(null, true);
+        }
+        return cb(new Error('Payment proof must be an image file.'), false);
+    },
+    limits: {
+        files: 1,
+        fileSize: Math.max(1, Number(process.env.PAYMENT_PROOF_MAX_MB || 8)) * 1024 * 1024
+    }
+});
+
+const requirePaymentProofUpload = (req, res, next) => {
+    paymentProofUpload.single('paymentProof')(req, res, (error) => {
+        if (error) {
+            return res.status(400).json({ error: error.message || 'Invalid payment proof upload.' });
+        }
+        if (!req.file) {
+            return res.status(400).json({ error: 'Upload your payment screenshot before creating a ticket.' });
+        }
+        return next();
+    });
+};
 
 
 // ????????????????????????????????????????????????????????????????????????????????
@@ -443,6 +473,63 @@ const buildClientPayUrl = (orderId, extraQuery = '') => {
     const base = getClientBaseUrl();
     if (base) return `${base}/pay?orderId=${encodedOrderId}${query}`;
     return `/pay?orderId=${encodedOrderId}${query}`;
+};
+
+const getTicketReadinessError = (order) => {
+    if (!order?.robloxUsername || !order?.robloxUserId) {
+        return { status: 409, error: 'Link your Roblox account before creating a ticket.', code: 'ROBLOX_LINK_REQUIRED' };
+    }
+    if (!order?.deliverySlotId || !order?.deliveryCustomerStartAt || !order?.deliveryCustomerEndAt) {
+        return { status: 409, error: 'Select a delivery time before creating a ticket.', code: 'DELIVERY_SLOT_REQUIRED' };
+    }
+    return null;
+};
+
+const orderToPlainObject = (order) => {
+    if (!order) return {};
+    if (typeof order.toObject === 'function') return order.toObject();
+    return order;
+};
+
+const persistPaymentProofLogResult = async ({ orderId, method, proofFile, proofLog }) => {
+    await Order.updateOne(
+        { _id: orderId },
+        {
+            $set: {
+                paymentProofStatus: proofLog?.ok ? 'uploaded' : 'not_uploaded',
+                paymentProofMethod: method,
+                paymentProofOriginalName: String(proofFile?.originalname || '').slice(0, 255),
+                paymentProofMimeType: String(proofFile?.mimetype || '').slice(0, 100),
+                paymentProofUploadedAt: new Date(),
+                paymentProofLogGuildId: proofLog?.guildId || '',
+                paymentProofLogChannelId: proofLog?.channelId || '',
+                paymentProofLogMessageId: proofLog?.messageId || '',
+                paymentProofLogError: proofLog?.ok ? '' : 'Could not send payment proof log.'
+            }
+        }
+    );
+};
+
+const logPaymentProofForTicket = async ({ order, method, ticketChannelId, proofFile }) => {
+    const plainOrder = { ...orderToPlainObject(order), paymentMethod: method };
+    const proofLog = await sendPaymentProofLog({
+        order: plainOrder,
+        method,
+        ticketChannelId,
+        proofFile
+    }).catch((error) => {
+        console.error('Payment proof log send error:', error?.message || error);
+        return { ok: false, error: 'Could not send payment proof log.' };
+    });
+
+    await persistPaymentProofLogResult({
+        orderId: order._id,
+        method,
+        proofFile,
+        proofLog
+    });
+
+    return proofLog;
 };
 
 const isDiscordCloudflareBlock = (status, data) => {
@@ -3298,7 +3385,7 @@ router.get('/owner/confirmed-orders', authRequired, async (req, res) => {
     }
 });
 
-router.post('/create-ticket-paypal-ff', authRequired, ticketCreateLimiter, async (req, res) => {
+router.post('/create-ticket-paypal-ff', authRequired, ticketCreateLimiter, requirePaymentProofUpload, async (req, res) => {
     let lockAcquiredOrderId = '';
     let lockAcquiredDiscordId = '';
     let lockAcquiredUntil = null;
@@ -3310,6 +3397,8 @@ router.post('/create-ticket-paypal-ff', authRequired, ticketCreateLimiter, async
 
         const { order, status, error } = await getOwnedOrder(orderId, req.user.discordId);
         if (!order) return res.status(status).json({ error });
+        const readinessError = getTicketReadinessError(order);
+        if (readinessError) return res.status(readinessError.status).json(readinessError);
         const instructions = await ensurePayPalFfInstructions(order);
 
         if (isPanelTicketMode()) {
@@ -3329,12 +3418,22 @@ router.post('/create-ticket-paypal-ff', authRequired, ticketCreateLimiter, async
         }
 
         if (order.paypalTicketChannelId) {
+            const proofLog = order.paymentProofLogMessageId
+                ? { ok: true }
+                : await logPaymentProofForTicket({
+                    order,
+                    method: 'paypal_ff',
+                    ticketChannelId: order.paypalTicketChannelId,
+                    proofFile: req.file
+                });
             return res.json({
                 success: true,
                 alreadyExists: true,
                 channelId: order.paypalTicketChannelId,
                 email: instructions?.paypalEmail || process.env.PAYPAL_EMAIL || '',
-                memoExpected: instructions?.memoExpected || buildMemoExpected(order)
+                memoExpected: instructions?.memoExpected || buildMemoExpected(order),
+                paymentProofLogged: Boolean(proofLog?.ok),
+                paymentProofLogError: proofLog?.ok ? '' : 'Could not send payment proof log.'
             });
         }
 
@@ -3427,6 +3526,12 @@ router.post('/create-ticket-paypal-ff', authRequired, ticketCreateLimiter, async
                 code: 'DISCORD_TICKET_UNAVAILABLE'
             });
         }
+        const proofLog = await logPaymentProofForTicket({
+            order: lockedOrder,
+            method: 'paypal_ff',
+            ticketChannelId: channelId,
+            proofFile: req.file
+        });
 
         const persistResult = await Order.updateOne(
             { _id: lockedOrder._id, paypalTicketLockUntil: lockAcquiredUntil },
@@ -3481,7 +3586,9 @@ router.post('/create-ticket-paypal-ff', authRequired, ticketCreateLimiter, async
             success: true,
             channelId: channelId || null,
             email: instructions?.paypalEmail || process.env.PAYPAL_EMAIL || '',
-            memoExpected: instructions?.memoExpected || buildMemoExpected(order)
+            memoExpected: instructions?.memoExpected || buildMemoExpected(order),
+            paymentProofLogged: Boolean(proofLog?.ok),
+            paymentProofLogError: proofLog?.ok ? '' : 'Could not send payment proof log.'
         });
     } catch (err) {
         console.error('Create PayPal F&F ticket error:', err);
@@ -3511,7 +3618,7 @@ router.post('/create-ticket-paypal-ff', authRequired, ticketCreateLimiter, async
     }
 });
 
-router.post('/create-ticket-ltc', authRequired, ticketCreateLimiter, async (req, res) => {
+router.post('/create-ticket-ltc', authRequired, ticketCreateLimiter, requirePaymentProofUpload, async (req, res) => {
     let lockAcquiredOrderId = '';
     let lockAcquiredDiscordId = '';
     let lockAcquiredUntil = null;
@@ -3523,6 +3630,8 @@ router.post('/create-ticket-ltc', authRequired, ticketCreateLimiter, async (req,
 
         const { order, status, error } = await getOwnedOrder(orderId, req.user.discordId);
         if (!order) return res.status(status).json({ error });
+        const readinessError = getTicketReadinessError(order);
+        if (readinessError) return res.status(readinessError.status).json(readinessError);
 
         if (isPanelTicketMode()) {
             await Order.findByIdAndUpdate(order._id, { paymentMethod: 'ltc' });
@@ -3539,10 +3648,20 @@ router.post('/create-ticket-ltc', authRequired, ticketCreateLimiter, async (req,
         }
 
         if (order.ltcTicketChannelId) {
+            const proofLog = order.paymentProofLogMessageId
+                ? { ok: true }
+                : await logPaymentProofForTicket({
+                    order,
+                    method: 'ltc',
+                    ticketChannelId: order.ltcTicketChannelId,
+                    proofFile: req.file
+                });
             return res.json({
                 success: true,
                 alreadyExists: true,
-                channelId: order.ltcTicketChannelId
+                channelId: order.ltcTicketChannelId,
+                paymentProofLogged: Boolean(proofLog?.ok),
+                paymentProofLogError: proofLog?.ok ? '' : 'Could not send payment proof log.'
             });
         }
 
@@ -3618,6 +3737,12 @@ router.post('/create-ticket-ltc', authRequired, ticketCreateLimiter, async (req,
                 code: 'DISCORD_TICKET_UNAVAILABLE'
             });
         }
+        const proofLog = await logPaymentProofForTicket({
+            order: lockedOrder,
+            method: 'ltc',
+            ticketChannelId: channelId,
+            proofFile: req.file
+        });
 
         const persistResult = await Order.updateOne(
             { _id: lockedOrder._id, ltcTicketLockUntil: lockAcquiredUntil },
@@ -3670,7 +3795,9 @@ router.post('/create-ticket-ltc', authRequired, ticketCreateLimiter, async (req,
             success: true,
             channelId: channelId || null,
             payAddress: getLtcPayAddress(),
-            qrImageUrl: getLtcQrImageUrl()
+            qrImageUrl: getLtcQrImageUrl(),
+            paymentProofLogged: Boolean(proofLog?.ok),
+            paymentProofLogError: proofLog?.ok ? '' : 'Could not send payment proof log.'
         });
     } catch (err) {
         console.error('Create LTC ticket error:', err);

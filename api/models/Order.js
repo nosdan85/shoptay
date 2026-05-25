@@ -49,6 +49,22 @@ const orderSchema = new mongoose.Schema({
     paymentInstructionEmailSentAt: { type: Date, default: null },
     paymentConfirmationEmailSentAt: { type: Date, default: null },
     paymentReminderEmailSentAt: { type: Date, default: null },
+    paymentProofStatus: {
+        type: String,
+        enum: ['not_uploaded', 'uploaded', 'done'],
+        default: 'not_uploaded',
+        index: true
+    },
+    paymentProofMethod: { type: String, default: '', trim: true },
+    paymentProofOriginalName: { type: String, default: '', trim: true },
+    paymentProofMimeType: { type: String, default: '', trim: true },
+    paymentProofUploadedAt: { type: Date, default: null },
+    paymentProofLogGuildId: { type: String, default: '', trim: true },
+    paymentProofLogChannelId: { type: String, default: '', trim: true },
+    paymentProofLogMessageId: { type: String, default: '', trim: true },
+    paymentProofLogError: { type: String, default: '' },
+    paymentProofDoneAt: { type: Date, default: null },
+    paymentProofDoneBy: { type: String, default: '', trim: true },
     manualPaymentNote: { type: String, default: '' },
     manualPaymentConfirmedBy: { type: String, default: '' },
     ipnLogId: { type: mongoose.Schema.Types.ObjectId, ref: 'PaymentLog', default: null },
@@ -72,6 +88,7 @@ const orderSchema = new mongoose.Schema({
 orderSchema.index({ createdAt: -1 });
 orderSchema.index({ memoExpected: 1 });
 orderSchema.index({ paymentMethod: 1, paymentStatus: 1, createdAt: -1 });
+orderSchema.index({ paymentProofLogChannelId: 1, paymentProofLogMessageId: 1 });
 
 orderSchema.pre('validate', function syncPaymentAliases(next) {
     if (!Number.isFinite(Number(this.total)) || Number(this.total) <= 0) {

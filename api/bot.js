@@ -16,6 +16,11 @@ const Proof = require('./models/Proof');
 const ProofImage = require('./models/ProofImage');
 const { encryptSecret, decryptSecret } = require('./utils/tokenCrypto');
 const { formatPurchasedUnitsLabel } = require('./utils/itemQuantityDisplay');
+const {
+    buildPaymentProofLogPayload,
+    getPaymentLogConfig,
+    isPaymentLogConfigured
+} = require('./utils/paymentProofLog');
 
 const { log } = require('./utils/loggingService');
 
@@ -1136,6 +1141,71 @@ const sendAutoVouchFromTicketImages = async ({ order, imageUrls }) => {
     return true;
 };
 
+const sendPaymentProofLog = async ({ order, method, ticketChannelId, proofFile }) => {
+    const config = getPaymentLogConfig();
+    if (!isPaymentLogConfigured(config)) {
+        return { ok: false, error: 'Payment log channel is not configured.' };
+    }
+    if (!proofFile?.buffer || !proofFile?.mimetype) {
+        return { ok: false, error: 'Payment proof file is missing.' };
+    }
+
+    const channel = await client.channels.fetch(config.channelId, { force: true });
+    if (!channel || typeof channel.send !== 'function') {
+        return { ok: false, error: 'Payment log channel is unavailable.' };
+    }
+
+    const payload = buildPaymentProofLogPayload({
+        order,
+        method,
+        ticketGuildId: getGuildId(),
+        ticketChannelId,
+        status: 'not_done'
+    });
+
+    const safeOrderId = String(order?.orderId || 'order').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const fallbackName = `payment-proof-${safeOrderId}.png`;
+    const sent = await channel.send({
+        ...payload,
+        files: [{
+            attachment: proofFile.buffer,
+            name: proofFile.originalname || fallbackName,
+            contentType: proofFile.mimetype
+        }]
+    });
+
+    return {
+        ok: true,
+        guildId: config.guildId,
+        channelId: config.channelId,
+        messageId: sent.id
+    };
+};
+
+const updatePaymentProofLogDone = async ({ order, doneBy }) => {
+    if (!order?.paymentProofLogChannelId || !order?.paymentProofLogMessageId) return false;
+
+    const channel = await client.channels.fetch(order.paymentProofLogChannelId, { force: true });
+    if (!channel || typeof channel.messages?.fetch !== 'function') return false;
+
+    const message = await channel.messages.fetch(order.paymentProofLogMessageId);
+    if (!message || typeof message.edit !== 'function') return false;
+
+    const ticketChannelId = order.paypalTicketChannelId || order.ltcTicketChannelId || order.channelId || '';
+    const payload = buildPaymentProofLogPayload({
+        order,
+        method: order.paymentMethod || order.paymentProofMethod,
+        ticketGuildId: getGuildId(),
+        ticketChannelId,
+        status: 'done',
+        doneBy,
+        doneAt: new Date()
+    });
+
+    await message.edit(payload);
+    return true;
+};
+
 const resetOrderTicketStateByChannel = async (order, channelId, { finalStatus = '' } = {}) => {
     if (!order || !channelId) return;
 
@@ -1915,10 +1985,17 @@ client.on('messageCreate', async (message) => {
                     $set: {
                         status: 'Completed',
                         paymentStatus: 'paid',
-                        paymentMethod: order.paymentMethod || 'manual'
+                        paymentMethod: order.paymentMethod || 'manual',
+                        paymentProofStatus: 'done',
+                        paymentProofDoneAt: new Date(),
+                        paymentProofDoneBy: String(message.author.id || '')
                     }
                 }
             );
+
+            await updatePaymentProofLogDone({ order, doneBy: message.author.id }).catch((error) => {
+                console.error('Payment proof log update failed:', error?.message || error);
+            });
 
             let dmSent = false;
             try {
@@ -1980,6 +2057,7 @@ client.on('messageCreate', async (message) => {
         return;
     }
     if (imageAttachments.length === 0) return;
+    if (normalizedContent !== '!') return;
 
     try {
         const canSendVouch = ['1146730730060271736', '1005326332001009784'].includes(String(message.author.id || ''));
@@ -2046,6 +2124,7 @@ module.exports = {
     createOrderTicket,
     createWalletDeliveryTicket,
     notifyOwnerWalletTopupRequest,
+    sendPaymentProofLog,
     createPayPalFFTicket,
     createLTCTicket,
     checkUserInGuild,

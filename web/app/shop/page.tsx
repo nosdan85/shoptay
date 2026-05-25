@@ -286,6 +286,8 @@ export default function ShopPage() {
   const [pickedSlot, setPickedSlot] = useState<string | null>(null);
   const [ticketResult, setTicketResult] = useState<TicketResult | null>(null);
   const [selectedPaymentGuide, setSelectedPaymentGuide] = useState<PaymentGuide>("paypal_ff");
+  const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null);
+  const [paymentProofPreviewUrl, setPaymentProofPreviewUrl] = useState("");
   const [copiedPaymentValue, setCopiedPaymentValue] = useState<string | null>(null);
   const [showVisitorNotice, setShowVisitorNotice] = useState(false);
   const [showAll, setShowAll] = useState(false);
@@ -375,6 +377,12 @@ export default function ShopPage() {
       if (searchDebounceRef.current) window.clearTimeout(searchDebounceRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (paymentProofPreviewUrl) URL.revokeObjectURL(paymentProofPreviewUrl);
+    };
+  }, [paymentProofPreviewUrl]);
 
   useEffect(() => {
     if (!token || !user?.discordId) {
@@ -775,17 +783,38 @@ export default function ShopPage() {
     window.setTimeout(() => setCopiedPaymentValue((current) => current === value ? null : current), 1600);
   };
 
+  const selectPaymentGuide = (method: PaymentGuide) => {
+    setSelectedPaymentGuide(method);
+    setPaymentProofFile(null);
+    if (paymentProofPreviewUrl) URL.revokeObjectURL(paymentProofPreviewUrl);
+    setPaymentProofPreviewUrl("");
+  };
+
+  const selectPaymentProofFile = (file: File | null) => {
+    if (paymentProofPreviewUrl) URL.revokeObjectURL(paymentProofPreviewUrl);
+    setPaymentProofFile(file);
+    setPaymentProofPreviewUrl(file ? URL.createObjectURL(file) : "");
+  };
+
   const createTicket = async (method: PaymentGuide = selectedPaymentGuide) => {
     if (!canAct()) return;
     if (!orderId || !token || submitting) return;
     if (ticketInFlightRef.current) return;
+    if (!paymentProofFile) {
+      setError("Upload your payment screenshot before creating a ticket.");
+      return;
+    }
     const action = method === "ltc" ? "create-ticket-ltc" : "create-ticket-paypal-ff";
     ticketInFlightRef.current = true;
     setSubmitting(true); setError(null);
     try {
+      const formData = new FormData();
+      formData.append("orderId", orderId);
+      formData.append("method", method);
+      formData.append("paymentProof", paymentProofFile);
       const res = await fetch(`/api/shop/orders/${orderId}?action=${action}`, {
-        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ orderId, method }),
+        method: "POST", headers: { Authorization: `Bearer ${token}` },
+        body: formData,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed");
@@ -948,7 +977,7 @@ export default function ShopPage() {
 
         {step !== "shop" && (
           <div className="mx-auto max-w-2xl space-y-6 animate-page-enter">
-            <button onClick={() => (() => { setStep("shop"); setOrderId(null); setCheckoutSummary(null); clearPendingCheckout(); })()} className="flex items-center gap-2 text-sm text-[#B5B5B5] hover:text-white transition-colors">
+            <button onClick={() => (() => { setStep("shop"); setOrderId(null); setCheckoutSummary(null); selectPaymentProofFile(null); clearPendingCheckout(); })()} className="flex items-center gap-2 text-sm text-[#B5B5B5] hover:text-white transition-colors">
               <ArrowLeft className="h-4 w-4" /> Back to Shop
             </button>
             <div className="flex gap-2">{(["roblox", "delivery", "ticket"] as const).map((s) => (
@@ -1186,7 +1215,7 @@ export default function ShopPage() {
                       <div className="grid grid-cols-2 gap-3">
                         <button
                           type="button"
-                          onClick={() => setSelectedPaymentGuide("paypal_ff")}
+                          onClick={() => selectPaymentGuide("paypal_ff")}
                           className={"flex items-center justify-center gap-2 rounded-[14px] border px-4 py-3 text-sm font-medium transition-all " + (selectedPaymentGuide === "paypal_ff" ? "border-[#2F9BE6] bg-[#49B6FF]/10 text-white" : "border-[#1E1E1E] bg-[#050505] text-[#B5B5B5] hover:text-white")}
                         >
                           <CreditCard className="h-4 w-4" />
@@ -1194,7 +1223,7 @@ export default function ShopPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => setSelectedPaymentGuide("ltc")}
+                          onClick={() => selectPaymentGuide("ltc")}
                           className={"flex items-center justify-center gap-2 rounded-[14px] border px-4 py-3 text-sm font-medium transition-all " + (selectedPaymentGuide === "ltc" ? "border-[#2F9BE6] bg-[#49B6FF]/10 text-white" : "border-[#1E1E1E] bg-[#050505] text-[#B5B5B5] hover:text-white")}
                         >
                           <QrCode className="h-4 w-4" />
@@ -1223,7 +1252,7 @@ export default function ShopPage() {
                               <p><span className="font-semibold text-white">1.</span> Select <span className="font-semibold text-white">Friends and Family</span> as the payment method.</p>
                               <p><span className="font-semibold text-white">2.</span> Send <span className="font-semibold text-white">${checkoutTotal.toFixed(2)}</span> to the PayPal email address above.</p>
                               <p><span className="font-semibold text-white">3.</span> After completing the payment, click the <span className="font-semibold text-white">Create Ticket</span> button below.</p>
-                              <p><span className="font-semibold text-white">4.</span> Send your payment screenshot in the ticket after it opens.</p>
+                              <p><span className="font-semibold text-white">4.</span> Upload your payment screenshot below, then create the ticket.</p>
                             </div>
                             <div className="rounded-[14px] border border-[#FF4D4F]/30 bg-[#FF4D4F]/10 p-3 text-sm text-[#FFB3B3]">
                               Payments sent using Goods and Services instead of Friends and Family are not eligible for a refund.
@@ -1250,7 +1279,7 @@ export default function ShopPage() {
                               <p><span className="font-semibold text-white">1.</span> Select <span className="font-semibold text-white">Litecoin (LTC)</span> as the payment method.</p>
                               <p><span className="font-semibold text-white">2.</span> Send <span className="font-semibold text-white">${checkoutTotal.toFixed(2)}</span> worth of LTC to the wallet address above, or scan the QR code.</p>
                               <p><span className="font-semibold text-white">3.</span> After completing the payment, click the <span className="font-semibold text-white">Create Ticket</span> button below.</p>
-                              <p><span className="font-semibold text-white">4.</span> Send your payment screenshot in the ticket after it opens.</p>
+                              <p><span className="font-semibold text-white">4.</span> Upload your payment screenshot below, then create the ticket.</p>
                             </div>
                             <div className="rounded-[14px] border border-[#FF4D4F]/30 bg-[#FF4D4F]/10 p-3 text-sm text-[#FFB3B3]">
                               Please double-check the wallet address before sending. Crypto payments are non-refundable once confirmed on the blockchain.
@@ -1258,14 +1287,26 @@ export default function ShopPage() {
                           </>
                         )}
                       </div>
-                      <button onClick={() => void createTicket(selectedPaymentGuide)} disabled={submitting} className="w-full rounded-[14px] bg-[#3DDC84] py-3 font-medium primary-hover-glow disabled:opacity-50">
+                      <div className="rounded-[16px] border border-[#1E1E1E] bg-[#050505] p-4">
+                        <label className="block text-sm font-semibold text-white" htmlFor="payment-proof-upload">Payment screenshot</label>
+                        <input
+                          id="payment-proof-upload"
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/gif"
+                          onChange={(event) => selectPaymentProofFile(event.target.files?.[0] || null)}
+                          className="mt-3 w-full rounded-[14px] border border-[#1E1E1E] bg-[#111111] px-3 py-3 text-sm text-[#B5B5B5] file:mr-3 file:rounded-[10px] file:border-0 file:bg-[#2F9BE6] file:px-3 file:py-2 file:text-sm file:font-medium file:text-white"
+                        />
+                        {paymentProofFile && <p className="mt-2 text-xs text-[#3DDC84]">{paymentProofFile.name}</p>}
+                        {paymentProofPreviewUrl && <img src={paymentProofPreviewUrl} alt="Payment proof preview" className="mt-3 max-h-48 rounded-[12px] border border-[#1E1E1E] object-contain" />}
+                      </div>
+                      <button onClick={() => void createTicket(selectedPaymentGuide)} disabled={submitting || !paymentProofFile} className="w-full rounded-[14px] bg-[#3DDC84] py-3 font-medium primary-hover-glow disabled:opacity-50">
                         {submitting ? "Creating..." : selectedPaymentGuide === "ltc" ? "Create LTC Ticket" : "Create PayPal Ticket"}
                       </button>
                     </div>
                   ) : (
                     <div className="space-y-3">
                       <div className="flex items-center gap-2 rounded-[16px] border border-[#3DDC84]/30 bg-[#3DDC84]/10 p-4"><CheckCircle2 className="h-5 w-5 text-[#3DDC84]" /><span className="text-sm">Ticket created!</span></div>
-                      <button onClick={() => { (() => { setStep("shop"); setOrderId(null); setCheckoutSummary(null); clearPendingCheckout(); })(); clearCartState(); setOrderId(null); setRobloxUsernameInput(""); setPickedSlot(null); setTicketResult(null); }} className="w-full rounded-[14px] bg-[#161616] py-3 text-sm">Continue Shopping</button>
+                      <button onClick={() => { (() => { setStep("shop"); setOrderId(null); setCheckoutSummary(null); clearPendingCheckout(); })(); clearCartState(); setOrderId(null); setRobloxUsernameInput(""); setPickedSlot(null); setTicketResult(null); selectPaymentProofFile(null); }} className="w-full rounded-[14px] bg-[#161616] py-3 text-sm">Continue Shopping</button>
                     </div>
                   )}
                 </div>

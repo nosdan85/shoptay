@@ -10,7 +10,9 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
   try {
     const { orderId } = await params;
     const token = request.headers.get("authorization") || "";
-    const body = await request.json();
+    const contentType = request.headers.get("content-type") || "";
+    const isMultipart = contentType.toLowerCase().includes("multipart/form-data");
+    const body = isMultipart ? await request.formData() : await request.json();
     const action = request.nextUrl.searchParams.get("action");
     const encodedOrderId = encodeURIComponent(orderId);
 
@@ -34,10 +36,10 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     const res = await fetch(endpoint, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        ...(!isMultipart ? { "Content-Type": "application/json" } : {}),
         ...(token ? { Authorization: token } : {}),
       },
-      body: JSON.stringify(body),
+      body: isMultipart ? body : JSON.stringify(body),
       cache: "no-store",
     });
     const data = await res.json().catch(() => ({ error: "Backend returned an invalid response" }));

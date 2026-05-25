@@ -1164,12 +1164,17 @@ const sendPaymentProofLog = async ({ order, method, ticketChannelId, proofFile }
     });
 
     const safeOrderId = String(order?.orderId || 'order').replace(/[^a-zA-Z0-9_-]/g, '_');
-    const fallbackName = `payment-proof-${safeOrderId}.png`;
+    const ext = String(proofFile.originalname || '').toLowerCase().match(/\.(png|jpe?g|webp|gif)$/)?.[0] || '.png';
+    const attachmentName = `payment-proof-${safeOrderId}${ext}`;
+    const proofEmbed = payload.embeds?.[0];
+    if (proofEmbed && typeof proofEmbed.setImage === 'function') {
+        proofEmbed.setImage(`attachment://${attachmentName}`);
+    }
     const sent = await channel.send({
         ...payload,
         files: [{
             attachment: proofFile.buffer,
-            name: proofFile.originalname || fallbackName,
+            name: attachmentName,
             contentType: proofFile.mimetype
         }]
     });
@@ -1201,6 +1206,11 @@ const updatePaymentProofLogDone = async ({ order, doneBy }) => {
         doneBy,
         doneAt: new Date()
     });
+    const existingImageUrl = message.embeds?.[0]?.image?.url || '';
+    const proofEmbed = payload.embeds?.[0];
+    if (existingImageUrl && proofEmbed && typeof proofEmbed.setImage === 'function') {
+        proofEmbed.setImage(existingImageUrl);
+    }
 
     await message.edit(payload);
     return true;

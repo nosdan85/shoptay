@@ -385,6 +385,7 @@ const getDiscordTicketConfigError = () => {
     if (!normalizeEnvValue(process.env.DISCORD_GUILD_ID)) return 'DISCORD_GUILD_ID is missing';
     return '';
 };
+const getDiscordTicketGuildId = () => normalizeEnvValue(process.env.DISCORD_GUILD_ID);
 const getTicketMode = () => String(process.env.DISCORD_TICKET_MODE || 'bot').trim().toLowerCase();
 const getTicketPanelUrl = () => String(process.env.DISCORD_TICKET_PANEL_URL || '').trim();
 const isPanelTicketMode = () => getTicketMode() === 'panel' && /^https?:\/\//i.test(getTicketPanelUrl());
@@ -3430,6 +3431,7 @@ router.post('/create-ticket-paypal-ff', authRequired, ticketCreateLimiter, requi
                 success: true,
                 alreadyExists: true,
                 channelId: order.paypalTicketChannelId,
+                guildId: getDiscordTicketGuildId(),
                 email: instructions?.paypalEmail || process.env.PAYPAL_EMAIL || '',
                 memoExpected: instructions?.memoExpected || buildMemoExpected(order),
                 paymentProofLogged: Boolean(proofLog?.ok),
@@ -3476,6 +3478,7 @@ router.post('/create-ticket-paypal-ff', authRequired, ticketCreateLimiter, requi
                     success: true,
                     alreadyExists: true,
                     channelId: fresh.paypalTicketChannelId,
+                    guildId: getDiscordTicketGuildId(),
                     email: instructions?.paypalEmail || process.env.PAYPAL_EMAIL || '',
                     memoExpected: instructions?.memoExpected || buildMemoExpected(order)
                 });
@@ -3553,6 +3556,7 @@ router.post('/create-ticket-paypal-ff', authRequired, ticketCreateLimiter, requi
                     success: true,
                     alreadyExists: true,
                     channelId: fresh.paypalTicketChannelId,
+                    guildId: getDiscordTicketGuildId(),
                     email: instructions?.paypalEmail || process.env.PAYPAL_EMAIL || '',
                     memoExpected: instructions?.memoExpected || buildMemoExpected(order)
                 });
@@ -3585,6 +3589,7 @@ router.post('/create-ticket-paypal-ff', authRequired, ticketCreateLimiter, requi
         return res.json({
             success: true,
             channelId: channelId || null,
+            guildId: getDiscordTicketGuildId(),
             email: instructions?.paypalEmail || process.env.PAYPAL_EMAIL || '',
             memoExpected: instructions?.memoExpected || buildMemoExpected(order),
             paymentProofLogged: Boolean(proofLog?.ok),
@@ -3660,6 +3665,7 @@ router.post('/create-ticket-ltc', authRequired, ticketCreateLimiter, requirePaym
                 success: true,
                 alreadyExists: true,
                 channelId: order.ltcTicketChannelId,
+                guildId: getDiscordTicketGuildId(),
                 paymentProofLogged: Boolean(proofLog?.ok),
                 paymentProofLogError: proofLog?.ok ? '' : 'Could not send payment proof log.'
             });
@@ -3699,7 +3705,8 @@ router.post('/create-ticket-ltc', authRequired, ticketCreateLimiter, requirePaym
                 return res.json({
                     success: true,
                     alreadyExists: true,
-                    channelId: fresh.ltcTicketChannelId
+                    channelId: fresh.ltcTicketChannelId,
+                    guildId: getDiscordTicketGuildId()
                 });
             }
 
@@ -3763,7 +3770,8 @@ router.post('/create-ticket-ltc', authRequired, ticketCreateLimiter, requirePaym
                 return res.json({
                     success: true,
                     alreadyExists: true,
-                    channelId: fresh.ltcTicketChannelId
+                    channelId: fresh.ltcTicketChannelId,
+                    guildId: getDiscordTicketGuildId()
                 });
             }
             await Order.updateOne(
@@ -3794,6 +3802,7 @@ router.post('/create-ticket-ltc', authRequired, ticketCreateLimiter, requirePaym
         return res.json({
             success: true,
             channelId: channelId || null,
+            guildId: getDiscordTicketGuildId(),
             payAddress: getLtcPayAddress(),
             qrImageUrl: getLtcQrImageUrl(),
             paymentProofLogged: Boolean(proofLog?.ok),

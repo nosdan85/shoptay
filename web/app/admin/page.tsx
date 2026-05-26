@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
+import { resolveImageUrl } from "@/lib/imageUrl";
 import {
   AlertCircle, Loader2, Plus, Edit2, Trash2, RefreshCcw, ChevronLeft, ChevronRight
 } from "lucide-react";
@@ -10,9 +11,7 @@ import {
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 function imgUrl(src: string | undefined | null): string {
-  if (!src) return "";
-  if (src.startsWith("http")) return src;
-  return `${API_BASE}${src.startsWith("/") ? "" : "/"}${src}`;
+  return resolveImageUrl(src, API_BASE);
 }
 
 function toVietnamDateTimeParts(iso: string): { date: string; time: string } {
@@ -820,6 +819,12 @@ export default function AdminPage() {
                   <input required value={gameForm.slug} onChange={(e) => setGameForm((p) => ({ ...p, slug: e.target.value }))} placeholder="Slug game" className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
                   <input value={gameForm.image} onChange={(e) => setGameForm((p) => ({ ...p, image: e.target.value }))} placeholder="URL ảnh (tùy chọn)" className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 outline-none" />
                 </div>
+                {gameForm.image.trim() && (
+                  <div className="flex items-center gap-3 rounded-[14px] border border-[#1E1E1E] bg-[#050505] p-3">
+                    <img src={imgUrl(gameForm.image)} alt="Game icon preview" className="h-12 w-12 rounded object-cover" />
+                    <p className="break-all text-xs text-[#B5B5B5]/70">{imgUrl(gameForm.image)}</p>
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <button type="submit" disabled={submitting} className="rounded-[14px] bg-[#2F9BE6] px-5 py-2.5 text-sm font-medium disabled:opacity-50">Lưu game</button>
                   <button type="button" onClick={() => setShowGameForm(false)} className="rounded-[14px] bg-[#1E1E1E] px-5 py-2.5 text-sm">Hủy</button>

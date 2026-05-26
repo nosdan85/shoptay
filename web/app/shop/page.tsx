@@ -4,6 +4,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type ChangeEve
 import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
 import { ALL_TIMEZONES, detectUserTimezone, filterTimezones, getTimezonesGroupedByCountry, type CountryGroup } from "@/lib/timezones";
+import { resolveImageUrl } from "@/lib/imageUrl";
 import {
   Search,
   ShoppingCart,
@@ -29,9 +30,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 const VISITOR_NOTICE_DISMISSED_KEY = "visitorNoticeDismissed";
 
 function imgUrl(src: string | undefined | null): string {
-  if (!src) return "";
-  if (src.startsWith("http")) return src;
-  return `${API_BASE}${src.startsWith("/") ? "" : "/"}${src}`;
+  return resolveImageUrl(src, API_BASE);
 }
 
 function maskName(name: string): string {
@@ -1488,25 +1487,8 @@ export default function ShopPage() {
                 )}
               </div>
                 {showAll && (
-                  <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="mb-4 flex">
                     <button onClick={() => setShowAll(false)} className="flex items-center gap-2 rounded-[14px] bg-[#1E1E1E] px-4 py-2 text-sm transition-colors hover:bg-[#1E1E1E]"><ArrowLeft className="h-4 w-4" /> Back</button>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm text-[#B5B5B5]/80">Price</span>
-                      {([
-                        ["none", "Default"],
-                        ["low-high", "Low to High"],
-                        ["high-low", "High to Low"],
-                      ] as const).map(([value, label]) => (
-                        <button
-                          key={value}
-                          type="button"
-                          onClick={() => setPriceSort(value)}
-                          className={"rounded-full px-4 py-2 text-sm font-medium transition-all " + (priceSort === value ? "bg-[#2F9BE6] text-white" : "bg-[#111111] text-[#B5B5B5] hover:text-white")}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
                   </div>
                 )}
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">

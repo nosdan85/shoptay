@@ -53,6 +53,9 @@ function resolveImageUrl(src, apiBase = process.env.NEXT_PUBLIC_API_URL || "http
       return normalizeLocalPath(`${url.pathname}${url.search}${url.hash}`);
     }
   }
+  if (/^http:\/\//i.test(cleanSrc) && !isLocalhostUrl(cleanSrc)) {
+    return cleanSrc.replace(/^http:\/\//i, "https://");
+  }
   if (/^[a-z][a-z\d+.-]*:/i.test(cleanSrc)) return cleanSrc;
   if (isLegacyProductFilename(cleanSrc)) return normalizeLocalPath(`/products/${cleanSrc}`);
   if (/^(?:[\w-]+\.)+[\w-]+(?:[/:?#]|$)/i.test(cleanSrc)) return `https://${cleanSrc}`;

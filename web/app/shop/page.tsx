@@ -319,7 +319,6 @@ export default function ShopPage() {
   const [paymentProofPreviewUrl, setPaymentProofPreviewUrl] = useState("");
   const [copiedPaymentValue, setCopiedPaymentValue] = useState<string | null>(null);
   const [showVisitorNotice, setShowVisitorNotice] = useState(false);
-  const [showAll, setShowAll] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [modalQty, setModalQty] = useState<string | number>(1);
   const [modalOpen, setModalOpen] = useState(false);
@@ -1446,7 +1445,7 @@ export default function ShopPage() {
               </div>
             )}
 
-            {bestSellers.length > 0 && !showAll && !activeSelectedGame && !searchQuery && (
+            {bestSellers.length > 0 && !activeSelectedGame && !searchQuery && (
               <div className="animate-section-enter">
                 <div className="mb-4 flex items-center justify-between gap-4">
                   <h2 className="text-2xl font-bold text-[#2F9BE6]">Best Sellers</h2>
@@ -1482,17 +1481,9 @@ export default function ShopPage() {
             <div className="animate-section-enter">
               <div className="mb-4 flex items-center justify-between gap-4">
                 <h2 className="text-2xl font-bold">{activeSelectedGame ? games.find((g) => g._id === activeSelectedGame)?.name || "Items" : "All Items"}</h2>
-                {!showAll && filtered.length > 8 && !searchQuery && (
-                  <button onClick={() => setShowAll(true)} className="rounded-[14px] bg-[#161616] px-4 py-2 text-sm transition-colors hover:bg-[#1E1E1E]">View Full</button>
-                )}
               </div>
-                {showAll && (
-                  <div className="mb-4 flex">
-                    <button onClick={() => setShowAll(false)} className="flex items-center gap-2 rounded-[14px] bg-[#1E1E1E] px-4 py-2 text-sm transition-colors hover:bg-[#1E1E1E]"><ArrowLeft className="h-4 w-4" /> Back</button>
-                  </div>
-                )}
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-                {(showAll ? filtered : filtered.slice(0, 8)).map((p, idx) => (
+                {filtered.map((p, idx) => (
                   <ProductCard key={p._id} product={p} index={idx} onOpen={openProductModal} />
                 ))}
               </div>

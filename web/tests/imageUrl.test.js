@@ -9,6 +9,11 @@ test('resolveImageUrl keeps absolute image URLs after trimming pasted input', ()
   assert.equal(resolveImageUrl('\nHTTPS://cdn.example.com/game.webp\t'), 'HTTPS://cdn.example.com/game.webp');
 });
 
+test('resolveImageUrl upgrades remote http image URLs for secure mobile browsers', () => {
+  assert.equal(resolveImageUrl('http://cdn.example.com/game-icon.png'), 'https://cdn.example.com/game-icon.png');
+  assert.equal(resolveImageUrl('  http://images.example.com/items/aura.png?size=128  '), 'https://images.example.com/items/aura.png?size=128');
+});
+
 test('resolveImageUrl supports protocol-relative and bare CDN URLs', () => {
   assert.equal(resolveImageUrl('//cdn.example.com/game.png'), 'https://cdn.example.com/game.png');
   assert.equal(resolveImageUrl('i.ibb.co/game/icon.png'), 'https://i.ibb.co/game/icon.png');

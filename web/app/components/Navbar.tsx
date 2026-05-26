@@ -5,6 +5,8 @@ import { useAuth } from "../context/AuthContext";
 import { ShoppingCart, LogOut, User, Loader2, Menu, X } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 
+const SUPPORT_DISCORD_URL = "https://discord.com/channels/1398984938111369256/1493927408217100438";
+
 interface NavbarProps {
   cartCount?: number;
   showCart?: boolean;
@@ -111,6 +113,15 @@ export default function Navbar({ cartCount = 0, showCart = false, onCartClick }:
             Proofs
             <span className="absolute bottom-0 left-4 right-4 h-0.5 bg-[#2F9BE6] scale-x-0 group-hover:scale-x-100 transition-transform duration-200 origin-left rounded-full" />
           </Link>
+          <a
+            href={SUPPORT_DISCORD_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="relative px-3 py-2 text-[#B5B5B5] hover:text-white transition-colors duration-200 font-medium text-sm group"
+          >
+            Support
+            <span className="absolute bottom-0 left-4 right-4 h-0.5 bg-[#2F9BE6] scale-x-0 group-hover:scale-x-100 transition-transform duration-200 origin-left rounded-full" />
+          </a>
           {user?.isOwner && (
             <Link 
               href="/admin" 
@@ -227,6 +238,15 @@ export default function Navbar({ cartCount = 0, showCart = false, onCartClick }:
             >
               Proofs
             </Link>
+            <a
+              href={SUPPORT_DISCORD_URL}
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center rounded-2xl bg-[#111111] px-5 py-4 text-lg font-semibold text-white transition-all active:scale-[0.98]"
+            >
+              Support
+            </a>
             {user?.isOwner && (
               <Link
                 href="/admin"

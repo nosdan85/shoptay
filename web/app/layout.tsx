@@ -17,6 +17,9 @@ const geistMono = Geist_Mono({
   preload: false,
 });
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://www.nosdan.store";
+const SOCIAL_BANNER_IMAGE = "/pictures/banner.jpg";
+
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
@@ -26,20 +29,35 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: "NOS Market | Premium Gaming Marketplace",
   description: "Buy and sell gaming items securely with instant delivery. Premium dark tech gaming marketplace.",
   keywords: ["gaming", "marketplace", "roblox", "game items", "buy sell"],
   authors: [{ name: "NOS Market" }],
+  alternates: {
+    canonical: "/",
+  },
   openGraph: {
     title: "NOS Market | Premium Gaming Marketplace",
     description: "Buy and sell gaming items securely with instant delivery.",
+    url: "/",
+    siteName: "NOS Market",
     type: "website",
     locale: "en_US",
+    images: [
+      {
+        url: SOCIAL_BANNER_IMAGE,
+        width: 2048,
+        height: 702,
+        alt: "NOS Market banner",
+      },
+    ],
   },
   twitter: {
-    card: "summary",
-    title: "NOS Market",
-    description: "Premium Gaming Marketplace",
+    card: "summary_large_image",
+    title: "NOS Market | Premium Gaming Marketplace",
+    description: "Buy and sell gaming items securely with instant delivery.",
+    images: [SOCIAL_BANNER_IMAGE],
   },
   robots: {
     index: true,

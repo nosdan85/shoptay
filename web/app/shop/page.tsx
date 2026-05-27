@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type SyntheticEvent } from "react";
 import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
 import { ALL_TIMEZONES, detectUserTimezone, filterTimezones, getTimezonesGroupedByCountry, type CountryGroup } from "@/lib/timezones";
@@ -31,6 +31,17 @@ const VISITOR_NOTICE_DISMISSED_KEY = "visitorNoticeDismissed";
 
 function imgUrl(src: string | undefined | null): string {
   return resolveImageUrl(src, API_BASE);
+}
+
+function handleShopImageError(event: SyntheticEvent<HTMLImageElement>) {
+  const image = event.currentTarget;
+  const fallbackSrc = image.dataset.fallbackSrc || "/pictures/logo.png";
+  if (image.dataset.fallbackApplied === "true") {
+    image.style.display = "none";
+    return;
+  }
+  image.dataset.fallbackApplied = "true";
+  image.src = fallbackSrc;
 }
 
 function maskName(name: string): string {
@@ -220,7 +231,7 @@ const ProductCard = memo(function ProductCard({
     >
       <div className="aspect-square bg-[#050505] overflow-hidden">
         {product.image ? (
-          <img src={imgUrl(product.image)} alt={product.name} loading="lazy" className="h-full w-full object-cover" />
+          <img src={imgUrl(product.image)} alt={product.name} loading="lazy" onError={handleShopImageError} className="h-full w-full object-cover" />
         ) : (
           <div className="flex h-full items-center justify-center"><Package className="h-10 w-10 text-[#B5B5B5]/50" /></div>
         )}
@@ -951,7 +962,7 @@ export default function ShopPage() {
               {cart.map((item) => (
                 <div key={item._id} className="flex gap-3 rounded-[16px] border border-[#1E1E1E] bg-[#050505] p-3 sm:p-3">
                   <div className="h-12 w-12 sm:h-14 sm:w-14 flex-shrink-0 overflow-hidden rounded-[12px] sm:rounded-[14px] bg-[#111111]">
-                    {item.image ? <img src={imgUrl(item.image)} alt="" loading="lazy" className="h-full w-full object-cover" /> : <Package className="h-full w-full p-3 text-[#B5B5B5]/60" />}
+                    {item.image ? <img src={imgUrl(item.image)} alt="" loading="lazy" onError={handleShopImageError} className="h-full w-full object-cover" /> : <Package className="h-full w-full p-3 text-[#B5B5B5]/60" />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="truncate text-sm font-medium leading-5">{formatPurchasedProductName(item)}</p>
@@ -988,7 +999,7 @@ export default function ShopPage() {
             <div className="max-h-[calc(82dvh-96px)] overflow-y-auto px-4 py-3">
             <div className="space-y-3">
               <div className="mx-auto aspect-square w-full max-w-[120px] overflow-hidden rounded-[14px] bg-[#050505]">
-                {selectedProduct.image ? <img src={imgUrl(selectedProduct.image)} alt="" loading="lazy" className="h-full w-full object-contain" /> : <Package className="h-full w-full p-8 text-[#B5B5B5]/50" />}
+                {selectedProduct.image ? <img src={imgUrl(selectedProduct.image)} alt="" loading="lazy" onError={handleShopImageError} className="h-full w-full object-contain" /> : <Package className="h-full w-full p-8 text-[#B5B5B5]/50" />}
               </div>
               <div className="space-y-1.5">
                 <h2 className="text-base font-bold leading-tight">{formatProductNameWithQty(selectedProduct.name, selectedProduct.packQuantity)}</h2>
@@ -1433,7 +1444,7 @@ export default function ShopPage() {
               </button>
               {games.map((g) => (
                 <button key={g._id} onClick={() => setSelectedGame(g._id)} className={"flex shrink-0 items-center gap-2 rounded-full px-5 py-3 text-sm font-medium transition-all " + (activeSelectedGame === g._id ? "bg-[#2F9BE6] text-white shadow-lg" : "bg-[#111111] text-[#B5B5B5] active:bg-[#161616]")}>
-                  {g.image && <img src={imgUrl(g.image)} alt="" className="h-5 w-5 rounded object-cover" />}
+                  {g.image && <img src={imgUrl(g.image)} alt="" data-fallback-src="/pictures/logo.png" onError={handleShopImageError} className="h-5 w-5 rounded object-cover" />}
                   {g.name}
                 </button>
               ))}
@@ -1441,7 +1452,7 @@ export default function ShopPage() {
 
             {banners.length > 0 && (
               <div className="motion-panel overflow-hidden rounded-[24px] border border-[#1E1E1E] animate-section-enter mb-8">
-                <img src={imgUrl(banners[0])} alt="" className="w-full max-w-full h-auto object-cover max-h-[220px] sm:max-h-[320px] md:max-h-[400px]" />
+                <img src={imgUrl(banners[0])} alt="" onError={handleShopImageError} className="w-full max-w-full h-auto object-cover max-h-[220px] sm:max-h-[320px] md:max-h-[400px]" />
               </div>
             )}
 

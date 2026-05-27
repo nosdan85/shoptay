@@ -67,7 +67,7 @@ const {
 } = require('../utils/deliverySlots');
 
 // Redis cache + Bull queue
-const { cacheGet, cacheSet, cacheDel } = require('../cache/redis');
+const { cacheGet, cacheSet, cacheDel, bitmapOffsetFromHash, bitmapCheckAndSet } = require('../cache/redis');
 const { addTicketJob } = require('../queue/ticketQueue');
 const metrics = require('../metrics');
 
@@ -1744,7 +1744,6 @@ router.get('/proofs', async (req, res) => {
             hasMore,
             items: pageItems.map((proof) => ({
                 id: String(proof?._id || ''),
-                robloxUsername: String(proof?.robloxUsername || ''),
                 totalAmount: Number(proof?.totalAmount || 0),
                 items: Array.isArray(proof?.items) ? proof.items : [],
                 imageUrls: (Array.isArray(proof?.imageUrls) ? proof.imageUrls : [])
@@ -2612,7 +2611,6 @@ router.get('/order-payment-info', async (req, res) => {
         return res.json({
             orderId: order.orderId,
             customerEmail: order.customerEmail || '',
-                robloxUsername: String(proof?.robloxUsername || ''),
             subtotalAmount: Number(order.subtotalAmount || order.totalAmount || 0),
             discountAmount: Number(order.discountAmount || 0),
             discountPercent: Number(order.discountPercent || 0),
@@ -3248,6 +3246,11 @@ router.post('/visitor-notice', async (req, res) => {
             .createHash('sha256')
             .update(`${process.env.VISITOR_NOTICE_SALT || 'shoptay'}:${normalizedIp}`)
             .digest('hex');
+        const bitmapKey = `visitor-notice:${process.env.VISITOR_NOTICE_BITMAP_VERSION || 'v1'}`;
+        const bitmapResult = await bitmapCheckAndSet(bitmapKey, bitmapOffsetFromHash(ipHash));
+        if (bitmapResult) {
+            return res.json({ show: !bitmapResult.alreadySet });
+        }
         const existing = await VisitorNotice.findOne({ ipHash }).lean();
         if (existing) return res.json({ show: false });
         await VisitorNotice.create({ ipHash });

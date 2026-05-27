@@ -21,6 +21,8 @@ const {
     getPaymentLogConfig,
     isPaymentLogConfigured
 } = require('./utils/paymentProofLog');
+const { buildDeliveryWindowFields } = require('./utils/ticketDeliveryFields');
+const { bitmapOffsetFromHash, bitmapCheckAndSet } = require('./cache/redis');
 
 const { log } = require('./utils/loggingService');
 
@@ -749,6 +751,8 @@ const reAddLinkedUsersToGuild = async ({ targetGuildId, totalLinkedHint = 0, onP
     const totalLinked = Number(totalLinkedHint) > 0
         ? Math.floor(Number(totalLinkedHint))
         : await User.countDocuments(baseFilter);
+    const restoreBitmapKey = `bot:addall:${guildId}:${Date.now().toString(36)}`;
+    const restoreBitmapSize = Number(process.env.REDIS_BOT_ADDALL_BITMAP_SIZE) || (1 << 27);
 
     const cursor = User.find(baseFilter)
         .select('discordId discordUsername accessToken refreshToken tokenExpiresAt scopes')
@@ -780,6 +784,17 @@ const reAddLinkedUsersToGuild = async ({ targetGuildId, totalLinkedHint = 0, onP
         const discordId = String(dbUser?.discordId || '').trim();
         if (!isSnowflake(discordId)) {
             summary.failed += 1;
+            summary.processed += 1;
+            await notifyProgress();
+            return;
+        }
+        const restoreHash = crypto.createHash('sha256').update(`${guildId}:${discordId}`).digest('hex');
+        const restoreSeen = await bitmapCheckAndSet(
+            restoreBitmapKey,
+            bitmapOffsetFromHash(restoreHash, restoreBitmapSize)
+        );
+        if (restoreSeen?.alreadySet) {
+            summary.alreadyInGuild += 1;
             summary.processed += 1;
             await notifyProgress();
             return;
@@ -1505,6 +1520,7 @@ const buildPaymentTicketFields = ({ order, paymentLine, note, orderTotalAmount =
         { name: 'Order Total', value: formatUsdAmount(resolvedOrderTotalAmount), inline: true },
         { name: 'Payment', value: paymentLine, inline: false },
         { name: 'Items (Qty + Price)', value: formatOrderItemsWithPrice(order.items), inline: false },
+        ...buildDeliveryWindowFields(order),
         { name: 'Proof', value: 'Send your payment screenshot in this ticket after you pay.', inline: false }
     ];
     const safeNote = String(note || '').trim();
@@ -1518,11 +1534,7 @@ const buildDeliveryTicketFields = (order) => [
     { name: 'Discord Account', value: order.discordId ? `<@${order.discordId}>` : (order.discordUsername || '-Normalized'), inline: true },
     { name: 'Order Total', value: formatUsdAmount(order.totalAmount || order.total || 0), inline: true },
     { name: 'Items (Qty + Price)', value: formatOrderItemsWithPrice(order.items), inline: false },
-    {
-        name: 'Delivery Time',
-        value: `${formatDateInTimezone(order.deliveryCustomerStartAt, order.deliveryCustomerTimezone)} - ${formatDateInTimezone(order.deliveryCustomerEndAt, order.deliveryCustomerTimezone)} (${order.deliveryCustomerTimezone || 'UTC'})`,
-        inline: false
-    }
+    ...buildDeliveryWindowFields(order)
 ];
 
 const sendRobloxAccountMessage = async ({ channelId, order }) => {

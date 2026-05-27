@@ -92,6 +92,31 @@ const cacheDelPattern = async (pattern) => {
   }
 };
 
+const DEFAULT_BITMAP_SIZE = 1 << 24;
+
+const bitmapOffsetFromHash = (hash, bitmapSize = DEFAULT_BITMAP_SIZE) => {
+  const safeSize = Math.max(1, Math.floor(Number(bitmapSize) || DEFAULT_BITMAP_SIZE));
+  const hex = String(hash || '').replace(/[^a-fA-F0-9]/g, '');
+  const slice = (hex || '0').slice(0, 16);
+  return Number(BigInt(`0x${slice || '0'}`) % BigInt(safeSize));
+};
+
+const bitmapCheckAndSet = async (key, offset) => {
+  try {
+    if (!isAvailable()) return null;
+    const safeOffset = Math.max(0, Math.floor(Number(offset) || 0));
+    const client = getRedis();
+    const previous = await client.getbit(key, safeOffset);
+    if (Number(previous) === 1) {
+      return { alreadySet: true };
+    }
+    await client.setbit(key, safeOffset, 1);
+    return { alreadySet: false };
+  } catch {
+    return null;
+  }
+};
+
 module.exports = {
   getRedis,
   isAvailable,
@@ -99,5 +124,7 @@ module.exports = {
   cacheSet,
   cacheDel,
   cacheDelPattern,
+  bitmapOffsetFromHash,
+  bitmapCheckAndSet,
 };
 

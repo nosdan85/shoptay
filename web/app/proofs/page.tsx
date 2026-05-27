@@ -15,8 +15,6 @@ import {
   X,
   Edit2,
   Check,
-  Copy,
-  CheckCheck,
   Upload,
 } from "lucide-react"
 import { formatPrice } from "@/lib/timezones"
@@ -33,7 +31,6 @@ interface Proof {
   totalAmount: number
   items: ProofItem[]
   imageUrls: string[]
-  robloxUsername?: string
 }
 
 interface ProofsResponse {
@@ -57,7 +54,6 @@ export default function ProofsPage() {
   const [editingProofId, setEditingProofId] = useState<string | null>(null)
   const [editingItems, setEditingItems] = useState<ProofItem[]>([])
   const [saving, setSaving] = useState(false)
-  const [copiedProofId, setCopiedProofId] = useState<string | null>(null)
   const [uploadingImage, setUploadingImage] = useState<string | null>(null)
 
   const fetchProofs = async (pageNum: number) => {
@@ -243,25 +239,14 @@ export default function ProofsPage() {
     }
   }
 
-  const copyRobloxName = async (proofId: string, robloxUsername?: string) => {
-    if (!robloxUsername) return
-    try {
-      await navigator.clipboard.writeText(robloxUsername)
-      setCopiedProofId(proofId)
-      window.setTimeout(() => {
-        setCopiedProofId((current) => (current === proofId ? null : current))
-      }, 1500)
-    } catch (error) {
-      console.error("Copy failed:", error)
-    }
-  }
-
   const getGalleryGridClass = (count: number) => {
     if (count <= 1) return "grid-cols-1"
     return "grid-cols-2"
   }
 
   const getImageSpanClass = (count: number, index: number) => {
+    void count
+    void index
     return ""
   }
 
@@ -328,26 +313,6 @@ export default function ProofsPage() {
                     className="animate-vouch-entrance rounded-[16px] border border-[#1E1E1E]/60 bg-[#111111]/90 p-5 backdrop-blur-sm transition-all hover:border-[#1E1E1E]/50"
                     style={{ animationDelay: `${idx * 80}ms` }}
                   >
-                    {proof.robloxUsername && (
-                      <div className="mb-4 flex items-center gap-2 rounded-[14px] border border-[#2F9BE6]/20 bg-[#2F9BE6]/10 px-3 py-2">
-                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-white">
-                          {proof.robloxUsername}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => void copyRobloxName(proof.id, proof.robloxUsername)}
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-[14px] bg-[#2F9BE6]/20 text-white hover:bg-[#2F9BE6]/30"
-                          title="Copy Roblox username"
-                        >
-                          {copiedProofId === proof.id ? (
-                            <CheckCheck className="h-4 w-4" />
-                          ) : (
-                            <Copy className="h-4 w-4" />
-                          )}
-                        </button>
-                      </div>
-                    )}
-
                     {proof.imageUrls.length > 0 ? (
                       <div className={`mb-4 grid gap-2 ${getGalleryGridClass(proof.imageUrls.length)}`}>
                         {proof.imageUrls.slice(0, 2).map((url, imageIndex) => (

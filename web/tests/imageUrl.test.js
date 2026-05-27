@@ -34,3 +34,13 @@ test('resolveImageUrl rewrites localhost product URLs so phones use the web orig
   assert.equal(resolveImageUrl('http://localhost:5000/products/icon.png'), '/products/icon.png');
   assert.equal(resolveImageUrl('http://127.0.0.1:5000/products/Cid V2+F.png'), '/products/Cid%20V2%2BF.png');
 });
+
+test('shop page applies image error fallback to game icons and product images', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const source = fs.readFileSync(path.join(__dirname, '..', 'app', 'shop', 'page.tsx'), 'utf8');
+
+  assert.match(source, /function handleShopImageError/);
+  assert.match(source, /data-fallback-src="\/pictures\/logo\.png"/);
+  assert.equal((source.match(/onError=\{handleShopImageError\}/g) || []).length >= 5, true);
+});

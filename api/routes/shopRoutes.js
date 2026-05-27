@@ -884,8 +884,6 @@ const creditSquareWalletPayment = async ({ payment, source = 'square' }) => {
 const LEGACY_COMBO_KEYS = new Set(['combox2luck+drop', 'combox2luckdrop']);
 const COMBO_LUCK_KEY = 'x2luck';
 const COMBO_DROP_KEY = 'x2drop';
-const DEFAULT_COMBO_IMAGE = 'combo x2 luck+drop.png';
-let ensureComboProductsPromise = null;
 const getForcedCatalogPrice = (product) => {
     const category = normalizeText(product?.category);
     const name = normalizeText(product?.name);
@@ -937,45 +935,6 @@ const isLegacyComboProduct = (product) => {
     const category = normalizeText(product?.category);
     const keyName = normalizeKeyText(product?.name);
     return category === 'combo' && LEGACY_COMBO_KEYS.has(keyName);
-};
-
-const createComboProductPayload = (name, image) => ({
-    name,
-    price: 3,
-    originalPriceString: '$3/1',
-    bulkPrice: null,
-    bulkPriceString: '',
-    image: String(image || DEFAULT_COMBO_IMAGE).trim() || DEFAULT_COMBO_IMAGE,
-    category: 'Combo'
-});
-
-const ensureSplitComboProducts = async () => {
-    if (ensureComboProductsPromise) return ensureComboProductsPromise;
-
-    ensureComboProductsPromise = (async () => {
-        const comboProducts = await Product.find({ category: { $regex: /^combo$/i } }).lean();
-        const hasLuck = comboProducts.some((item) => normalizeKeyText(item?.name) === COMBO_LUCK_KEY);
-        const hasDrop = comboProducts.some((item) => normalizeKeyText(item?.name) === COMBO_DROP_KEY);
-        const legacyProduct = comboProducts.find((item) => isLegacyComboProduct(item));
-        const comboImage = String(legacyProduct?.image || DEFAULT_COMBO_IMAGE).trim() || DEFAULT_COMBO_IMAGE;
-
-        const createTasks = [];
-        if (!hasLuck) {
-            createTasks.push(Product.create(createComboProductPayload('x2 luck', comboImage)));
-        }
-        if (!hasDrop) {
-            createTasks.push(Product.create(createComboProductPayload('x2 drop', comboImage)));
-        }
-
-        if (createTasks.length > 0) {
-            await Promise.all(createTasks);
-        }
-    })().catch((error) => {
-        ensureComboProductsPromise = null;
-        throw error;
-    });
-
-    return ensureComboProductsPromise;
 };
 
 const validateCouponCode = async (couponCodeRaw) => {
@@ -1696,9 +1655,6 @@ router.get('/products', async (req, res) => {
             return res.json(productsCache);
         }
 
-        await ensureSplitComboProducts().catch((error) => {
-            console.warn('ensureSplitComboProducts warning:', error?.message || error);
-        });
         const cached = await getProductsFromCache();
         if (cached) {
             res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');

@@ -1170,21 +1170,19 @@ const sendPaymentProofLog = async ({ order, method, ticketChannelId, proofFile }
         return { ok: false, error: 'Payment log channel is unavailable.' };
     }
 
+    const safeOrderId = String(order?.orderId || 'order').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const mimeExt = String(proofFile.mimetype || '').toLowerCase().split('/')[1];
+    const extFromMime = mimeExt ? `.${mimeExt.replace(/[^a-z0-9]/g, '')}` : '';
+    const ext = String(proofFile.originalname || '').toLowerCase().match(/\.(png|jpe?g|webp|gif|bmp|avif|heic|heif|tiff?)$/)?.[0] || extFromMime || '.png';
+    const attachmentName = `payment-proof-${safeOrderId}${ext}`;
     const payload = buildPaymentProofLogPayload({
         order,
         method,
         ticketGuildId: getGuildId(),
         ticketChannelId,
-        status: 'not_done'
+        status: 'not_done',
+        proofAttachmentName: attachmentName
     });
-
-    const safeOrderId = String(order?.orderId || 'order').replace(/[^a-zA-Z0-9_-]/g, '_');
-    const ext = String(proofFile.originalname || '').toLowerCase().match(/\.(png|jpe?g|webp|gif)$/)?.[0] || '.png';
-    const attachmentName = `payment-proof-${safeOrderId}${ext}`;
-    const proofEmbed = payload.embeds?.[0];
-    if (proofEmbed && typeof proofEmbed.setImage === 'function') {
-        proofEmbed.setImage(`attachment://${attachmentName}`);
-    }
     const proofAttachment = new AttachmentBuilder(proofFile.buffer, {
         name: attachmentName,
         description: `Payment proof for ${safeOrderId}`

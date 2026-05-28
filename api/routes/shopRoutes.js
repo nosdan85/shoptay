@@ -56,6 +56,12 @@ const { isOwnerDiscordId } = require('../utils/ownerAccess');
 const { buildCashAppPaymentInstructions } = require('../utils/paymentMethods');
 const { buildOrderPaymentInfoPayload, isPublicOrderAccessible } = require('../utils/orderPaymentInfo');
 const {
+    applyPriceOverridesForClient,
+    getEffectiveProductPrice,
+    isLegacyComboProduct,
+    normalizeText
+} = require('../utils/catalogPricing');
+const {
     buildPublicDeliverySlotQuery,
     buildSelectableDeliverySlotQuery,
     isFutureDeliverySlotRange,
@@ -109,13 +115,13 @@ const uploadProofImage = multer({
     limits: { fileSize: 8 * 1024 * 1024 }
 });
 
-const PAYMENT_PROOF_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.gif'];
+const PAYMENT_PROOF_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.avif', '.heic', '.heif', '.tif', '.tiff'];
 const paymentProofUpload = multer({
     storage: multer.memoryStorage(),
     fileFilter: (req, file, cb) => {
         const contentType = String(file?.mimetype || '').toLowerCase();
         const ext = path.extname(file?.originalname || '').toLowerCase();
-        if (/^image\/(png|jpe?g|webp|gif)$/i.test(contentType) || PAYMENT_PROOF_IMAGE_EXTENSIONS.includes(ext)) {
+        if (contentType.startsWith('image/') || PAYMENT_PROOF_IMAGE_EXTENSIONS.includes(ext)) {
             return cb(null, true);
         }
         return cb(new Error('Payment proof must be an image file.'), false);
@@ -731,8 +737,6 @@ const BULK_DISCOUNT_THRESHOLD = 10;
 const roundMoney = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 const moneyToCents = (value) => Math.round((Number(value) + Number.EPSILON) * 100);
 const centsToMoney = (value) => roundMoney((Number(value) || 0) / 100);
-const normalizeText = (value) => String(value || '').trim().toLowerCase();
-const normalizeKeyText = (value) => normalizeText(value).replace(/\s+/g, '');
 const WALLET_TOPUP_METHODS = new Set(['paypal_ff', 'cashapp', 'ltc']);
 const formatWalletMethodLabel = (method) => {
     const normalized = String(method || '').trim().toLowerCase();
@@ -881,62 +885,6 @@ const creditSquareWalletPayment = async ({ payment, source = 'square' }) => {
         adminNotes: `Square Cash App Pay status=${paymentStatus}`
     });
 };
-const LEGACY_COMBO_KEYS = new Set(['combox2luck+drop', 'combox2luckdrop']);
-const COMBO_LUCK_KEY = 'x2luck';
-const COMBO_DROP_KEY = 'x2drop';
-const getForcedCatalogPrice = (product) => {
-    const category = normalizeText(product?.category);
-    const name = normalizeText(product?.name);
-    const keyName = normalizeKeyText(product?.name);
-
-    if (category === 'sets') {
-        return name === 'madoka' ? 8 : 2;
-    }
-    if (category === 'combo' && (keyName === COMBO_LUCK_KEY || keyName === COMBO_DROP_KEY)) {
-        return 3;
-    }
-    return null;
-};
-const normalizeBasePrice = (value) => {
-    const n = Number(value);
-    if (!Number.isFinite(n) || n <= 0) return 0;
-    return n;
-};
-const getEffectiveProductPrice = (product) => {
-    const forced = getForcedCatalogPrice(product);
-    if (Number.isFinite(forced) && forced > 0) return forced;
-    const base = normalizeBasePrice(product?.price);
-    if (base > 0 && base < 1) return 1;
-    return base;
-};
-const applyPriceOverridesForClient = (product) => {
-    const forced = getForcedCatalogPrice(product);
-    const base = normalizeBasePrice(product?.price);
-    const shouldForceOneDollar = !Number.isFinite(forced) && base > 0 && base < 1;
-    const finalPrice = Number.isFinite(forced) && forced > 0
-        ? forced
-        : (shouldForceOneDollar ? 1 : null);
-    if (!Number.isFinite(finalPrice) || finalPrice <= 0) return product;
-
-    const nextOriginalPriceString = Number.isFinite(forced) && forced > 0
-        ? `$${finalPrice}/1`
-        : product?.originalPriceString;
-
-    return {
-        ...product,
-        price: finalPrice,
-        originalPriceString: nextOriginalPriceString,
-        bulkPrice: null,
-        bulkPriceString: ''
-    };
-};
-
-const isLegacyComboProduct = (product) => {
-    const category = normalizeText(product?.category);
-    const keyName = normalizeKeyText(product?.name);
-    return category === 'combo' && LEGACY_COMBO_KEYS.has(keyName);
-};
-
 const validateCouponCode = async (couponCodeRaw) => {
     const couponCode = normalizeCouponCode(couponCodeRaw);
     if (!couponCode) {
@@ -986,14 +934,12 @@ const validateCouponCode = async (couponCodeRaw) => {
 
 const getLinePricing = (product, quantity) => {
     const qty = Number(quantity) || 0;
-    const rawRegularUnitPrice = normalizeBasePrice(product?.price);
     const regularUnitPrice = getEffectiveProductPrice(product);
-    const forcedToOneDollar = rawRegularUnitPrice > 0 && rawRegularUnitPrice < 1;
     if (!Number.isFinite(regularUnitPrice) || regularUnitPrice <= 0 || qty <= 0) {
         return { lineTotal: 0, effectiveUnitPrice: 0, bulkUnits: 0 };
     }
 
-    const bulkUnitPrice = forcedToOneDollar ? null : Number(product.bulkPrice);
+    const bulkUnitPrice = Number(product.bulkPrice);
     const hasBulkPrice = Number.isFinite(bulkUnitPrice) && bulkUnitPrice > 0;
     if (!hasBulkPrice) {
         const lineTotal = roundMoney(regularUnitPrice * qty);
@@ -4516,7 +4462,7 @@ router.get('/config', async (req, res) => {
 // GET /api/shop/recent-purchases ? public feed of confirmed orders (masked usernames)
 router.get('/recent-purchases', async (req, res) => {
     try {
-        const limit = Math.min(Number(req.query?.limit) || 10, 10);
+        const limit = Math.min(Math.max(Number(req.query?.limit) || 7, 1), 10);
         const orders = await Order.find({
             $or: [
                 { status: 'Completed' },
@@ -4541,11 +4487,11 @@ router.get('/recent-purchases', async (req, res) => {
             };
         });
 
-        if (real.length >= 5) return res.json(real.slice(0, 10));
+        if (real.length >= 5) return res.json(real.slice(0, limit));
         const fakeNames = ['Alex', 'Jordan', 'Taylor', 'Morgan', 'Casey', 'Riley', 'Quinn', 'Avery', 'Skyler', 'Dakota', 'Reese', 'Finley'];
         const fakeProducts = ['Blox Fruits Dragon Fruit', 'Pet Simulator Huge Cat', 'Adopt Me Neon Unicorn', 'Blox Fruits Dough Fruit', 'Pet Simulator Titanic Axolotl', 'King Legacy Mera Fruit', 'Anime Adventures SSR Unit', 'Blox Fruits Leopard Fruit', 'Pet Simulator Huge Dog', 'Murder Mystery Godly Knife'];
         const fake = [];
-        const needed = Math.max(0, 10 - real.length);
+        const needed = Math.max(0, limit - real.length);
         for (let i = 0; i < needed; i++) {
             fake.push({
                 username: fakeNames[Math.floor(Math.random() * fakeNames.length)] + '***',
@@ -4553,7 +4499,7 @@ router.get('/recent-purchases', async (req, res) => {
                 price: parseFloat((Math.random() * 25 + 2).toFixed(2))
             });
         }
-        return res.json([...real, ...fake].slice(0, 10));
+        return res.json([...real, ...fake].slice(0, limit));
     } catch (error) {
         console.error('Recent purchases error:', error);
         return res.status(500).json({ error: 'Could not load recent purchases.' });

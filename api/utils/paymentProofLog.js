@@ -58,7 +58,8 @@ const buildPaymentProofLogPayload = ({
     ticketChannelId,
     status = 'not_done',
     doneBy = '',
-    doneAt = null
+    doneAt = null,
+    proofAttachmentName = ''
 }) => {
     const ticketUrl = getTicketUrl(ticketGuildId, ticketChannelId);
     const statusText = status === 'done'
@@ -79,11 +80,17 @@ const buildPaymentProofLogPayload = ({
         ])
         .setTimestamp(new Date());
 
+    const safeAttachmentName = String(proofAttachmentName || '').trim();
+    if (safeAttachmentName) {
+        embed.setImage(`attachment://${safeAttachmentName}`);
+    }
+
     return { embeds: [embed] };
 };
 
 module.exports = {
     buildPaymentProofLogPayload,
+    formatUsd,
     formatVietnamDateTime,
     getPaymentLogConfig,
     getTicketUrl,

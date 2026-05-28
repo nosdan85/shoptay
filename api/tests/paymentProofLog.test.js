@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 const {
     buildPaymentProofLogPayload,
+    formatUsd,
     formatVietnamDateTime,
     getTicketUrl,
     isPaymentLogConfigured
@@ -36,6 +37,30 @@ test('buildPaymentProofLogPayload includes order summary and not done status', (
     assert.equal(payload.embeds[0].data.title, 'Payment proof - NM_1');
     assert.match(payload.embeds[0].data.fields.find((field) => field.name === 'Status').value, /Not done/);
     assert.match(payload.embeds[0].data.fields.find((field) => field.name === 'Ticket').value, /discord.com\/channels\/111\/222/);
+});
+
+test('formatUsd preserves cents for sub-dollar prices', () => {
+    assert.equal(formatUsd(0.99), '$0.99');
+});
+
+test('buildPaymentProofLogPayload can reference attached proof image files', () => {
+    const payload = buildPaymentProofLogPayload({
+        order: {
+            orderId: 'nm_3',
+            robloxUsername: 'PlayerThree',
+            discordUsername: 'buyer',
+            discordId: '999',
+            totalAmount: 0.99,
+            items: [{ name: 'Small item', quantity: 1, packQuantity: 1, price: 0.99 }]
+        },
+        method: 'paypal_ff',
+        ticketGuildId: '111',
+        ticketChannelId: '222',
+        status: 'not_done',
+        proofAttachmentName: 'payment-proof-nm_3.png'
+    });
+
+    assert.equal(payload.embeds[0].data.image.url, 'attachment://payment-proof-nm_3.png');
 });
 
 test('buildPaymentProofLogPayload formats done time in Vietnam timezone', () => {

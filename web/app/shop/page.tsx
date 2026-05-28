@@ -28,6 +28,7 @@ import {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 const VISITOR_NOTICE_DISMISSED_KEY = "visitorNoticeDismissed";
+const SAILOR_PIECE_MOBILE_ICON = "https://res-console.cloudinary.com/dphai9vy2/thumbnails/v1/image/upload/v1779780557/c2FpbG9yX3BpZWNfeG9pZnNh/drilldown";
 
 function imgUrl(src: string | undefined | null): string {
   return resolveImageUrl(src, API_BASE);
@@ -47,6 +48,17 @@ function handleShopImageError(event: SyntheticEvent<HTMLImageElement>) {
 function maskName(name: string): string {
   if (!name || name.length <= 2) return "***";
   return name[0] + "*".repeat(Math.min(name.length - 1, 4));
+}
+
+function formatMoney(value: number | string | undefined | null): string {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "$0.00";
+  return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function isSailorPieceGame(game: Game): boolean {
+  const text = `${game.name || ""} ${game.slug || ""}`.toLowerCase();
+  return text.includes("sailor") && text.includes("piece");
 }
 
 function formatQtyLabel(quantity: number | undefined | null): string {
@@ -126,6 +138,7 @@ interface CheckoutSummary {
   discountAmount: number;
   discountPercent: number;
   totalAmount: number;
+  couponCode?: string;
   items: Array<{ product?: string; _id?: string; name: string; quantity: number; packQuantity?: number; price: number }>;
 }
 
@@ -242,7 +255,7 @@ const ProductCard = memo(function ProductCard({
           <p className="text-xs text-[#2F9BE6] mt-0.5">{formatQtyLabel(product.packQuantity)}</p>
           {product.desc && <p className="text-xs text-[#B5B5B5] mt-1 line-clamp-2">{product.desc}</p>}
           <div className="mt-2 flex items-center justify-between">
-            <span className="text-sm font-semibold text-[#3DDC84]">${product.price.toFixed(2)}</span>
+            <span className="text-sm font-semibold text-[#3DDC84]">{formatMoney(product.price)}</span>
             <span className="text-xs text-[#2F9BE6]">View</span>
           </div>
         </div>
@@ -252,7 +265,7 @@ const ProductCard = memo(function ProductCard({
           <p className="text-xs text-[#2F9BE6] mt-0.5">{formatQtyLabel(product.packQuantity)}</p>
           <p className="text-xs text-[#B5B5B5]/80">{product.category}</p>
           <div className="flex items-center justify-between">
-            <span className="text-lg font-semibold text-[#3DDC84]">${product.price.toFixed(2)}</span>
+            <span className="text-lg font-semibold text-[#3DDC84]">{formatMoney(product.price)}</span>
             <span className="text-xs text-[#2F9BE6]">View</span>
           </div>
         </div>
@@ -265,6 +278,38 @@ function LogoLoader() {
   return (
     <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-[#050505]/95 backdrop-blur-sm">
       <style>{`
+        @keyframes duelOne {
+          0%, 100% { transform: translateX(-78px) translateY(0) rotate(-5deg); }
+          24% { transform: translateX(-38px) translateY(-4px) rotate(9deg); }
+          36% { transform: translateX(-22px) translateY(0) rotate(-10deg); }
+          54% { transform: translateX(-62px) translateY(2px) rotate(-5deg); }
+          72% { transform: translateX(-86px) translateY(-7px) rotate(-18deg); }
+        }
+        @keyframes duelTwo {
+          0%, 100% { transform: translateX(78px) scaleX(-1) translateY(0) rotate(-5deg); }
+          24% { transform: translateX(82px) scaleX(-1) translateY(-6px) rotate(-16deg); }
+          42% { transform: translateX(34px) scaleX(-1) translateY(0) rotate(10deg); }
+          54% { transform: translateX(20px) scaleX(-1) translateY(0) rotate(-12deg); }
+          78% { transform: translateX(62px) scaleX(-1) translateY(2px) rotate(-5deg); }
+        }
+        @keyframes staffSwingLeft {
+          0%, 18%, 100% { transform: rotate(-62deg); }
+          30%, 40% { transform: rotate(52deg); }
+          58%, 76% { transform: rotate(-35deg); }
+        }
+        @keyframes staffSwingRight {
+          0%, 34%, 100% { transform: rotate(-55deg); }
+          46%, 58% { transform: rotate(55deg); }
+          72% { transform: rotate(-35deg); }
+        }
+        @keyframes hitSpark {
+          0%, 22%, 34%, 44%, 56%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(0.4) rotate(0deg); }
+          28%, 50% { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(18deg); }
+        }
+        @keyframes actionLine {
+          0%, 18%, 60%, 100% { opacity: 0; transform: translateX(-18px) scaleX(0.4); }
+          30%, 50% { opacity: 1; transform: translateX(8px) scaleX(1); }
+        }
         @keyframes barFill {
           0% { width: 0%; }
           50% { width: 100%; }
@@ -276,6 +321,31 @@ function LogoLoader() {
           100% { left: 0%; transform: translate(-50%, -50%) rotate(720deg); }
         }
       `}</style>
+
+      <div className="relative mb-4 h-24 w-80 max-w-[80vw] overflow-hidden rounded-[18px] border border-[#1E1E1E] bg-[#0A0A0A]">
+        <div className="absolute inset-x-5 bottom-5 h-px bg-[#2F9BE6]/25" />
+        <div className="absolute left-1/2 top-9 h-8 w-8" style={{ animation: "hitSpark 1.6s ease-in-out infinite" }}>
+          <div className="absolute left-1/2 top-1/2 h-0.5 w-8 -translate-x-1/2 -translate-y-1/2 bg-[#F7D154]" />
+          <div className="absolute left-1/2 top-1/2 h-8 w-0.5 -translate-x-1/2 -translate-y-1/2 bg-[#F7D154]" />
+          <div className="absolute left-1/2 top-1/2 h-0.5 w-8 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-[#F7D154]" />
+          <div className="absolute left-1/2 top-1/2 h-0.5 w-8 -translate-x-1/2 -translate-y-1/2 -rotate-45 bg-[#F7D154]" />
+        </div>
+        <div className="absolute left-[40%] top-7 h-0.5 w-10 bg-[#49B6FF]/70" style={{ animation: "actionLine 1.6s ease-in-out infinite" }} />
+        <div className="absolute right-[40%] top-12 h-0.5 w-10 bg-[#49B6FF]/70" style={{ animation: "actionLine 1.6s ease-in-out infinite reverse" }} />
+        {["left", "right"].map((side) => (
+          <div
+            key={side}
+            className="absolute bottom-5 left-1/2 h-14 w-12"
+            style={{ animation: `${side === "left" ? "duelOne" : "duelTwo"} 1.6s ease-in-out infinite` }}
+          >
+            <div className="absolute left-1/2 top-0 h-4 w-4 -translate-x-1/2 rounded-full border-2 border-white" />
+            <div className="absolute left-1/2 top-4 h-6 w-0.5 -translate-x-1/2 bg-white" />
+            <div className="absolute left-[23px] top-7 h-6 w-0.5 origin-top rotate-[36deg] bg-white" />
+            <div className="absolute left-[23px] top-7 h-6 w-0.5 origin-top -rotate-[36deg] bg-white" />
+            <div className="absolute left-[23px] top-[18px] h-9 w-0.5 origin-top rounded-full bg-[#49B6FF]" style={{ animation: `${side === "left" ? "staffSwingLeft" : "staffSwingRight"} 1.6s ease-in-out infinite` }} />
+          </div>
+        ))}
+      </div>
 
       <div className="relative mb-6 w-80 max-w-[80vw]">
         {/* Bar */}
@@ -289,7 +359,7 @@ function LogoLoader() {
         </div>
       </div>
 
-      <p className="text-sm font-medium text-white">Loading NOS Market...</p>
+      <p className="px-4 text-center text-sm font-medium text-white">This may take a little while. Please wait.</p>
     </div>
   );
 }
@@ -315,6 +385,10 @@ export default function ShopPage() {
   const [error, setError] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [checkoutSummary, setCheckoutSummary] = useState<CheckoutSummary | null>(null);
+  const [couponCode, setCouponCode] = useState("");
+  const [couponPreview, setCouponPreview] = useState<CheckoutSummary | null>(null);
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponMessage, setCouponMessage] = useState("");
   const [robloxUsernameInput, setRobloxUsernameInput] = useState("");
   const [customerTz, setCustomerTz] = useState(detectUserTimezone());
   const [tzSearch, setTzSearch] = useState("");
@@ -349,6 +423,8 @@ export default function ShopPage() {
 
   const saveCart = useCallback((newCart: CartItem[], options?: { skipRemoteSync?: boolean }) => {
     if (options?.skipRemoteSync) skipNextRemoteCartSyncRef.current = true;
+    setCouponPreview(null);
+    setCouponMessage("");
     setCart(newCart);
   }, []);
 
@@ -373,6 +449,12 @@ export default function ShopPage() {
     return Array.isArray(data?.items) ? (data.items as CartItem[]) : [];
   }, [token]);
 
+  const loadRecentPurchases = useCallback(async () => {
+    const res = await fetch("/api/shop/recent-purchases?limit=7", { cache: "no-store" });
+    const data = await res.json();
+    setRecentPurchases(Array.isArray(data) ? data.slice(0, 7) : []);
+  }, []);
+
   const load = async () => {
     setLoading(true);
     try {
@@ -380,7 +462,7 @@ export default function ShopPage() {
         fetch("/api/shop/products", { cache: "no-store" }),
         fetch("/api/shop/games?nocache=" + Date.now(), { cache: "no-store" }),
         fetch("/api/shop/config", { cache: "no-store" }),
-        fetch("/api/shop/recent-purchases?limit=10", { cache: "no-store" }),
+        fetch("/api/shop/recent-purchases?limit=7", { cache: "no-store" }),
       ]);
       const pData = await pRes.json();
       const gData = await gRes.json();
@@ -390,7 +472,7 @@ export default function ShopPage() {
       setGames(Array.isArray(gData) ? gData : []);
       setBanners(Array.isArray(cData.banners) ? cData.banners : []);
       setBestSellerIds(Array.isArray(cData.bestSellerIds) ? cData.bestSellerIds : []);
-      setRecentPurchases(Array.isArray(rData) ? rData : []);
+      setRecentPurchases(Array.isArray(rData) ? rData.slice(0, 7) : []);
     } catch { /* silent */ }
     setLoading(false);
   };
@@ -399,6 +481,13 @@ export default function ShopPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, []);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      void loadRecentPurchases().catch(() => {});
+    }, 15000);
+    return () => window.clearInterval(interval);
+  }, [loadRecentPurchases]);
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.localStorage.getItem(VISITOR_NOTICE_DISMISSED_KEY) === "1") return;
@@ -653,6 +742,9 @@ export default function ShopPage() {
   const hasPickedTwoHours = pickedSlotHours.length === 2;
   const checkoutItems = checkoutSummary?.items?.length ? checkoutSummary.items : cart;
   const checkoutTotal = Number.isFinite(Number(checkoutSummary?.totalAmount)) ? Number(checkoutSummary?.totalAmount) : cartTotal;
+  const cartDiscountAmount = Number(couponPreview?.discountAmount || 0);
+  const cartDiscountPercent = Number(couponPreview?.discountPercent || 0);
+  const cartPayableTotal = Number.isFinite(Number(couponPreview?.totalAmount)) ? Number(couponPreview?.totalAmount) : cartTotal;
 
   const handleSearchChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value;
@@ -721,11 +813,48 @@ export default function ShopPage() {
 
   const clearCartState = () => {
     saveCart([], { skipRemoteSync: true });
+    setCouponCode("");
+    setCouponPreview(null);
+    setCouponMessage("");
     if (token) {
       void fetch("/api/shop/cart", {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       }).catch(() => {});
+    }
+  };
+
+  const previewCoupon = async () => {
+    const code = couponCode.trim();
+    if (!code || cart.length === 0) return;
+    setCouponLoading(true);
+    setCouponMessage("");
+    try {
+      const res = await fetch("/api/shop/coupon/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          couponCode: code,
+          cartItems: cart.map((i) => ({ product: i._id, name: i.name, quantity: i.quantity, price: i.price })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Coupon is invalid");
+      const nextPreview: CheckoutSummary = {
+        subtotalAmount: Number(data.subtotalAmount || cartTotal),
+        discountAmount: Number(data.discountAmount || 0),
+        discountPercent: Number(data.discountPercent || 0),
+        totalAmount: Number(data.totalAmount || cartTotal),
+        couponCode: data.couponCode || code,
+        items: Array.isArray(data.items) ? data.items : cart,
+      };
+      setCouponPreview(nextPreview);
+      setCouponMessage(nextPreview.discountPercent > 0 ? `${nextPreview.discountPercent}% discount applied.` : "Coupon checked.");
+    } catch (e) {
+      setCouponPreview(null);
+      setCouponMessage(e instanceof Error ? e.message : "Coupon is invalid");
+    } finally {
+      setCouponLoading(false);
     }
   };
 
@@ -742,7 +871,10 @@ export default function ShopPage() {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ cartItems: cart.map((i) => ({ product: i._id, name: i.name, quantity: i.quantity, price: i.price })) }),
+        body: JSON.stringify({
+          couponCode: couponCode.trim(),
+          cartItems: cart.map((i) => ({ product: i._id, name: i.name, quantity: i.quantity, price: i.price })),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Checkout failed");
@@ -751,6 +883,7 @@ export default function ShopPage() {
         discountAmount: Number(data.discountAmount || 0),
         discountPercent: Number(data.discountPercent || 0),
         totalAmount: Number(data.totalAmount || 0),
+        couponCode: data.couponCode || "",
         items: Array.isArray(data.items) ? data.items : cart,
       };
       setOrderId(data.orderId);
@@ -952,7 +1085,7 @@ export default function ShopPage() {
 
       {(cartOpen || cartClosing) && (
         <div className={"fixed inset-0 z-[70] flex items-end sm:items-stretch bg-black/60 backdrop-blur-sm " + (cartClosing ? "animate-fade-out" : "animate-fade-in")} onClick={closeCart}>
-          <div className={"w-full sm:ml-auto sm:h-full sm:max-w-md max-h-[80vh] bg-[#111111] border-t sm:border-l border-[#1E1E1E] flex flex-col rounded-t-[24px] sm:rounded-none " + (cartClosing ? "animate-cart-slide-out" : "animate-cart-slide-in")} onClick={(e) => e.stopPropagation()}>
+          <div className={"w-full sm:my-4 sm:mr-4 sm:ml-auto sm:h-[calc(100%-2rem)] sm:max-w-md max-h-[80vh] bg-[#111111] border-t sm:border border-[#1E1E1E] flex flex-col rounded-t-[24px] sm:rounded-[24px] " + (cartClosing ? "animate-cart-slide-out" : "animate-cart-slide-in")} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-[#1E1E1E] px-4 py-4 sticky top-0 bg-[#111111] z-10">
               <div className="mx-auto h-1.5 w-12 rounded-full bg-[#2A2A2A] absolute top-2 left-1/2 -translate-x-1/2 sm:hidden" />
               <h2 className="text-base sm:text-lg font-semibold">Cart ({cartCount})</h2>
@@ -973,7 +1106,7 @@ export default function ShopPage() {
                     </div>
                   </div>
                   <div className="flex flex-col items-end justify-between">
-                    <span className="text-sm font-medium text-[#3DDC84]">${(item.price * item.quantity).toFixed(2)}</span>
+                    <span className="text-sm font-medium text-[#3DDC84]">{formatMoney(item.price * item.quantity)}</span>
                     <button onClick={() => removeItem(item._id)} className="text-xs text-[#FF4D4F]">Remove</button>
                   </div>
                 </div>
@@ -981,7 +1114,40 @@ export default function ShopPage() {
             </div>
             {cart.length > 0 && (
               <div className="border-t border-[#1E1E1E] px-4 py-4 space-y-3 sticky bottom-0 bg-[#111111]">
-                <div className="flex justify-between text-lg font-semibold"><span>Total</span><span className="text-[#3DDC84]">${cartTotal.toFixed(2)}</span></div>
+                <div className="space-y-2 rounded-[16px] border border-[#1E1E1E] bg-[#050505] p-3">
+                  <label className="text-xs font-medium uppercase tracking-[0.08em] text-[#B5B5B5]" htmlFor="cart-coupon">Discount code</label>
+                  <div className="flex gap-2">
+                    <input
+                      id="cart-coupon"
+                      value={couponCode}
+                      onChange={(event) => {
+                        setCouponCode(event.target.value);
+                        setCouponPreview(null);
+                        setCouponMessage("");
+                      }}
+                      placeholder="Enter code"
+                      className="min-w-0 flex-1 rounded-[12px] border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm text-white outline-none focus:border-[#2F9BE6]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void previewCoupon()}
+                      disabled={couponLoading || !couponCode.trim()}
+                      className="rounded-[12px] bg-[#1E1E1E] px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                    >
+                      {couponLoading ? "Checking" : "Apply"}
+                    </button>
+                  </div>
+                  {couponMessage && (
+                    <p className={"text-xs " + (couponPreview ? "text-[#3DDC84]" : "text-[#FFB3B3]")}>{couponMessage}</p>
+                  )}
+                </div>
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between"><span className="text-[#B5B5B5]">Subtotal</span><span>{formatMoney(cartTotal)}</span></div>
+                  {cartDiscountAmount > 0 && (
+                    <div className="flex justify-between text-[#3DDC84]"><span>Discount ({cartDiscountPercent}%)</span><span>-{formatMoney(cartDiscountAmount)}</span></div>
+                  )}
+                  <div className="flex justify-between border-t border-[#1E1E1E] pt-2 text-lg font-semibold"><span>Total</span><span className="text-[#3DDC84]">{formatMoney(cartPayableTotal)}</span></div>
+                </div>
                 <button onClick={() => { closeCart(); void doCheckout(); }} disabled={submitting} className="w-full rounded-[14px] bg-[#2F9BE6] py-3 font-medium transition-all hover:bg-[#49B6FF] primary-hover-glow disabled:opacity-50">{submitting ? "Processing..." : "Checkout"}</button>
               </div>
             )}
@@ -991,23 +1157,23 @@ export default function ShopPage() {
 
       {(modalOpen || modalClosing) && selectedProduct && (
         <div className={"fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-0 " + (modalClosing ? "animate-fade-out" : "animate-fade-in")} onClick={closeProductModal}>
-          <div className={"motion-panel relative mx-3 w-full max-w-[340px] max-h-[82dvh] overflow-hidden rounded-[20px] border border-[#1E1E1E] bg-[#0A0A0A] shadow-2xl " + (modalClosing ? "animate-modal-zoom-out" : "animate-modal-zoom-in")} onClick={(e) => e.stopPropagation()}>
+          <div className={"motion-panel relative mx-3 w-full max-w-[340px] md:max-w-[408px] max-h-[82dvh] overflow-hidden rounded-[20px] border border-[#1E1E1E] bg-[#0A0A0A] shadow-2xl " + (modalClosing ? "animate-modal-zoom-out" : "animate-modal-zoom-in")} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-[#1E1E1E] bg-[#0A0A0A] px-4 py-2.5">
               <h3 className="text-sm font-semibold text-white">Product Details</h3>
               <button onClick={closeProductModal} className="rounded-full bg-[#1E1E1E] p-2 active:scale-90"><X className="h-4 w-4" /></button>
             </div>
             <div className="max-h-[calc(82dvh-96px)] overflow-y-auto px-4 py-3">
             <div className="space-y-3">
-              <div className="mx-auto aspect-square w-full max-w-[120px] overflow-hidden rounded-[14px] bg-[#050505]">
+              <div className="mx-auto aspect-square w-full max-w-[120px] md:max-w-[138px] overflow-hidden rounded-[14px] bg-[#050505]">
                 {selectedProduct.image ? <img src={imgUrl(selectedProduct.image)} alt="" loading="lazy" onError={handleShopImageError} className="h-full w-full object-contain" /> : <Package className="h-full w-full p-8 text-[#B5B5B5]/50" />}
               </div>
               <div className="space-y-1.5">
                 <h2 className="text-base font-bold leading-tight">{formatProductNameWithQty(selectedProduct.name, selectedProduct.packQuantity)}</h2>
                 {<p className="text-xs text-[#2F9BE6]">Pack {formatQtyLabel(selectedProduct.packQuantity)}</p>}
                 
-                <div className="flex items-baseline gap-1.5"><span className="text-xl font-bold text-[#3DDC84]">${selectedProduct.price.toFixed(2)}</span><span className="text-[10px] text-[#B5B5B5]">USD</span></div>
+                <div className="flex items-baseline gap-1.5"><span className="text-xl font-bold text-[#3DDC84]">{formatMoney(selectedProduct.price)}</span><span className="text-[10px] text-[#B5B5B5]">USD</span></div>
                 {selectedProduct.bulkPrice && (
-                  <p className="text-[10px] leading-4 text-[#2F9BE6]">Bulk: ${selectedProduct.bulkPrice?.toFixed(2)}</p>
+                  <p className="text-[10px] leading-4 text-[#2F9BE6]">Bulk: {formatMoney(selectedProduct.bulkPrice)}</p>
                 )}
               </div>
             </div>
@@ -1048,8 +1214,13 @@ export default function ShopPage() {
               <div className="border-b border-[#1E1E1E] pb-3">
                 <p className="text-sm text-[#B5B5B5]">Order {orderId}</p>
                 <div className="mt-2 space-y-1">{checkoutItems.map((i) => (
-                  <div key={String(i._id || ("product" in i ? i.product : "") || i.name)} className="flex justify-between text-sm"><span>{formatPurchasedProductName(i)}</span><span className="text-[#B5B5B5]">${(Number(i.price || 0) * Number(i.quantity || 1)).toFixed(2)}</span></div>
-                ))}<div className="flex justify-between border-t border-[#1E1E1E] pt-2 font-semibold"><span>Total</span><span className="text-[#3DDC84]">${checkoutTotal.toFixed(2)}</span></div></div>
+                  <div key={String(i._id || ("product" in i ? i.product : "") || i.name)} className="flex justify-between text-sm"><span>{formatPurchasedProductName(i)}</span><span className="text-[#B5B5B5]">{formatMoney(Number(i.price || 0) * Number(i.quantity || 1))}</span></div>
+                ))}
+                  {Number(checkoutSummary?.discountAmount || 0) > 0 && (
+                    <div className="flex justify-between text-sm text-[#3DDC84]"><span>Discount ({checkoutSummary?.discountPercent || 0}%)</span><span>-{formatMoney(checkoutSummary?.discountAmount || 0)}</span></div>
+                  )}
+                  <div className="flex justify-between border-t border-[#1E1E1E] pt-2 font-semibold"><span>Total</span><span className="text-[#3DDC84]">{formatMoney(checkoutTotal)}</span></div>
+                </div>
               </div>
               {step === "roblox" && (
                 <div className="space-y-4">
@@ -1321,7 +1492,7 @@ export default function ShopPage() {
                             <div className="space-y-1">
                               <h4 className="text-base font-semibold text-white">PayPal Payment Guide</h4>
                               <p className="text-sm text-[#B5B5B5]">Payment Method: <span className="font-semibold text-white">Friends and Family</span></p>
-                              <p className="text-sm text-[#B5B5B5]">Payment Amount: <span className="font-semibold text-[#3DDC84]">${checkoutTotal.toFixed(2)}</span></p>
+                              <p className="text-sm text-[#B5B5B5]">Payment Amount: <span className="font-semibold text-[#3DDC84]">{formatMoney(checkoutTotal)}</span></p>
                             </div>
                             <div>
                               <p className="mb-2 text-sm text-[#B5B5B5]">Send to</p>
@@ -1334,7 +1505,7 @@ export default function ShopPage() {
                             </div>
                             <div className="space-y-2 text-sm leading-6 text-[#B5B5B5]">
                               <p><span className="font-semibold text-white">1.</span> Select <span className="font-semibold text-white">Friends and Family</span> as the payment method.</p>
-                              <p><span className="font-semibold text-white">2.</span> Send <span className="font-semibold text-white">${checkoutTotal.toFixed(2)}</span> to the PayPal email address above.</p>
+                              <p><span className="font-semibold text-white">2.</span> Send <span className="font-semibold text-white">{formatMoney(checkoutTotal)}</span> to the PayPal email address above.</p>
                               <p><span className="font-semibold text-white">3.</span> After completing the payment, click the <span className="font-semibold text-white">Create Ticket</span> button below.</p>
                               <p><span className="font-semibold text-white">4.</span> Upload your payment screenshot below, then create the ticket.</p>
                             </div>
@@ -1347,7 +1518,7 @@ export default function ShopPage() {
                             <div className="space-y-1">
                               <h4 className="text-base font-semibold text-white">LTC Payment Guide</h4>
                               <p className="text-sm text-[#B5B5B5]">Payment Method: <span className="font-semibold text-white">Litecoin (LTC)</span></p>
-                              <p className="text-sm text-[#B5B5B5]">Payment Amount: <span className="font-semibold text-[#3DDC84]">${checkoutTotal.toFixed(2)}</span></p>
+                              <p className="text-sm text-[#B5B5B5]">Payment Amount: <span className="font-semibold text-[#3DDC84]">{formatMoney(checkoutTotal)}</span></p>
                             </div>
                             <div>
                               <p className="mb-2 text-sm text-[#B5B5B5]">Payment Address</p>
@@ -1361,7 +1532,7 @@ export default function ShopPage() {
                             <img src="/pictures/payments/ltc.png" alt="Litecoin QR code" className="h-44 w-44 rounded-[14px] border border-[#1E1E1E] bg-white p-2" />
                             <div className="space-y-2 text-sm leading-6 text-[#B5B5B5]">
                               <p><span className="font-semibold text-white">1.</span> Select <span className="font-semibold text-white">Litecoin (LTC)</span> as the payment method.</p>
-                              <p><span className="font-semibold text-white">2.</span> Send <span className="font-semibold text-white">${checkoutTotal.toFixed(2)}</span> worth of LTC to the wallet address above, or scan the QR code.</p>
+                              <p><span className="font-semibold text-white">2.</span> Send <span className="font-semibold text-white">{formatMoney(checkoutTotal)}</span> worth of LTC to the wallet address above, or scan the QR code.</p>
                               <p><span className="font-semibold text-white">3.</span> After completing the payment, click the <span className="font-semibold text-white">Create Ticket</span> button below.</p>
                               <p><span className="font-semibold text-white">4.</span> Upload your payment screenshot below, then create the ticket.</p>
                             </div>
@@ -1376,7 +1547,7 @@ export default function ShopPage() {
                         <input
                           id="payment-proof-upload"
                           type="file"
-                          accept="image/png,image/jpeg,image/webp,image/gif"
+                          accept="image/*"
                           onChange={(event) => selectPaymentProofFile(event.target.files?.[0] || null)}
                           className="mt-3 w-full rounded-[14px] border border-[#1E1E1E] bg-[#111111] px-3 py-3 text-sm text-[#B5B5B5] file:mr-3 file:rounded-[10px] file:border-0 file:bg-[#2F9BE6] file:px-3 file:py-2 file:text-sm file:font-medium file:text-white"
                         />
@@ -1408,7 +1579,7 @@ export default function ShopPage() {
                     <span className="text-[#2F9BE6] font-medium">{maskName(p.username)}</span>
                     <span className="text-[#B5B5B5]/80">purchased</span>
                     <span className="text-[#3DDC84]">{p.items}</span>
-                    {p.price && <span className="text-[#B5B5B5]">@ ${p.price.toFixed(2)}</span>}
+                    {p.price && <span className="text-[#B5B5B5]">@ {formatMoney(p.price)}</span>}
                   </span>
                 ))}
               </div>
@@ -1444,7 +1615,12 @@ export default function ShopPage() {
               </button>
               {games.map((g) => (
                 <button key={g._id} onClick={() => setSelectedGame(g._id)} className={"flex shrink-0 items-center gap-2 rounded-full px-5 py-3 text-sm font-medium transition-all " + (activeSelectedGame === g._id ? "bg-[#2F9BE6] text-white shadow-lg" : "bg-[#111111] text-[#B5B5B5] active:bg-[#161616]")}>
-                  {g.image && <img src={imgUrl(g.image)} alt="" data-fallback-src="/pictures/logo.png" onError={handleShopImageError} className="h-5 w-5 rounded object-cover" />}
+                  {g.image && (
+                    <>
+                      <img src={imgUrl(g.image)} alt="" data-fallback-src="/pictures/logo.png" onError={handleShopImageError} className={(isSailorPieceGame(g) ? "hidden sm:block " : "") + "h-5 w-5 rounded object-cover"} />
+                      {isSailorPieceGame(g) && <img src={SAILOR_PIECE_MOBILE_ICON} alt="" data-fallback-src="/pictures/logo.png" onError={handleShopImageError} className="h-5 w-5 rounded object-cover sm:hidden" />}
+                    </>
+                  )}
                   {g.name}
                 </button>
               ))}

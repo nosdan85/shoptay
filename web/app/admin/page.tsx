@@ -56,7 +56,13 @@ interface LinkedUser {
   cartItemsCount: number;
   cartUpdatedAt?: string | null;
   joinedAt?: string | null;
+  luckyWheelTickets?: number;
+  luckyWheelTicketsGrantedByAdmin?: number;
+  luckyWheelFirstLinkAwardedAt?: string | null;
 }
+
+interface LuckyWheelSlice { label: string; type: "empty" | "discount"; discountPercent: number }
+interface LuckyWheelConfig { enabled: boolean; title: string; message: string; slices: LuckyWheelSlice[] }
 
 const HOUR_OPTIONS = Array.from({ length: 25 }, (_, hour) => `${String(hour).padStart(2, "0")}:00`);
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -183,6 +189,17 @@ export default function AdminPage() {
   const [banners, setBanners] = useState<string[]>([]);
   const [bestSellers, setBestSellers] = useState<string[]>([]);
   const [newBannerUrl, setNewBannerUrl] = useState("");
+  const [luckyWheel, setLuckyWheel] = useState<LuckyWheelConfig>({
+    enabled: false,
+    title: "Lucky Wheel Event",
+    message: "We are running a limited lucky wheel event.",
+    slices: [
+      { label: "Better luck next time", type: "empty", discountPercent: 0 },
+      { label: "5% off", type: "discount", discountPercent: 5 },
+      { label: "15% off", type: "discount", discountPercent: 15 },
+      { label: "30% off", type: "discount", discountPercent: 30 },
+    ],
+  });
 
   /* --- linked users state --- */
   const [linkedUsers, setLinkedUsers] = useState<LinkedUser[]>([]);
@@ -191,14 +208,6 @@ export default function AdminPage() {
   const [linkedUsersPage, setLinkedUsersPage] = useState(1);
   const [linkedUsersTotalPages, setLinkedUsersTotalPages] = useState(1);
   const [linkedUsersTotal, setLinkedUsersTotal] = useState(0);
-
-  async function fetchAll() {
-    void fetchProducts();
-    void fetchGames();
-    void fetchSlots();
-    void fetchConfig();
-    void fetchLinkedUsers(1, linkedUsersSearch);
-  }
 
   const fetchProducts = async () => {
     if (!token) return;
@@ -455,6 +464,35 @@ export default function AdminPage() {
     });
   };
 
+  const fetchLuckyWheel = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch("/api/shop/owner/lucky-wheel", {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Load lucky wheel failed");
+      setLuckyWheel({
+        enabled: Boolean(data.enabled),
+        title: data.title || "Lucky Wheel Event",
+        message: data.message || "We are running a limited lucky wheel event.",
+        slices: Array.isArray(data.slices) ? data.slices : [],
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Load lucky wheel failed");
+    }
+  };
+
+  async function fetchAll() {
+    void fetchProducts();
+    void fetchGames();
+    void fetchSlots();
+    void fetchConfig();
+    void fetchLuckyWheel();
+    void fetchLinkedUsers(1, linkedUsersSearch);
+  }
+
   const saveSlotEdit = async () => {
     if (!token || !editingSlot || !slotEditForm.date || !slotEditForm.startTime || !slotEditForm.endTime) return;
     if (hourToMinutes(slotEditForm.endTime) <= hourToMinutes(slotEditForm.startTime)) {
@@ -540,6 +578,70 @@ export default function AdminPage() {
       await fetchLinkedUsers(linkedUsersPage, linkedUsersSearch);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Clear cart failed");
+    }
+    setSubmitting(false);
+  };
+
+  const saveLuckyWheel = async () => {
+    if (!token) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/shop/owner/lucky-wheel", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(luckyWheel),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Save lucky wheel failed");
+      setLuckyWheel({
+        enabled: Boolean(data.enabled),
+        title: data.title || "Lucky Wheel Event",
+        message: data.message || "We are running a limited lucky wheel event.",
+        slices: Array.isArray(data.slices) ? data.slices : [],
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save lucky wheel failed");
+    }
+    setSubmitting(false);
+  };
+
+  const updateWheelSlice = (index: number, patch: Partial<LuckyWheelSlice>) => {
+    setLuckyWheel((current) => ({
+      ...current,
+      slices: current.slices.map((slice, i) => (i === index ? { ...slice, ...patch } : slice)),
+    }));
+  };
+
+  const addWheelSlice = () => {
+    setLuckyWheel((current) => ({
+      ...current,
+      slices: [...current.slices, { label: "5% off", type: "discount", discountPercent: 5 }],
+    }));
+  };
+
+  const removeWheelSlice = (index: number) => {
+    setLuckyWheel((current) => ({
+      ...current,
+      slices: current.slices.filter((_, i) => i !== index),
+    }));
+  };
+
+  const grantLuckyWheelTicket = async (discordId: string) => {
+    if (!token) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/shop/owner/linked-users/${discordId}/lucky-wheel-ticket`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ count: 1 }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Grant spin failed");
+      await fetchLinkedUsers(linkedUsersPage, linkedUsersSearch);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Grant spin failed");
     }
     setSubmitting(false);
   };
@@ -852,25 +954,65 @@ export default function AdminPage() {
 
         {/* ─── TAB: CONFIG (BANNERS) ─── */}
         {tab === "cấu hình" && (
-          <div className="rounded-[16px] border border-[#1E1E1E] bg-[#111111] p-5 space-y-6">
-            <div><h2 className="font-semibold text-lg">Banner cửa hàng</h2><p className="text-xs text-[#B5B5B5]/80">Chỉ 1 banner hiện có. Dán URL ảnh để thay thế.</p></div>
-            <div className="flex items-center gap-3 flex-wrap">
-              <input
-                value={newBannerUrl}
-                onChange={(e) => setNewBannerUrl(e.target.value)}
-                placeholder="Dán URL ảnh banner"
-                className="min-w-[280px] flex-1 rounded border border-[#1E1E1E] bg-[#050505] p-2 text-sm outline-none"
-              />
-              <button onClick={() => void handleBannerSave()} disabled={submitting || !newBannerUrl.trim()} className="rounded bg-[#2F9BE6] px-4 py-2 text-sm font-semibold disabled:opacity-50">Lưu banner</button>
-            </div>
-            {banners[0] ? (
-              <div className="relative group overflow-hidden rounded-[14px] border border-[#1E1E1E]">
-                <img src={imgUrl(banners[0])} alt="" className="w-full object-cover" style={{ maxHeight: "360px" }} />
-                <button onClick={() => void deleteBanner(banners[0])} className="absolute top-2 right-2 bg-[#FF4D4F] text-white rounded p-1.5 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="h-4 w-4" /></button>
+          <div className="space-y-6">
+            <div className="rounded-[16px] border border-[#1E1E1E] bg-[#111111] p-5 space-y-6">
+              <div><h2 className="font-semibold text-lg">Banner cửa hàng</h2><p className="text-xs text-[#B5B5B5]/80">Chỉ 1 banner hiện có. Dán URL ảnh để thay thế.</p></div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <input
+                  value={newBannerUrl}
+                  onChange={(e) => setNewBannerUrl(e.target.value)}
+                  placeholder="Dán URL ảnh banner"
+                  className="min-w-[280px] flex-1 rounded border border-[#1E1E1E] bg-[#050505] p-2 text-sm outline-none"
+                />
+                <button onClick={() => void handleBannerSave()} disabled={submitting || !newBannerUrl.trim()} className="rounded bg-[#2F9BE6] px-4 py-2 text-sm font-semibold disabled:opacity-50">Lưu banner</button>
               </div>
-            ) : (
-              <div className="rounded-[14px] border border-dashed border-[#1E1E1E] bg-[#050505] p-8 text-center text-sm text-[#B5B5B5]/60">Chưa có banner.</div>
-            )}
+              {banners[0] ? (
+                <div className="relative group overflow-hidden rounded-[14px] border border-[#1E1E1E]">
+                  <img src={imgUrl(banners[0])} alt="" className="w-full object-cover" style={{ maxHeight: "360px" }} />
+                  <button onClick={() => void deleteBanner(banners[0])} className="absolute top-2 right-2 bg-[#FF4D4F] text-white rounded p-1.5 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="h-4 w-4" /></button>
+                </div>
+              ) : (
+                <div className="rounded-[14px] border border-dashed border-[#1E1E1E] bg-[#050505] p-8 text-center text-sm text-[#B5B5B5]/60">Chưa có banner.</div>
+              )}
+            </div>
+
+            <div className="rounded-[16px] border border-[#1E1E1E] bg-[#111111] p-5 space-y-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="font-semibold text-lg">Lucky Wheel</h2>
+                  <p className="text-xs text-[#B5B5B5]/80">Bật/tắt event và cấu hình các ô quay. Ô empty là chúc may mắn lần sau.</p>
+                </div>
+                <label className="flex items-center gap-2 text-sm text-[#B5B5B5]">
+                  <input
+                    type="checkbox"
+                    checked={luckyWheel.enabled}
+                    onChange={(e) => setLuckyWheel((current) => ({ ...current, enabled: e.target.checked }))}
+                  />
+                  Enabled
+                </label>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <input value={luckyWheel.title} onChange={(e) => setLuckyWheel((current) => ({ ...current, title: e.target.value }))} className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 text-sm outline-none" placeholder="Event title" />
+                <input value={luckyWheel.message} onChange={(e) => setLuckyWheel((current) => ({ ...current, message: e.target.value }))} className="rounded-[14px] border border-[#1E1E1E] bg-[#050505] px-4 py-3 text-sm outline-none" placeholder="Popup message" />
+              </div>
+              <div className="space-y-3">
+                {luckyWheel.slices.map((slice, index) => (
+                  <div key={index} className="grid gap-2 rounded-[14px] border border-[#1E1E1E] bg-[#050505] p-3 md:grid-cols-[1fr_140px_120px_auto]">
+                    <input value={slice.label} onChange={(e) => updateWheelSlice(index, { label: e.target.value })} className="rounded-[12px] border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm outline-none" placeholder="Label" />
+                    <select value={slice.type} onChange={(e) => updateWheelSlice(index, { type: e.target.value as LuckyWheelSlice["type"] })} className="rounded-[12px] border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm outline-none">
+                      <option value="empty">Empty</option>
+                      <option value="discount">Discount</option>
+                    </select>
+                    <input type="number" min="0" max="100" value={slice.discountPercent} onChange={(e) => updateWheelSlice(index, { discountPercent: Number(e.target.value) || 0 })} disabled={slice.type === "empty"} className="rounded-[12px] border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm outline-none disabled:opacity-50" placeholder="%" />
+                    <button onClick={() => removeWheelSlice(index)} className="rounded-[12px] bg-[#FF4D4F]/15 px-3 py-2 text-sm text-[#FF4D4F]">Remove</button>
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button onClick={addWheelSlice} className="rounded-[14px] bg-[#1E1E1E] px-4 py-2 text-sm">Add slice</button>
+                <button onClick={() => void saveLuckyWheel()} disabled={submitting} className="rounded-[14px] bg-[#2F9BE6] px-4 py-2 text-sm font-semibold disabled:opacity-50">Save Lucky Wheel</button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -928,10 +1070,20 @@ export default function AdminPage() {
                           <span className="rounded-full bg-[#161616] px-2 py-1 text-[#B5B5B5]">
                             Cart items: {linkedUser.cartItemsCount}
                           </span>
+                          <span className="rounded-full bg-[#2F9BE6]/15 px-2 py-1 text-[#49B6FF]">
+                            Spins: {linkedUser.luckyWheelTickets || 0}
+                          </span>
                         </div>
                       </div>
 
                       <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => void grantLuckyWheelTicket(linkedUser.discordId)}
+                          disabled={submitting}
+                          className="rounded-[14px] bg-[#2F9BE6]/15 px-4 py-2 text-sm text-[#49B6FF] disabled:opacity-50"
+                        >
+                          Grant spin
+                        </button>
                         <button
                           onClick={() => void clearLinkedUserCart(linkedUser.discordId)}
                           disabled={submitting}
@@ -953,6 +1105,8 @@ export default function AdminPage() {
                       <div>Linked at: {formatDateTime(linkedUser.joinedAt)}</div>
                       <div>Token expires: {formatDateTime(linkedUser.tokenExpiresAt)}</div>
                       <div>Cart updated: {formatDateTime(linkedUser.cartUpdatedAt)}</div>
+                      <div>First spin award: {formatDateTime(linkedUser.luckyWheelFirstLinkAwardedAt)}</div>
+                      <div>Admin granted spins: {linkedUser.luckyWheelTicketsGrantedByAdmin || 0}</div>
                     </div>
 
                     {Array.isArray(linkedUser.scopes) && linkedUser.scopes.length > 0 && (

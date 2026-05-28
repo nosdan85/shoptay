@@ -28,6 +28,7 @@ import {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 const VISITOR_NOTICE_DISMISSED_KEY = "visitorNoticeDismissed";
+const LUCKY_WHEEL_NOTICE_KEY = "luckyWheelNoticeDismissed";
 const SAILOR_PIECE_MOBILE_ICON = "https://res-console.cloudinary.com/dphai9vy2/thumbnails/v1/image/upload/v1779780557/c2FpbG9yX3BpZWNfeG9pZnNh/drilldown";
 
 function imgUrl(src: string | undefined | null): string {
@@ -133,6 +134,9 @@ interface SlotSegment {
 }
 interface Purchase { username: string; items: string; price?: number }
 interface TicketResult { channelId: string; guildId?: string; url?: string }
+interface LuckyWheelSlice { label: string; type: "empty" | "discount"; discountPercent: number }
+interface LuckyWheelConfig { enabled: boolean; title: string; message: string; slices: LuckyWheelSlice[]; tickets: number }
+interface LuckyWheelResult { result: "empty" | "discount"; message: string; couponCode?: string; discountPercent?: number; tickets: number }
 interface CheckoutSummary {
   subtotalAmount: number;
   discountAmount: number;
@@ -404,6 +408,11 @@ export default function ShopPage() {
   const [paymentProofPreviewUrl, setPaymentProofPreviewUrl] = useState("");
   const [copiedPaymentValue, setCopiedPaymentValue] = useState<string | null>(null);
   const [showVisitorNotice, setShowVisitorNotice] = useState(false);
+  const [showLuckyWheelNotice, setShowLuckyWheelNotice] = useState(false);
+  const [luckyWheel, setLuckyWheel] = useState<LuckyWheelConfig | null>(null);
+  const [luckyWheelLoading, setLuckyWheelLoading] = useState(false);
+  const [luckyWheelResult, setLuckyWheelResult] = useState<LuckyWheelResult | null>(null);
+  const [copiedLuckyCode, setCopiedLuckyCode] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [modalQty, setModalQty] = useState<string | number>(1);
   const [modalOpen, setModalOpen] = useState(false);
@@ -455,6 +464,26 @@ export default function ShopPage() {
     setRecentPurchases(Array.isArray(data) ? data.slice(0, 7) : []);
   }, []);
 
+  const loadLuckyWheel = useCallback(async (signal?: AbortSignal) => {
+    const res = await fetch("/api/shop/lucky-wheel", {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      cache: "no-store",
+      signal,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error || "Failed to load lucky wheel");
+    setLuckyWheel({
+      enabled: Boolean(data.enabled),
+      title: data.title || "Lucky Wheel Event",
+      message: data.message || "We are running a limited lucky wheel event.",
+      slices: Array.isArray(data.slices) ? data.slices : [],
+      tickets: Math.max(0, Number(data.tickets || 0)),
+    });
+    if (data?.enabled && typeof window !== "undefined" && window.localStorage.getItem(LUCKY_WHEEL_NOTICE_KEY) !== "1") {
+      setShowLuckyWheelNotice(true);
+    }
+  }, [token]);
+
   const load = async () => {
     setLoading(true);
     try {
@@ -473,6 +502,7 @@ export default function ShopPage() {
       setBanners(Array.isArray(cData.banners) ? cData.banners : []);
       setBestSellerIds(Array.isArray(cData.bestSellerIds) ? cData.bestSellerIds : []);
       setRecentPurchases(Array.isArray(rData) ? rData.slice(0, 7) : []);
+      void loadLuckyWheel().catch(() => {});
     } catch { /* silent */ }
     setLoading(false);
   };
@@ -488,6 +518,13 @@ export default function ShopPage() {
     }, 15000);
     return () => window.clearInterval(interval);
   }, [loadRecentPurchases]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      void loadLuckyWheel().catch(() => {});
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [loadLuckyWheel]);
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.localStorage.getItem(VISITOR_NOTICE_DISMISSED_KEY) === "1") return;
@@ -671,6 +708,61 @@ export default function ShopPage() {
     }
     setShowVisitorNotice(false);
   }, []);
+
+  const dismissLuckyWheelNotice = useCallback(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(LUCKY_WHEEL_NOTICE_KEY, "1");
+    }
+    setShowLuckyWheelNotice(false);
+  }, []);
+
+  const scrollToLuckyWheel = useCallback(() => {
+    dismissLuckyWheelNotice();
+    requestAnimationFrame(() => {
+      document.getElementById("lucky-wheel-event")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [dismissLuckyWheelNotice]);
+
+  const spinLuckyWheel = async () => {
+    if (!token) {
+      window.location.href = getOAuthUrl("/shop");
+      return;
+    }
+    setLuckyWheelLoading(true);
+    setError(null);
+    setLuckyWheelResult(null);
+    setCopiedLuckyCode(false);
+    try {
+      const res = await fetch("/api/shop/lucky-wheel/spin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Spin failed");
+      setLuckyWheelResult({
+        result: data.result === "discount" ? "discount" : "empty",
+        message: data.message || (data.result === "discount" ? "Discount unlocked." : "Better luck next time."),
+        couponCode: data.couponCode || "",
+        discountPercent: Number(data.discountPercent || data.prize?.discountPercent || 0),
+        tickets: Math.max(0, Number(data.tickets || 0)),
+      });
+      setLuckyWheel((current) => current ? { ...current, tickets: Math.max(0, Number(data.tickets || 0)) } : current);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Spin failed");
+    } finally {
+      setLuckyWheelLoading(false);
+    }
+  };
+
+  const copyLuckyCoupon = async (code: string) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopiedLuckyCode(true);
+    } catch {
+      setCopiedLuckyCode(false);
+    }
+  };
 
   const fetchSlotsForTimezone = useCallback(async (tzValue: string) => {
     const res = await fetch(`/api/shop/delivery-slots?timezone=${encodeURIComponent(tzValue)}`, { cache: "no-store" });
@@ -1070,6 +1162,30 @@ export default function ShopPage() {
                 onClick={dismissVisitorNotice}
                 className="rounded-[14px] bg-[#1E1E1E] px-4 py-3 text-sm font-medium text-white"
               >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showLuckyWheelNotice && luckyWheel?.enabled && (
+        <div className="fixed inset-0 z-[181] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-md rounded-[20px] border border-[#2F9BE6]/30 bg-[#111111] p-5 shadow-2xl animate-bounce-in">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-white">{luckyWheel.title}</h2>
+                <p className="mt-2 text-sm leading-6 text-[#B5B5B5]">{luckyWheel.message}</p>
+              </div>
+              <button type="button" onClick={dismissLuckyWheelNotice} className="rounded-full bg-[#1E1E1E] p-2 text-white hover:bg-[#2A2A2A]">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <button type="button" onClick={scrollToLuckyWheel} className="rounded-[14px] bg-[#2F9BE6] px-4 py-3 text-sm font-medium text-white primary-hover-glow">
+                Go to event
+              </button>
+              <button type="button" onClick={dismissLuckyWheelNotice} className="rounded-[14px] bg-[#1E1E1E] px-4 py-3 text-sm font-medium text-white">
                 Close
               </button>
             </div>
@@ -1585,6 +1701,68 @@ export default function ShopPage() {
               </div>
               <style>{`@keyframes scroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}`}</style>
             </div>
+
+            {luckyWheel?.enabled && (
+              <section id="lucky-wheel-event" className="motion-panel rounded-[20px] border border-[#2F9BE6]/30 bg-[#111111] p-5 animate-section-enter">
+                <div className="grid gap-5 lg:grid-cols-[260px_1fr]">
+                  <div className="relative mx-auto aspect-square w-full max-w-[240px] rounded-full border-4 border-[#2F9BE6]/50 bg-[#050505] p-4 shadow-[0_0_40px_rgba(47,155,230,0.18)]">
+                    <div className={"h-full w-full rounded-full border border-[#1E1E1E] bg-[conic-gradient(from_0deg,#2F9BE6_0_20%,#111111_20%_40%,#3DDC84_40%_60%,#111111_60%_80%,#F7D154_80%_100%)] transition-transform duration-700 " + (luckyWheelLoading ? "rotate-[720deg]" : "")} />
+                    <div className="absolute left-1/2 top-0 h-8 w-4 -translate-x-1/2 rounded-b-full bg-[#F7D154]" />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="rounded-full border border-[#1E1E1E] bg-[#050505] px-4 py-2 text-center text-sm font-semibold text-white">
+                        SPIN
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <h2 className="text-2xl font-bold text-white">{luckyWheel.title}</h2>
+                      <p className="mt-2 text-sm leading-6 text-[#B5B5B5]">{luckyWheel.message}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {luckyWheel.slices.map((slice, index) => (
+                        <span key={`${slice.label}-${index}`} className="rounded-full bg-[#050505] px-3 py-1.5 text-xs text-[#B5B5B5]">
+                          {slice.type === "discount" ? `${slice.discountPercent}% off` : "Empty"}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="rounded-[16px] border border-[#1E1E1E] bg-[#050505] p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm text-[#B5B5B5]">Your spin tickets</p>
+                          <p className="text-2xl font-bold text-[#3DDC84]">{token ? luckyWheel.tickets : 0}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void spinLuckyWheel()}
+                          disabled={luckyWheelLoading || (token ? luckyWheel.tickets <= 0 : false)}
+                          className="rounded-[14px] bg-[#2F9BE6] px-5 py-3 text-sm font-semibold text-white primary-hover-glow disabled:opacity-50"
+                        >
+                          {!token ? "Login to spin" : luckyWheelLoading ? "Spinning..." : "Spin now"}
+                        </button>
+                      </div>
+                      {luckyWheelResult && (
+                        <div className="mt-4 rounded-[14px] border border-[#1E1E1E] bg-[#111111] p-4">
+                          <p className={luckyWheelResult.result === "discount" ? "text-[#3DDC84]" : "text-[#B5B5B5]"}>
+                            {luckyWheelResult.result === "discount"
+                              ? `${luckyWheelResult.discountPercent}% discount unlocked.`
+                              : "Better luck next time."}
+                          </p>
+                          {luckyWheelResult.couponCode && (
+                            <div className="mt-3 flex gap-2">
+                              <div className="min-w-0 flex-1 break-all rounded-[12px] border border-[#1E1E1E] bg-[#050505] px-3 py-2 font-mono text-sm text-white">{luckyWheelResult.couponCode}</div>
+                              <button type="button" onClick={() => void copyLuckyCoupon(luckyWheelResult.couponCode || "")} className="rounded-[12px] bg-[#1E1E1E] px-3 text-white">
+                                {copiedLuckyCode ? <CheckCircle2 className="h-4 w-4 text-[#3DDC84]" /> : <Copy className="h-4 w-4" />}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </section>
+            )}
 
             <div className="relative animate-section-enter mb-6">
               <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-[#B5B5B5]" />

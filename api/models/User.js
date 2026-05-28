@@ -13,6 +13,9 @@ const userSchema = new mongoose.Schema({
     unlinkedAt: { type: Date, default: null },
 
     walletBalanceCents: { type: Number, default: 0, min: 0 },
+    luckyWheelTickets: { type: Number, default: 0, min: 0 },
+    luckyWheelFirstLinkAwardedAt: { type: Date, default: null },
+    luckyWheelTicketsGrantedByAdmin: { type: Number, default: 0, min: 0 },
 
     linkToken: { type: String },
     linkTokenExpiresAt: { type: Date },

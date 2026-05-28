@@ -14,6 +14,7 @@ const DeliverySlot = require('../models/DeliverySlot');
 const VisitorNotice = require('../models/VisitorNotice');
 const Game = require('../models/Game');
 const ShopConfig = require('../models/ShopConfig');
+const GeneratedCoupon = require('../models/GeneratedCoupon');
 const {
     createOrderTicket,
     createWalletDeliveryTicket,
@@ -61,6 +62,13 @@ const {
     isLegacyComboProduct,
     normalizeText
 } = require('../utils/catalogPricing');
+const {
+    buildGeneratedCouponCode,
+    isGeneratedCouponCode,
+    normalizeWheelConfig,
+    pickWheelSlice,
+    validateGeneratedCouponDiscount
+} = require('../utils/luckyWheel');
 const {
     buildPublicDeliverySlotQuery,
     buildSelectableDeliverySlotQuery,
@@ -702,6 +710,11 @@ const upsertDiscordUserAndBuildAuthPayload = async ({
         dbUser.scopes = scopes;
     }
 
+    if (isNewUser && !dbUser.luckyWheelFirstLinkAwardedAt) {
+        dbUser.luckyWheelTickets = Math.max(0, Number(dbUser.luckyWheelTickets || 0)) + 1;
+        dbUser.luckyWheelFirstLinkAwardedAt = new Date();
+    }
+
     await dbUser.save();
 
     // Keep Discord API load low by default; only auto-join when explicitly enabled.
@@ -895,6 +908,25 @@ const validateCouponCode = async (couponCodeRaw) => {
         };
     }
 
+    if (isGeneratedCouponCode(couponCode)) {
+        const generatedCoupon = await GeneratedCoupon.findOne({ couponCode }).lean();
+        const validation = validateGeneratedCouponDiscount(couponCode, generatedCoupon);
+        if (!validation.ok) {
+            return {
+                couponCode: '',
+                discountPercent: 0,
+                discountAmount: 0,
+                error: validation.error
+            };
+        }
+        return {
+            couponCode,
+            discountPercent: validation.discountPercent,
+            discountAmount: 0,
+            generatedCouponId: String(generatedCoupon._id || '')
+        };
+    }
+
     const confirmedCouponOrder = await Order.findOne({
         confirmationDiscountCode: couponCode,
         confirmedAt: { $ne: null },
@@ -930,6 +962,60 @@ const validateCouponCode = async (couponCodeRaw) => {
         discountPercent: isGeneratedConfirmCoupon ? 5 : getCouponDiscountPercent(couponCode),
         discountAmount: 0
     };
+};
+
+const markGeneratedCouponUsed = async ({ couponCode, orderId }) => {
+    const normalized = normalizeCouponCode(couponCode);
+    if (!isGeneratedCouponCode(normalized)) return;
+    await GeneratedCoupon.updateOne(
+        { couponCode: normalized, status: 'unused' },
+        {
+            $set: {
+                status: 'used',
+                usedOrderId: String(orderId || ''),
+                usedAt: new Date()
+            }
+        }
+    );
+};
+
+const toPublicLuckyWheelPayload = (config, user = null) => {
+    const luckyWheel = normalizeWheelConfig(config?.luckyWheel || {});
+    return {
+        ...luckyWheel,
+        tickets: Math.max(0, Number(user?.luckyWheelTickets || 0))
+    };
+};
+
+const createUniqueGeneratedCoupon = async ({ discountPercent, discordId }) => {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+        const couponCode = buildGeneratedCouponCode();
+        try {
+            return await GeneratedCoupon.create({
+                couponCode,
+                discountPercent,
+                discordId,
+                source: 'lucky_wheel'
+            });
+        } catch (error) {
+            if (Number(error?.code) !== 11000 || attempt >= 7) throw error;
+        }
+    }
+    throw new Error('Could not generate coupon code.');
+};
+
+const requireOwner = async (req, res) => {
+    const discordId = String(req.user?.discordId || '').trim();
+    if (!discordId) {
+        res.status(401).json({ error: 'Authentication required' });
+        return null;
+    }
+    const isOwner = await canAccessOwnerEndpoints(discordId);
+    if (!isOwner) {
+        res.status(403).json({ error: 'Forbidden' });
+        return null;
+    }
+    return discordId;
 };
 
 const getLinePricing = (product, quantity) => {
@@ -1967,6 +2053,66 @@ router.post('/coupon/preview', async (req, res) => {
     }
 });
 
+router.get('/lucky-wheel', async (req, res) => {
+    try {
+        const config = await ShopConfig.getConfig();
+        const viewer = getOptionalRequestUser(req);
+        const discordId = String(viewer?.discordId || '').trim();
+        const user = discordId
+            ? await User.findOne({ discordId }).select('luckyWheelTickets').lean()
+            : null;
+        return res.json(toPublicLuckyWheelPayload(config, user));
+    } catch (error) {
+        console.error('Lucky wheel config error:', error);
+        return res.status(500).json({ error: 'Could not load lucky wheel.' });
+    }
+});
+
+router.post('/lucky-wheel/spin', authRequired, async (req, res) => {
+    try {
+        const discordId = String(req.user?.discordId || '').trim();
+        if (!discordId) return res.status(401).json({ error: 'Authentication required' });
+
+        const config = await ShopConfig.getConfig();
+        const luckyWheel = normalizeWheelConfig(config?.luckyWheel || {});
+        if (!luckyWheel.enabled) return res.status(409).json({ error: 'Lucky wheel event is not active.' });
+
+        const user = await User.findOneAndUpdate(
+            { discordId, linkedActive: { $ne: false }, luckyWheelTickets: { $gt: 0 } },
+            { $inc: { luckyWheelTickets: -1 } },
+            { new: true }
+        ).select('discordId luckyWheelTickets').lean();
+        if (!user) return res.status(409).json({ error: 'No lucky wheel tickets available.' });
+
+        const prize = pickWheelSlice(luckyWheel.slices);
+        if (prize.type !== 'discount') {
+            return res.json({
+                result: 'empty',
+                message: 'Better luck next time.',
+                prize,
+                tickets: Math.max(0, Number(user.luckyWheelTickets || 0))
+            });
+        }
+
+        const coupon = await createUniqueGeneratedCoupon({
+            discountPercent: prize.discountPercent,
+            discordId
+        });
+
+        return res.json({
+            result: 'discount',
+            message: `${prize.discountPercent}% discount unlocked.`,
+            prize,
+            couponCode: coupon.couponCode,
+            discountPercent: coupon.discountPercent,
+            tickets: Math.max(0, Number(user.luckyWheelTickets || 0))
+        });
+    } catch (error) {
+        console.error('Lucky wheel spin error:', error);
+        return res.status(500).json({ error: 'Could not spin lucky wheel.' });
+    }
+});
+
 router.get('/wallet', authRequired, async (req, res) => {
     try {
         const discordId = String(req.user?.discordId || '').trim();
@@ -2431,6 +2577,7 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
                         ticketError: ''
                     });
                     await newOrder.save();
+                    await markGeneratedCouponUsed({ couponCode, orderId });
                     break;
                 } catch (saveError) {
                     const duplicateOrderId = Number(saveError?.code) === 11000 && saveError?.keyPattern?.orderId;
@@ -4054,7 +4201,7 @@ router.get('/owner/linked-users', authRequired, async (req, res) => {
         const [total, users] = await Promise.all([
             User.countDocuments(filter),
             User.find(filter)
-                .select('_id discordId discordUsername scopes tokenExpiresAt joinedAt createdAt cartUpdatedAt cartItems accessToken refreshToken')
+                .select('_id discordId discordUsername scopes tokenExpiresAt joinedAt createdAt cartUpdatedAt cartItems accessToken refreshToken luckyWheelTickets luckyWheelTicketsGrantedByAdmin luckyWheelFirstLinkAwardedAt')
                 .sort({ joinedAt: -1, createdAt: -1, _id: -1 })
                 .skip((page - 1) * limit)
                 .limit(limit)
@@ -4072,7 +4219,10 @@ router.get('/owner/linked-users', authRequired, async (req, res) => {
                 scopes: Array.isArray(user.scopes) ? user.scopes : [],
                 cartItemsCount: Array.isArray(user.cartItems) ? user.cartItems.length : 0,
                 cartUpdatedAt: user.cartUpdatedAt || null,
-                joinedAt: user.joinedAt || null
+                joinedAt: user.joinedAt || null,
+                luckyWheelTickets: Math.max(0, Number(user.luckyWheelTickets || 0)),
+                luckyWheelTicketsGrantedByAdmin: Math.max(0, Number(user.luckyWheelTicketsGrantedByAdmin || 0)),
+                luckyWheelFirstLinkAwardedAt: user.luckyWheelFirstLinkAwardedAt || null
             })),
             page,
             limit,
@@ -4082,6 +4232,62 @@ router.get('/owner/linked-users', authRequired, async (req, res) => {
     } catch (error) {
         console.error('Owner linked users error:', error);
         return res.status(500).json({ error: 'Could not load linked users.' });
+    }
+});
+
+router.post('/owner/linked-users/:discordId/lucky-wheel-ticket', authRequired, async (req, res) => {
+    try {
+        const ownerDiscordId = await requireOwner(req, res);
+        if (!ownerDiscordId) return;
+
+        const targetDiscordId = String(req.params?.discordId || '').trim();
+        if (!targetDiscordId) return res.status(400).json({ error: 'Discord ID is required' });
+        const count = Math.max(1, Math.min(50, Math.floor(Number(req.body?.count || 1))));
+        const user = await User.findOneAndUpdate(
+            { discordId: targetDiscordId, linkedActive: { $ne: false } },
+            {
+                $inc: {
+                    luckyWheelTickets: count,
+                    luckyWheelTicketsGrantedByAdmin: count
+                }
+            },
+            { new: true }
+        ).select('discordId luckyWheelTickets luckyWheelTicketsGrantedByAdmin').lean();
+        if (!user) return res.status(404).json({ error: 'Linked user not found.' });
+        return res.json({
+            discordId: user.discordId,
+            luckyWheelTickets: Math.max(0, Number(user.luckyWheelTickets || 0)),
+            luckyWheelTicketsGrantedByAdmin: Math.max(0, Number(user.luckyWheelTicketsGrantedByAdmin || 0))
+        });
+    } catch (error) {
+        console.error('Owner grant lucky wheel ticket error:', error);
+        return res.status(500).json({ error: 'Could not grant lucky wheel ticket.' });
+    }
+});
+
+router.get('/owner/lucky-wheel', authRequired, async (req, res) => {
+    try {
+        const ownerDiscordId = await requireOwner(req, res);
+        if (!ownerDiscordId) return;
+        const config = await ShopConfig.getConfig();
+        return res.json(normalizeWheelConfig(config.luckyWheel || {}));
+    } catch (error) {
+        console.error('Owner lucky wheel config error:', error);
+        return res.status(500).json({ error: 'Could not load lucky wheel config.' });
+    }
+});
+
+router.put('/owner/lucky-wheel', authRequired, async (req, res) => {
+    try {
+        const ownerDiscordId = await requireOwner(req, res);
+        if (!ownerDiscordId) return;
+        const config = await ShopConfig.getConfig();
+        config.luckyWheel = normalizeWheelConfig(req.body || {});
+        await config.save();
+        return res.json(normalizeWheelConfig(config.luckyWheel || {}));
+    } catch (error) {
+        console.error('Owner save lucky wheel config error:', error);
+        return res.status(500).json({ error: 'Could not save lucky wheel config.' });
     }
 });
 

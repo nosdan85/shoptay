@@ -429,6 +429,8 @@ export default function ShopPage() {
   const lastActionRef = useRef(0);
   const searchDebounceRef = useRef<number | null>(null);
   const resumeHandledRef = useRef(false);
+  const latestLuckyWheelTokenRef = useRef<string | null>(null);
+  const luckyWheelRequestRef = useRef(0);
 
   const ACTION_COOLDOWN_MS = 450;
   const canAct = () => { if (submitting || Date.now() - lastActionRef.current < ACTION_COOLDOWN_MS) return false; lastActionRef.current = Date.now(); return true; };
@@ -468,6 +470,9 @@ export default function ShopPage() {
   }, []);
 
   const loadLuckyWheel = useCallback(async (signal?: AbortSignal) => {
+    const requestId = luckyWheelRequestRef.current + 1;
+    luckyWheelRequestRef.current = requestId;
+    const requestToken = token || null;
     const res = await fetch("/api/shop/lucky-wheel", {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       cache: "no-store",
@@ -475,6 +480,7 @@ export default function ShopPage() {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data?.error || "Failed to load lucky wheel");
+    if (signal?.aborted || requestId !== luckyWheelRequestRef.current || requestToken !== latestLuckyWheelTokenRef.current) return;
     setLuckyWheel({
       enabled: Boolean(data.enabled),
       title: data.title || "Lucky Wheel Event",
@@ -519,7 +525,6 @@ export default function ShopPage() {
       setBanners(Array.isArray(cData.banners) ? cData.banners : []);
       setBestSellerIds(Array.isArray(cData.bestSellerIds) ? cData.bestSellerIds : []);
       setRecentPurchases(Array.isArray(rData) ? rData.slice(0, 7) : []);
-      void loadLuckyWheel().catch(() => {});
     } catch { /* silent */ }
     setLoading(false);
   };
@@ -537,11 +542,16 @@ export default function ShopPage() {
   }, [loadRecentPurchases]);
 
   useEffect(() => {
+    latestLuckyWheelTokenRef.current = token || null;
+  }, [token]);
+
+  useEffect(() => {
+    if (authLoading) return;
     const timeoutId = window.setTimeout(() => {
       void loadLuckyWheel().catch(() => {});
     }, 0);
     return () => window.clearTimeout(timeoutId);
-  }, [loadLuckyWheel]);
+  }, [authLoading, loadLuckyWheel]);
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.localStorage.getItem(VISITOR_NOTICE_DISMISSED_KEY) === "1") return;
@@ -1781,13 +1791,19 @@ export default function ShopPage() {
                       {wheelSlices.map((slice, index) => {
                         const count = Math.max(1, wheelSlices.length);
                         const angle = (index + 0.5) * (360 / count);
+                        const wheelLabel = slice.type === "discount" ? `${slice.discountPercent}% OFF` : "TRY AGAIN";
                         return (
                           <div
                             key={`${slice.label}-${index}`}
-                            className="absolute left-1/2 top-1/2 flex h-[34px] w-[112px] origin-left items-center justify-center text-center text-[10px] font-bold uppercase leading-tight text-white drop-shadow"
-                            style={{ transform: `rotate(${angle}deg) translateX(38px) rotate(90deg)` }}
+                            className="absolute left-1/2 top-1/2 flex h-7 w-[88px] origin-left items-center justify-center"
+                            style={{ transform: `rotate(${angle}deg) translateX(72px)` }}
                           >
-                            <span className="line-clamp-2 break-words">{slice.type === "discount" ? `${slice.discountPercent}% off` : slice.label || "Empty"}</span>
+                            <span
+                              className="rounded-full bg-black/35 px-2 py-1 text-center text-[10px] font-black uppercase leading-none text-white shadow-sm transition-transform duration-[4200ms] ease-out"
+                              style={{ transform: `rotate(${-angle - wheelRotation}deg)` }}
+                            >
+                              {wheelLabel}
+                            </span>
                           </div>
                         );
                       })}

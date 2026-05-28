@@ -155,6 +155,14 @@ const BEST_SELLERS_PER_PAGE = 4;
 const PENDING_CHECKOUT_KEY = "pendingCheckout";
 const PAYPAL_EMAIL = "nguyenquanghuy111106@gmail.com";
 const LTC_ADDRESS = "ltc1ququ7e6ryccpnu7jgy0l4vukgc3mventxyulyge";
+const WHEEL_SPIN_DURATION_MS = 4200;
+const WHEEL_SLICE_COLORS = [
+  "#E11D48", "#2563EB", "#16A34A", "#F59E0B", "#7C3AED", "#0891B2", "#DB2777", "#65A30D", "#EA580C", "#4F46E5",
+  "#DC2626", "#0D9488", "#9333EA", "#CA8A04", "#0284C7", "#C026D3", "#059669", "#D97706", "#4338CA", "#BE123C",
+  "#1D4ED8", "#15803D", "#B45309", "#6D28D9", "#0E7490", "#BE185D", "#4D7C0F", "#C2410C", "#3730A3", "#991B1B",
+  "#0369A1", "#047857", "#A16207", "#581C87", "#155E75", "#9D174D", "#3F6212", "#9A3412", "#312E81", "#B91C1C",
+  "#0F766E", "#A21CAF", "#854D0E", "#1E40AF", "#166534", "#22C55E", "#86198F", "#6366F1", "#A3A3A3", "#F97316",
+];
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function getMonthLabel(monthKey: string): string {
@@ -431,6 +439,7 @@ export default function ShopPage() {
   const resumeHandledRef = useRef(false);
   const latestLuckyWheelTokenRef = useRef<string | null>(null);
   const luckyWheelRequestRef = useRef(0);
+  const luckyWheelResultTimeoutRef = useRef<number | null>(null);
 
   const ACTION_COOLDOWN_MS = 450;
   const canAct = () => { if (submitting || Date.now() - lastActionRef.current < ACTION_COOLDOWN_MS) return false; lastActionRef.current = Date.now(); return true; };
@@ -567,6 +576,7 @@ export default function ShopPage() {
   useEffect(() => {
     return () => {
       if (searchDebounceRef.current) window.clearTimeout(searchDebounceRef.current);
+      if (luckyWheelResultTimeoutRef.current) window.clearTimeout(luckyWheelResultTimeoutRef.current);
     };
   }, []);
 
@@ -778,7 +788,7 @@ export default function ShopPage() {
         const delta = (desired - normalizedCurrent + 360) % 360;
         return current + 1440 + delta;
       });
-      setLuckyWheelResult({
+      const nextLuckyWheelResult: LuckyWheelResult = {
         result: data.result === "discount" ? "discount" : "empty",
         message: data.message || (data.result === "discount" ? "Discount unlocked." : "Better luck next time."),
         couponCode: data.couponCode || "",
@@ -786,7 +796,13 @@ export default function ShopPage() {
         tickets: Math.max(0, Number(data.tickets || 0)),
         prizeIndex,
         sliceCount,
-      });
+      };
+      if (luckyWheelResultTimeoutRef.current) window.clearTimeout(luckyWheelResultTimeoutRef.current);
+      luckyWheelResultTimeoutRef.current = window.setTimeout(() => {
+        setLuckyWheelResult(nextLuckyWheelResult);
+        setLuckyWheelLoading(false);
+        luckyWheelResultTimeoutRef.current = null;
+      }, WHEEL_SPIN_DURATION_MS);
       setLuckyWheel((current) => current ? {
         ...current,
         tickets: Math.max(0, Number(data.tickets || 0)),
@@ -794,7 +810,6 @@ export default function ShopPage() {
       } : current);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Spin failed");
-    } finally {
       setLuckyWheelLoading(false);
     }
   };
@@ -813,12 +828,11 @@ export default function ShopPage() {
     [luckyWheel]
   );
   const wheelGradient = useMemo(() => {
-    const colors = ["#2F9BE6", "#3DDC84", "#F7D154", "#FF7A59", "#8B5CF6", "#14B8A6", "#F472B6", "#94A3B8"];
     const count = Math.max(1, wheelSlices.length);
-    return `conic-gradient(from -90deg, ${wheelSlices.map((slice, index) => {
+    return `conic-gradient(from 0deg, ${wheelSlices.map((slice, index) => {
       const start = (index / count) * 100;
       const end = ((index + 1) / count) * 100;
-      const color = slice.type === "discount" ? colors[index % colors.length] : "#1E1E1E";
+      const color = WHEEL_SLICE_COLORS[index % WHEEL_SLICE_COLORS.length];
       return `${color} ${start}% ${end}%`;
     }).join(", ")})`;
   }, [wheelSlices]);
@@ -1791,16 +1805,17 @@ export default function ShopPage() {
                       {wheelSlices.map((slice, index) => {
                         const count = Math.max(1, wheelSlices.length);
                         const angle = (index + 0.5) * (360 / count);
+                        const cssAngle = angle - 90;
                         const wheelLabel = slice.type === "discount" ? `${slice.discountPercent}% OFF` : "TRY AGAIN";
                         return (
                           <div
                             key={`${slice.label}-${index}`}
                             className="absolute left-1/2 top-1/2 flex h-7 w-[88px] origin-left items-center justify-center"
-                            style={{ transform: `rotate(${angle}deg) translateX(72px)` }}
+                            style={{ transform: `rotate(${cssAngle}deg) translateX(72px)` }}
                           >
                             <span
                               className="rounded-full bg-black/35 px-2 py-1 text-center text-[10px] font-black uppercase leading-none text-white shadow-sm transition-transform duration-[4200ms] ease-out"
-                              style={{ transform: `rotate(${-angle - wheelRotation}deg)` }}
+                              style={{ transform: `rotate(${-cssAngle - wheelRotation}deg)` }}
                             >
                               {wheelLabel}
                             </span>

@@ -51,6 +51,10 @@ function maskName(name: string): string {
   return name[0] + "*".repeat(Math.min(name.length - 1, 4));
 }
 
+function buildCartCouponKey(code: string, items: CartItem[]): string {
+  return `${code.trim().toUpperCase()}|${items.map((item) => `${item._id}:${item.quantity}:${Number(item.price || 0)}`).join(",")}`;
+}
+
 function formatMoney(value: number | string | undefined | null): string {
   const n = Number(value);
   if (!Number.isFinite(n)) return "$0.00";
@@ -400,6 +404,7 @@ export default function ShopPage() {
   const [checkoutSummary, setCheckoutSummary] = useState<CheckoutSummary | null>(null);
   const [couponCode, setCouponCode] = useState("");
   const [couponPreview, setCouponPreview] = useState<CheckoutSummary | null>(null);
+  const [couponPreviewKey, setCouponPreviewKey] = useState("");
   const [couponLoading, setCouponLoading] = useState(false);
   const [couponMessage, setCouponMessage] = useState("");
   const [robloxUsernameInput, setRobloxUsernameInput] = useState("");
@@ -446,10 +451,14 @@ export default function ShopPage() {
 
   const saveCart = useCallback((newCart: CartItem[], options?: { skipRemoteSync?: boolean }) => {
     if (options?.skipRemoteSync) skipNextRemoteCartSyncRef.current = true;
-    setCouponPreview(null);
-    setCouponMessage("");
+    const nextCouponKey = buildCartCouponKey(couponCode, newCart);
+    if (!couponPreviewKey || couponPreviewKey !== nextCouponKey) {
+      setCouponPreview(null);
+      setCouponPreviewKey("");
+      setCouponMessage("");
+    }
     setCart(newCart);
-  }, []);
+  }, [couponCode, couponPreviewKey]);
 
   const syncCartToAccount = useCallback(async (nextCart: CartItem[]) => {
     if (!token) return;
@@ -907,9 +916,14 @@ export default function ShopPage() {
   const hasPickedTwoHours = pickedSlotHours.length === 2;
   const checkoutItems = checkoutSummary?.items?.length ? checkoutSummary.items : cart;
   const checkoutTotal = Number.isFinite(Number(checkoutSummary?.totalAmount)) ? Number(checkoutSummary?.totalAmount) : cartTotal;
-  const cartDiscountAmount = Number(couponPreview?.discountAmount || 0);
-  const cartDiscountPercent = Number(couponPreview?.discountPercent || 0);
-  const cartPayableTotal = Number.isFinite(Number(couponPreview?.totalAmount)) ? Number(couponPreview?.totalAmount) : cartTotal;
+  const cartCouponKey = useMemo(
+    () => buildCartCouponKey(couponCode, cart),
+    [cart, couponCode]
+  );
+  const activeCouponPreview = couponPreview && couponPreviewKey === cartCouponKey ? couponPreview : null;
+  const activeCartDiscountAmount = Number(activeCouponPreview?.discountAmount || 0);
+  const activeCartDiscountPercent = Number(activeCouponPreview?.discountPercent || 0);
+  const activeCartPayableTotal = Number.isFinite(Number(activeCouponPreview?.totalAmount)) ? Number(activeCouponPreview?.totalAmount) : cartTotal;
 
   const handleSearchChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value;
@@ -980,6 +994,7 @@ export default function ShopPage() {
     saveCart([], { skipRemoteSync: true });
     setCouponCode("");
     setCouponPreview(null);
+    setCouponPreviewKey("");
     setCouponMessage("");
     if (token) {
       void fetch("/api/shop/cart", {
@@ -991,7 +1006,12 @@ export default function ShopPage() {
 
   const previewCoupon = async () => {
     const code = couponCode.trim();
-    if (!code || cart.length === 0) return;
+    return previewCouponFor(code, cart);
+  };
+
+  const previewCouponFor = async (code: string, items: CartItem[]) => {
+    const normalizedCode = code.trim();
+    if (!normalizedCode || items.length === 0) return null;
     setCouponLoading(true);
     setCouponMessage("");
     try {
@@ -999,25 +1019,29 @@ export default function ShopPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          couponCode: code,
-          cartItems: cart.map((i) => ({ product: i._id, name: i.name, quantity: i.quantity, price: i.price })),
+          couponCode: normalizedCode,
+          cartItems: items.map((i) => ({ product: i._id, name: i.name, quantity: i.quantity, price: i.price })),
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Coupon is invalid");
       const nextPreview: CheckoutSummary = {
-        subtotalAmount: Number(data.subtotalAmount || cartTotal),
+        subtotalAmount: Number(data.subtotalAmount || items.reduce((sum, item) => sum + item.price * item.quantity, 0)),
         discountAmount: Number(data.discountAmount || 0),
         discountPercent: Number(data.discountPercent || 0),
-        totalAmount: Number(data.totalAmount || cartTotal),
-        couponCode: data.couponCode || code,
-        items: Array.isArray(data.items) ? data.items : cart,
+        totalAmount: Number(data.totalAmount || items.reduce((sum, item) => sum + item.price * item.quantity, 0)),
+        couponCode: data.couponCode || normalizedCode,
+        items: Array.isArray(data.items) ? data.items : items,
       };
       setCouponPreview(nextPreview);
+      setCouponPreviewKey(buildCartCouponKey(normalizedCode, items));
       setCouponMessage(nextPreview.discountPercent > 0 ? `${nextPreview.discountPercent}% discount applied.` : "Coupon checked.");
+      return nextPreview;
     } catch (e) {
       setCouponPreview(null);
+      setCouponPreviewKey("");
       setCouponMessage(e instanceof Error ? e.message : "Coupon is invalid");
+      throw e;
     } finally {
       setCouponLoading(false);
     }
@@ -1030,6 +1054,10 @@ export default function ShopPage() {
     checkoutInFlightRef.current = true;
     setSubmitting(true); setCheckoutLoading(true); setError(null);
     try {
+      const codeForCheckout = couponCode.trim();
+      if (codeForCheckout && (!couponPreview || couponPreviewKey !== cartCouponKey)) {
+        await previewCouponFor(codeForCheckout, cart);
+      }
       const res = await fetch("/api/shop/checkout", {
         method: "POST",
         headers: {
@@ -1037,7 +1065,7 @@ export default function ShopPage() {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
-          couponCode: couponCode.trim(),
+          couponCode: codeForCheckout,
           cartItems: cart.map((i) => ({ product: i._id, name: i.name, quantity: i.quantity, price: i.price })),
         }),
       });
@@ -1312,6 +1340,7 @@ export default function ShopPage() {
                       onChange={(event) => {
                         setCouponCode(event.target.value);
                         setCouponPreview(null);
+                        setCouponPreviewKey("");
                         setCouponMessage("");
                       }}
                       placeholder="Enter code"
@@ -1327,15 +1356,15 @@ export default function ShopPage() {
                     </button>
                   </div>
                   {couponMessage && (
-                    <p className={"text-xs " + (couponPreview ? "text-[#3DDC84]" : "text-[#FFB3B3]")}>{couponMessage}</p>
+                    <p className={"text-xs " + (activeCouponPreview ? "text-[#3DDC84]" : "text-[#FFB3B3]")}>{couponMessage}</p>
                   )}
                 </div>
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between"><span className="text-[#B5B5B5]">Subtotal</span><span>{formatMoney(cartTotal)}</span></div>
-                  {cartDiscountAmount > 0 && (
-                    <div className="flex justify-between text-[#3DDC84]"><span>Discount ({cartDiscountPercent}%)</span><span>-{formatMoney(cartDiscountAmount)}</span></div>
+                  {activeCartDiscountAmount > 0 && (
+                    <div className="flex justify-between text-[#3DDC84]"><span>Discount ({activeCartDiscountPercent}%)</span><span>-{formatMoney(activeCartDiscountAmount)}</span></div>
                   )}
-                  <div className="flex justify-between border-t border-[#1E1E1E] pt-2 text-lg font-semibold"><span>Total</span><span className="text-[#3DDC84]">{formatMoney(cartPayableTotal)}</span></div>
+                  <div className="flex justify-between border-t border-[#1E1E1E] pt-2 text-lg font-semibold"><span>Total</span><span className="text-[#3DDC84]">{formatMoney(activeCartPayableTotal)}</span></div>
                 </div>
                 <button onClick={() => { closeCart(); void doCheckout(); }} disabled={submitting} className="w-full rounded-[14px] bg-[#2F9BE6] py-3 font-medium transition-all hover:bg-[#49B6FF] primary-hover-glow disabled:opacity-50">{submitting ? "Processing..." : "Checkout"}</button>
               </div>
@@ -1810,12 +1839,12 @@ export default function ShopPage() {
                         return (
                           <div
                             key={`${slice.label}-${index}`}
-                            className="absolute left-1/2 top-1/2 flex h-7 w-[88px] origin-left items-center justify-center"
-                            style={{ transform: `rotate(${cssAngle}deg) translateX(72px)` }}
+                            className="absolute left-1/2 top-1/2 h-0 w-0 origin-left"
+                            style={{ transform: `rotate(${cssAngle}deg) translateX(92px)` }}
                           >
                             <span
-                              className="rounded-full bg-black/35 px-2 py-1 text-center text-[10px] font-black uppercase leading-none text-white shadow-sm transition-transform duration-[4200ms] ease-out"
-                              style={{ transform: `rotate(${-cssAngle - wheelRotation}deg)` }}
+                              className="absolute left-1/2 top-1/2 w-[92px] text-center text-[10px] font-black uppercase leading-none text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.75)] transition-transform duration-[4200ms] ease-out"
+                              style={{ transform: `translate(-50%, -50%) rotate(${-cssAngle - wheelRotation}deg)` }}
                             >
                               {wheelLabel}
                             </span>
@@ -1823,7 +1852,7 @@ export default function ShopPage() {
                         );
                       })}
                     </div>
-                    <div className="absolute left-1/2 top-0 z-10 h-9 w-5 -translate-x-1/2 rounded-b-full bg-[#F7D154] shadow-[0_2px_12px_rgba(247,209,84,0.45)]" />
+                    <div className="absolute left-1/2 top-1 z-10 h-0 w-0 -translate-x-1/2 border-l-[11px] border-r-[11px] border-t-[34px] border-l-transparent border-r-transparent border-t-[#F7D154] drop-shadow-[0_3px_8px_rgba(247,209,84,0.5)]" />
                     <div className="absolute inset-0 flex items-center justify-center">
                       <div className="rounded-full border border-[#1E1E1E] bg-[#050505] px-5 py-3 text-center text-sm font-semibold text-white shadow-lg">
                         SPIN
@@ -1834,13 +1863,6 @@ export default function ShopPage() {
                     <div>
                       <h2 className="text-2xl font-bold text-white">{luckyWheel.title}</h2>
                       <p className="mt-2 text-sm leading-6 text-[#B5B5B5]">{luckyWheel.message}</p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {luckyWheel.slices.map((slice, index) => (
-                        <span key={`${slice.label}-${index}`} className="rounded-full bg-[#050505] px-3 py-1.5 text-xs text-[#B5B5B5]">
-                          {slice.type === "discount" ? `${slice.label || `${slice.discountPercent}% off`} - ${slice.discountPercent}% off` : slice.label || "Empty"}
-                        </span>
-                      ))}
                     </div>
                     <div className="rounded-[16px] border border-[#1E1E1E] bg-[#050505] p-4">
                       <div className="flex flex-wrap items-center justify-between gap-3">

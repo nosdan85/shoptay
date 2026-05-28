@@ -44,7 +44,7 @@ test('pickWheelSlice uses random source to choose a configured slice', () => {
         { label: '15% Off', type: 'discount', discountPercent: 15 }
     ];
 
-    assert.equal(pickWheelSlice(slices, () => 0.99).discountPercent, 15);
+    assert.deepEqual(pickWheelSlice(slices, () => 0.99), { label: '15% Off', type: 'discount', discountPercent: 15, index: 1 });
 });
 
 test('buildGeneratedCouponCode creates NOSMARKET code with 10 random characters', () => {
@@ -56,6 +56,7 @@ test('buildGeneratedCouponCode creates NOSMARKET code with 10 random characters'
 test('validateGeneratedCouponRecord rejects used coupons and returns active discount percent', () => {
     assert.deepEqual(validateGeneratedCouponRecord(null), { ok: false, error: 'Coupon code is invalid.' });
     assert.deepEqual(validateGeneratedCouponRecord({ status: 'used', discountPercent: 15 }), { ok: false, error: 'Coupon code has already been used.' });
+    assert.deepEqual(validateGeneratedCouponRecord({ status: 'replaced', discountPercent: 15 }), { ok: false, error: 'Coupon code has already been used.' });
     assert.deepEqual(validateGeneratedCouponRecord({ status: 'unused', discountPercent: 30 }), { ok: true, discountPercent: 30 });
 });
 

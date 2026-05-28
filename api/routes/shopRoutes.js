@@ -919,6 +919,18 @@ const validateCouponCode = async (couponCodeRaw) => {
                 error: validation.error
             };
         }
+        const existingGeneratedCouponOrder = await Order.findOne({
+            couponCode,
+            status: { $ne: 'Cancelled' }
+        }).select('_id').lean();
+        if (existingGeneratedCouponOrder) {
+            return {
+                couponCode: '',
+                discountPercent: 0,
+                discountAmount: 0,
+                error: 'Coupon code has already been used.'
+            };
+        }
         return {
             couponCode,
             discountPercent: validation.discountPercent,
@@ -979,11 +991,50 @@ const markGeneratedCouponUsed = async ({ couponCode, orderId }) => {
     );
 };
 
-const toPublicLuckyWheelPayload = (config, user = null) => {
+const markOrderGeneratedCouponUsed = async (order) => {
+    await markGeneratedCouponUsed({
+        couponCode: order?.couponCode,
+        orderId: order?.orderId
+    });
+};
+
+const findLatestLuckyWheelCoupon = async (discordId) => {
+    const normalizedDiscordId = String(discordId || '').trim();
+    if (!normalizedDiscordId) return null;
+    return GeneratedCoupon.findOne({
+        discordId: normalizedDiscordId,
+        source: 'lucky_wheel',
+        status: 'unused'
+    }).sort({ createdAt: -1 }).lean();
+};
+
+const replaceOpenLuckyWheelCoupons = async (discordId) => {
+    const normalizedDiscordId = String(discordId || '').trim();
+    if (!normalizedDiscordId) return;
+    await GeneratedCoupon.updateMany(
+        {
+            discordId: normalizedDiscordId,
+            source: 'lucky_wheel',
+            status: 'unused'
+        },
+        {
+            $set: {
+                status: 'replaced',
+                replacedAt: new Date()
+            }
+        }
+    );
+};
+
+const toPublicLuckyWheelPayload = (config, user = null, latestCoupon = null) => {
     const luckyWheel = normalizeWheelConfig(config?.luckyWheel || {});
     return {
         ...luckyWheel,
-        tickets: Math.max(0, Number(user?.luckyWheelTickets || 0))
+        tickets: Math.max(0, Number(user?.luckyWheelTickets || 0)),
+        latestCoupon: latestCoupon ? {
+            couponCode: latestCoupon.couponCode,
+            discountPercent: Number(latestCoupon.discountPercent || 0)
+        } : null
     };
 };
 
@@ -2061,7 +2112,8 @@ router.get('/lucky-wheel', async (req, res) => {
         const user = discordId
             ? await User.findOne({ discordId }).select('luckyWheelTickets').lean()
             : null;
-        return res.json(toPublicLuckyWheelPayload(config, user));
+        const latestCoupon = discordId ? await findLatestLuckyWheelCoupon(discordId) : null;
+        return res.json(toPublicLuckyWheelPayload(config, user, latestCoupon));
     } catch (error) {
         console.error('Lucky wheel config error:', error);
         return res.status(500).json({ error: 'Could not load lucky wheel.' });
@@ -2084,12 +2136,16 @@ router.post('/lucky-wheel/spin', authRequired, async (req, res) => {
         ).select('discordId luckyWheelTickets').lean();
         if (!user) return res.status(409).json({ error: 'No lucky wheel tickets available.' });
 
+        await replaceOpenLuckyWheelCoupons(discordId);
+
         const prize = pickWheelSlice(luckyWheel.slices);
         if (prize.type !== 'discount') {
             return res.json({
                 result: 'empty',
                 message: 'Better luck next time.',
                 prize,
+                prizeIndex: prize.index,
+                sliceCount: luckyWheel.slices.length,
                 tickets: Math.max(0, Number(user.luckyWheelTickets || 0))
             });
         }
@@ -2103,6 +2159,8 @@ router.post('/lucky-wheel/spin', authRequired, async (req, res) => {
             result: 'discount',
             message: `${prize.discountPercent}% discount unlocked.`,
             prize,
+            prizeIndex: prize.index,
+            sliceCount: luckyWheel.slices.length,
             couponCode: coupon.couponCode,
             discountPercent: coupon.discountPercent,
             tickets: Math.max(0, Number(user.luckyWheelTickets || 0))
@@ -2577,7 +2635,6 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
                         ticketError: ''
                     });
                     await newOrder.save();
-                    await markGeneratedCouponUsed({ couponCode, orderId });
                     break;
                 } catch (saveError) {
                     const duplicateOrderId = Number(saveError?.code) === 11000 && saveError?.keyPattern?.orderId;
@@ -3486,6 +3543,7 @@ router.post('/create-ticket-paypal-ff', authRequired, ticketCreateLimiter, requi
                     ticketChannelId: order.paypalTicketChannelId,
                     proofFile: req.file
                 });
+            await markOrderGeneratedCouponUsed(order);
             return res.json({
                 success: true,
                 alreadyExists: true,
@@ -3533,6 +3591,7 @@ router.post('/create-ticket-paypal-ff', authRequired, ticketCreateLimiter, requi
                 return res.status(404).json({ error: 'Order not found' });
             }
             if (fresh?.paypalTicketChannelId) {
+                await markOrderGeneratedCouponUsed(fresh);
                 return res.json({
                     success: true,
                     alreadyExists: true,
@@ -3611,6 +3670,7 @@ router.post('/create-ticket-paypal-ff', authRequired, ticketCreateLimiter, requi
         if (!persistResult?.matchedCount) {
             const fresh = await Order.findById(lockedOrder._id).lean();
             if (fresh?.paypalTicketChannelId) {
+                await markOrderGeneratedCouponUsed(fresh);
                 return res.json({
                     success: true,
                     alreadyExists: true,
@@ -3642,6 +3702,7 @@ router.post('/create-ticket-paypal-ff', authRequired, ticketCreateLimiter, requi
             );
         }
 
+        await markOrderGeneratedCouponUsed(lockedOrder);
         await clearUserCart(req.user.discordId).catch(() => {});
         await releaseUserTicketCreationLock(userTicketLockDiscordId, userTicketLockUntil).catch(() => {});
 
@@ -3720,6 +3781,7 @@ router.post('/create-ticket-ltc', authRequired, ticketCreateLimiter, requirePaym
                     ticketChannelId: order.ltcTicketChannelId,
                     proofFile: req.file
                 });
+            await markOrderGeneratedCouponUsed(order);
             return res.json({
                 success: true,
                 alreadyExists: true,
@@ -3761,6 +3823,7 @@ router.post('/create-ticket-ltc', authRequired, ticketCreateLimiter, requirePaym
                 return res.status(404).json({ error: 'Order not found' });
             }
             if (fresh?.ltcTicketChannelId) {
+                await markOrderGeneratedCouponUsed(fresh);
                 return res.json({
                     success: true,
                     alreadyExists: true,
@@ -3826,6 +3889,7 @@ router.post('/create-ticket-ltc', authRequired, ticketCreateLimiter, requirePaym
         if (!persistResult?.matchedCount) {
             const fresh = await Order.findById(lockedOrder._id).lean();
             if (fresh?.ltcTicketChannelId) {
+                await markOrderGeneratedCouponUsed(fresh);
                 return res.json({
                     success: true,
                     alreadyExists: true,
@@ -3855,6 +3919,7 @@ router.post('/create-ticket-ltc', authRequired, ticketCreateLimiter, requirePaym
             );
         }
 
+        await markOrderGeneratedCouponUsed(lockedOrder);
         await clearUserCart(req.user.discordId).catch(() => {});
         await releaseUserTicketCreationLock(userTicketLockDiscordId, userTicketLockUntil).catch(() => {});
 

@@ -61,7 +61,7 @@ interface LinkedUser {
   luckyWheelFirstLinkAwardedAt?: string | null;
 }
 
-interface LuckyWheelSlice { label: string; type: "empty" | "discount"; discountPercent: number }
+interface LuckyWheelSlice { label: string; type: "empty" | "discount"; discountPercent: number | "" }
 interface LuckyWheelConfig { enabled: boolean; title: string; message: string; slices: LuckyWheelSlice[] }
 
 const HOUR_OPTIONS = Array.from({ length: 25 }, (_, hour) => `${String(hour).padStart(2, "0")}:00`);
@@ -590,7 +590,13 @@ export default function AdminPage() {
       const res = await fetch("/api/shop/owner/lucky-wheel", {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(luckyWheel),
+        body: JSON.stringify({
+          ...luckyWheel,
+          slices: luckyWheel.slices.map((slice) => ({
+            ...slice,
+            discountPercent: slice.type === "discount" ? Number(slice.discountPercent) || 0 : 0,
+          })),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Save lucky wheel failed");
@@ -1003,7 +1009,7 @@ export default function AdminPage() {
                       <option value="empty">Empty</option>
                       <option value="discount">Discount</option>
                     </select>
-                    <input type="number" min="0" max="100" value={slice.discountPercent} onChange={(e) => updateWheelSlice(index, { discountPercent: Number(e.target.value) || 0 })} disabled={slice.type === "empty"} className="rounded-[12px] border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm outline-none disabled:opacity-50" placeholder="%" />
+                    <input type="number" min="0" max="100" value={slice.discountPercent} onChange={(e) => updateWheelSlice(index, { discountPercent: e.target.value === "" ? "" : Number(e.target.value) })} disabled={slice.type === "empty"} className="rounded-[12px] border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm outline-none disabled:opacity-50" placeholder="%" />
                     <button onClick={() => removeWheelSlice(index)} className="rounded-[12px] bg-[#FF4D4F]/15 px-3 py-2 text-sm text-[#FF4D4F]">Remove</button>
                   </div>
                 ))}

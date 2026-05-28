@@ -135,8 +135,9 @@ interface SlotSegment {
 interface Purchase { username: string; items: string; price?: number }
 interface TicketResult { channelId: string; guildId?: string; url?: string }
 interface LuckyWheelSlice { label: string; type: "empty" | "discount"; discountPercent: number }
-interface LuckyWheelConfig { enabled: boolean; title: string; message: string; slices: LuckyWheelSlice[]; tickets: number }
-interface LuckyWheelResult { result: "empty" | "discount"; message: string; couponCode?: string; discountPercent?: number; tickets: number }
+interface LuckyWheelCoupon { couponCode: string; discountPercent: number }
+interface LuckyWheelConfig { enabled: boolean; title: string; message: string; slices: LuckyWheelSlice[]; tickets: number; latestCoupon?: LuckyWheelCoupon | null }
+interface LuckyWheelResult { result: "empty" | "discount"; message: string; couponCode?: string; discountPercent?: number; tickets: number; prizeIndex?: number; sliceCount?: number }
 interface CheckoutSummary {
   subtotalAmount: number;
   discountAmount: number;
@@ -413,6 +414,8 @@ export default function ShopPage() {
   const [luckyWheelLoading, setLuckyWheelLoading] = useState(false);
   const [luckyWheelResult, setLuckyWheelResult] = useState<LuckyWheelResult | null>(null);
   const [copiedLuckyCode, setCopiedLuckyCode] = useState(false);
+  const [wheelRotation, setWheelRotation] = useState(0);
+  const [mobileShopView, setMobileShopView] = useState<"items" | "wheel">("items");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [modalQty, setModalQty] = useState<string | number>(1);
   const [modalOpen, setModalOpen] = useState(false);
@@ -478,7 +481,21 @@ export default function ShopPage() {
       message: data.message || "We are running a limited lucky wheel event.",
       slices: Array.isArray(data.slices) ? data.slices : [],
       tickets: Math.max(0, Number(data.tickets || 0)),
+      latestCoupon: data.latestCoupon || null,
     });
+    if (data?.latestCoupon?.couponCode) {
+      setLuckyWheelResult({
+        result: "discount",
+        message: `${Number(data.latestCoupon.discountPercent || 0)}% discount unlocked.`,
+        couponCode: data.latestCoupon.couponCode,
+        discountPercent: Number(data.latestCoupon.discountPercent || 0),
+        tickets: Math.max(0, Number(data.tickets || 0)),
+      });
+      setCopiedLuckyCode(false);
+    } else {
+      setLuckyWheelResult(null);
+      setCopiedLuckyCode(false);
+    }
     if (data?.enabled && typeof window !== "undefined" && window.localStorage.getItem(LUCKY_WHEEL_NOTICE_KEY) !== "1") {
       setShowLuckyWheelNotice(true);
     }
@@ -718,6 +735,7 @@ export default function ShopPage() {
 
   const scrollToLuckyWheel = useCallback(() => {
     dismissLuckyWheelNotice();
+    setMobileShopView("wheel");
     requestAnimationFrame(() => {
       document.getElementById("lucky-wheel-event")?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
@@ -740,14 +758,30 @@ export default function ShopPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Spin failed");
+      const sliceCount = Math.max(1, Number(data.sliceCount || luckyWheel?.slices.length || 1));
+      const prizeIndex = Math.max(0, Math.min(sliceCount - 1, Number(data.prizeIndex ?? data.prize?.index ?? 0)));
+      setWheelRotation((current) => {
+        const sliceAngle = 360 / sliceCount;
+        const targetCenter = prizeIndex * sliceAngle + sliceAngle / 2;
+        const normalizedCurrent = ((current % 360) + 360) % 360;
+        const desired = (360 - targetCenter) % 360;
+        const delta = (desired - normalizedCurrent + 360) % 360;
+        return current + 1440 + delta;
+      });
       setLuckyWheelResult({
         result: data.result === "discount" ? "discount" : "empty",
         message: data.message || (data.result === "discount" ? "Discount unlocked." : "Better luck next time."),
         couponCode: data.couponCode || "",
         discountPercent: Number(data.discountPercent || data.prize?.discountPercent || 0),
         tickets: Math.max(0, Number(data.tickets || 0)),
+        prizeIndex,
+        sliceCount,
       });
-      setLuckyWheel((current) => current ? { ...current, tickets: Math.max(0, Number(data.tickets || 0)) } : current);
+      setLuckyWheel((current) => current ? {
+        ...current,
+        tickets: Math.max(0, Number(data.tickets || 0)),
+        latestCoupon: data.couponCode ? { couponCode: data.couponCode, discountPercent: Number(data.discountPercent || 0) } : null,
+      } : current);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Spin failed");
     } finally {
@@ -763,6 +797,21 @@ export default function ShopPage() {
       setCopiedLuckyCode(false);
     }
   };
+
+  const wheelSlices = useMemo(
+    () => (luckyWheel?.slices?.length ? luckyWheel.slices : [{ label: "Better luck next time", type: "empty" as const, discountPercent: 0 }]),
+    [luckyWheel]
+  );
+  const wheelGradient = useMemo(() => {
+    const colors = ["#2F9BE6", "#3DDC84", "#F7D154", "#FF7A59", "#8B5CF6", "#14B8A6", "#F472B6", "#94A3B8"];
+    const count = Math.max(1, wheelSlices.length);
+    return `conic-gradient(from -90deg, ${wheelSlices.map((slice, index) => {
+      const start = (index / count) * 100;
+      const end = ((index + 1) / count) * 100;
+      const color = slice.type === "discount" ? colors[index % colors.length] : "#1E1E1E";
+      return `${color} ${start}% ${end}%`;
+    }).join(", ")})`;
+  }, [wheelSlices]);
 
   const fetchSlotsForTimezone = useCallback(async (tzValue: string) => {
     const res = await fetch(`/api/shop/delivery-slots?timezone=${encodeURIComponent(tzValue)}`, { cache: "no-store" });
@@ -1703,13 +1752,49 @@ export default function ShopPage() {
             </div>
 
             {luckyWheel?.enabled && (
-              <section id="lucky-wheel-event" className="motion-panel rounded-[20px] border border-[#2F9BE6]/30 bg-[#111111] p-5 animate-section-enter">
-                <div className="grid gap-5 lg:grid-cols-[260px_1fr]">
-                  <div className="relative mx-auto aspect-square w-full max-w-[240px] rounded-full border-4 border-[#2F9BE6]/50 bg-[#050505] p-4 shadow-[0_0_40px_rgba(47,155,230,0.18)]">
-                    <div className={"h-full w-full rounded-full border border-[#1E1E1E] bg-[conic-gradient(from_0deg,#2F9BE6_0_20%,#111111_20%_40%,#3DDC84_40%_60%,#111111_60%_80%,#F7D154_80%_100%)] transition-transform duration-700 " + (luckyWheelLoading ? "rotate-[720deg]" : "")} />
-                    <div className="absolute left-1/2 top-0 h-8 w-4 -translate-x-1/2 rounded-b-full bg-[#F7D154]" />
+              <div className="grid grid-cols-2 gap-2 md:hidden">
+                <button
+                  type="button"
+                  onClick={() => setMobileShopView("items")}
+                  className={"rounded-[14px] px-4 py-3 text-sm font-semibold " + (mobileShopView === "items" ? "bg-[#2F9BE6] text-white" : "bg-[#111111] text-[#B5B5B5]")}
+                >
+                  Items
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMobileShopView("wheel")}
+                  className={"rounded-[14px] px-4 py-3 text-sm font-semibold " + (mobileShopView === "wheel" ? "bg-[#2F9BE6] text-white" : "bg-[#111111] text-[#B5B5B5]")}
+                >
+                  Lucky Wheel
+                </button>
+              </div>
+            )}
+
+            {luckyWheel?.enabled && (
+              <section id="lucky-wheel-event" className={"motion-panel rounded-[20px] border border-[#2F9BE6]/30 bg-[#111111] p-5 animate-section-enter " + (mobileShopView === "wheel" ? "block" : "hidden md:block")}>
+                <div className="grid gap-6 lg:grid-cols-[340px_1fr]">
+                  <div className="relative mx-auto aspect-square w-full max-w-[320px] rounded-full border-4 border-[#2F9BE6]/50 bg-[#050505] p-4 shadow-[0_0_46px_rgba(47,155,230,0.2)]">
+                    <div
+                      className="relative h-full w-full rounded-full border border-[#1E1E1E] transition-transform duration-[4200ms] ease-out"
+                      style={{ background: wheelGradient, transform: `rotate(${wheelRotation}deg)` }}
+                    >
+                      {wheelSlices.map((slice, index) => {
+                        const count = Math.max(1, wheelSlices.length);
+                        const angle = (index + 0.5) * (360 / count);
+                        return (
+                          <div
+                            key={`${slice.label}-${index}`}
+                            className="absolute left-1/2 top-1/2 flex h-[34px] w-[112px] origin-left items-center justify-center text-center text-[10px] font-bold uppercase leading-tight text-white drop-shadow"
+                            style={{ transform: `rotate(${angle}deg) translateX(38px) rotate(90deg)` }}
+                          >
+                            <span className="line-clamp-2 break-words">{slice.type === "discount" ? `${slice.discountPercent}% off` : slice.label || "Empty"}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="absolute left-1/2 top-0 z-10 h-9 w-5 -translate-x-1/2 rounded-b-full bg-[#F7D154] shadow-[0_2px_12px_rgba(247,209,84,0.45)]" />
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="rounded-full border border-[#1E1E1E] bg-[#050505] px-4 py-2 text-center text-sm font-semibold text-white">
+                      <div className="rounded-full border border-[#1E1E1E] bg-[#050505] px-5 py-3 text-center text-sm font-semibold text-white shadow-lg">
                         SPIN
                       </div>
                     </div>
@@ -1722,7 +1807,7 @@ export default function ShopPage() {
                     <div className="flex flex-wrap gap-2">
                       {luckyWheel.slices.map((slice, index) => (
                         <span key={`${slice.label}-${index}`} className="rounded-full bg-[#050505] px-3 py-1.5 text-xs text-[#B5B5B5]">
-                          {slice.type === "discount" ? `${slice.discountPercent}% off` : "Empty"}
+                          {slice.type === "discount" ? `${slice.label || `${slice.discountPercent}% off`} - ${slice.discountPercent}% off` : slice.label || "Empty"}
                         </span>
                       ))}
                     </div>
@@ -1751,8 +1836,9 @@ export default function ShopPage() {
                           {luckyWheelResult.couponCode && (
                             <div className="mt-3 flex gap-2">
                               <div className="min-w-0 flex-1 break-all rounded-[12px] border border-[#1E1E1E] bg-[#050505] px-3 py-2 font-mono text-sm text-white">{luckyWheelResult.couponCode}</div>
-                              <button type="button" onClick={() => void copyLuckyCoupon(luckyWheelResult.couponCode || "")} className="rounded-[12px] bg-[#1E1E1E] px-3 text-white">
+                              <button type="button" onClick={() => void copyLuckyCoupon(luckyWheelResult.couponCode || "")} className="inline-flex items-center gap-2 rounded-[12px] bg-[#1E1E1E] px-4 text-sm font-semibold text-white">
                                 {copiedLuckyCode ? <CheckCircle2 className="h-4 w-4 text-[#3DDC84]" /> : <Copy className="h-4 w-4" />}
+                                {copiedLuckyCode ? "Copied" : "Copy code"}
                               </button>
                             </div>
                           )}
@@ -1764,6 +1850,7 @@ export default function ShopPage() {
               </section>
             )}
 
+            <div className={luckyWheel?.enabled && mobileShopView === "wheel" ? "hidden md:block" : ""}>
             <div className="relative animate-section-enter mb-6">
               <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-[#B5B5B5]" />
               <input value={searchInput} onChange={handleSearchChange} placeholder="Search items..." className="w-full rounded-[20px] border border-[#1E1E1E] bg-[#111111] py-4 pl-11 pr-4 text-base outline-none transition-colors focus:border-[#2F9BE6]" />
@@ -1853,6 +1940,7 @@ export default function ShopPage() {
                 ))}
               </div>
               {filtered.length === 0 && <div className="py-20 text-center text-[#B5B5B5]"><Package className="mx-auto mb-4 h-16 w-16 opacity-30" /><p>No items found.</p></div>}
+            </div>
             </div>
           </div>
         )}

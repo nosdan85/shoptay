@@ -33,7 +33,7 @@ const normalizeWheelConfig = (config = {}) => {
 const pickWheelSlice = (slices, random = Math.random) => {
     const normalized = normalizeWheelConfig({ enabled: true, slices }).slices;
     const index = Math.min(normalized.length - 1, Math.floor(Math.max(0, Math.min(0.999999, Number(random()) || 0)) * normalized.length));
-    return normalized[index] || DEFAULT_EMPTY_SLICE;
+    return { ...(normalized[index] || DEFAULT_EMPTY_SLICE), index };
 };
 
 const buildGeneratedCouponCode = (randomBytes = crypto.randomBytes) => {

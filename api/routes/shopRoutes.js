@@ -2172,8 +2172,6 @@ router.post('/coupon/preview', async (req, res) => {
     try {
         const cartItems = Array.isArray(req.body?.cartItems) ? req.body.cartItems : [];
         const couponCodeRaw = req.body?.couponCode;
-        const referralCodeRaw = req.body?.referralCode || '';
-        const validatedRefCode = normalizeReferralCode(referralCodeRaw);
         if (cartItems.length === 0) {
             return res.status(400).json({ error: 'Cart is empty' });
         }

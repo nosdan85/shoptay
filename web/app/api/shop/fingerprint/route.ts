@@ -1,11 +1,10 @@
-
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || process.env.API_BASE_URL || "http://localhost:5000";
 
 export async function POST(request: NextRequest) {
   try {
-    const body = method === "POST" ? await request.json() : undefined;
+    const body = await request.json();
     const token = request.headers.get("authorization") || "";
 
     const res = await fetch(`${API_BASE_URL}/api/shop/fingerprint`, {
@@ -14,7 +13,7 @@ export async function POST(request: NextRequest) {
         "Content-Type": "application/json",
         ...(token ? { Authorization: token } : {}),
       },
-      ...(body ? { body: JSON.stringify(body) } : {}),
+      body: JSON.stringify(body),
     });
 
     const data = await res.json();

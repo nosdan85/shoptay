@@ -2683,6 +2683,13 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
         } = cartSummary;
 
         const totalCents = moneyToCents(totalAmount);
+
+        let referredByDiscordId = '';
+        if (validatedRefCode) {
+            const suffix = validatedRefCode.replace(/^REF-/, '');
+            const match = await User.findOne({ discordId: { $ne: discordId }, $expr: { $eq: [ { $substrCP: ['$discordId', { $subtract: [ { $strLenCP: '$discordId' }, 6 ] }, 6 ] }, suffix ] } }).select('discordId').lean().catch(() => null);
+            if (match?.discordId) referredByDiscordId = String(match.discordId);
+        }
         if (!Number.isFinite(totalCents) || totalCents <= 0) {
             log.warn('[CHECKOUT] Invalid total', { requestId: req.requestId, totalAmount });
             return res.status(400).json({ error: 'Invalid checkout total' });
@@ -2844,7 +2851,7 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
             stack: err?.stack,
             duration: `${Date.now() - startTime}ms`
         });
-        return res.status(500).json({ error: 'Server error' });
+        return res.status(500).json({ error: err?.message || 'Server error', step: checkoutStep });
     }
 });
 

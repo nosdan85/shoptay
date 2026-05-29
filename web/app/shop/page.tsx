@@ -1386,8 +1386,7 @@ export default function ShopPage() {
             </div>
             {cart.length > 0 && (
               <div className="border-t border-[#1E1E1E] px-4 py-4 space-y-3 sticky bottom-0 bg-[#111111]">
-                <div className="space-y-2 rounded-[16px] border border-[#1E1E1E] bg-[#050505] p-3">
-                                    {/* === REFERRAL CODE === */}
+                <div className="space-y-3 rounded-[16px] border border-[#1E1E1E] bg-[#050505] p-3">
                   <div className="rounded-[12px] border border-[#2F9BE6]/40 bg-[#0A0E1A] p-3">
                     <div className="mb-2 flex items-center gap-2">
                       <span className="text-xs font-bold uppercase tracking-widest text-[#49B6FF]">Referral</span>
@@ -1396,6 +1395,7 @@ export default function ShopPage() {
                       id="cart-referral"
                       value={referralCode}
                       onChange={(event) => setReferralCode(event.target.value)}
+                      onBlur={() => { try { window.localStorage.setItem('pendingReferralCode', referralCode.trim()); } catch {} }}
                       placeholder="Enter referral code (e.g. REF-123456)"
                       className="w-full rounded-[10px] border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm text-white outline-none focus:border-[#49B6FF]"
                     />
@@ -1417,7 +1417,6 @@ export default function ShopPage() {
                     )}
                   </div>
 
-                  {/* === YOUR COUPONS === */}
                   {token && myCoupons.length > 0 && (
                     <div className="rounded-[12px] border border-[#3DDC84]/40 bg-[#0A1A0E] p-3">
                       <div className="mb-2 flex items-center gap-2">
@@ -1440,37 +1439,38 @@ export default function ShopPage() {
                     </div>
                   )}
 
-                  {/* === DISCOUNT CODE === */}
                   <div className="rounded-[12px] border border-[#9A9A9A]/30 bg-[#0A0A0A] p-3">
                     <div className="mb-2 flex items-center gap-2">
                       <span className="text-xs font-bold uppercase tracking-widest text-[#9A9A9A]">Discount code</span>
                     </div>
                     <div className="flex gap-2">
-                    <input
-                      id="cart-coupon"
-                      value={couponCode}
-                      onChange={(event) => {
-                        setCouponCode(event.target.value);
-                        setCouponPreview(null);
-                        setCouponPreviewKey("");
-                        setCouponMessage("");
-                      }}
-                      placeholder="Enter code"
-                      className="min-w-0 flex-1 rounded-[12px] border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm text-white outline-none focus:border-[#2F9BE6]"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => void previewCoupon()}
-                      disabled={couponLoading || !couponCode.trim()}
-                      className="rounded-[10px] bg-[#1E1E1E] px-3 py-2 text-sm font-bold text-white disabled:opacity-50"
-                    >
-                      {couponLoading ? "..." : "Apply"}
-                    </button>
+                      <input
+                        id="cart-coupon"
+                        value={couponCode}
+                        onChange={(event) => {
+                          setCouponCode(event.target.value);
+                          setCouponPreview(null);
+                          setCouponPreviewKey('');
+                          setCouponMessage('');
+                        }}
+                        placeholder="Enter code"
+                        className="min-w-0 flex-1 rounded-[12px] border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm text-white outline-none focus:border-[#2F9BE6]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void previewCoupon()}
+                        disabled={couponLoading || !couponCode.trim()}
+                        className="rounded-[10px] bg-[#1E1E1E] px-3 py-2 text-sm font-bold text-white disabled:opacity-50"
+                      >
+                        {couponLoading ? '...' : 'Apply'}
+                      </button>
+                    </div>
+                    {couponMessage && (
+                      <p className={'text-xs ' + (activeCouponPreview ? 'text-[#3DDC84]' : 'text-[#FFB3B3]')}>{couponMessage}</p>
+                    )}
                   </div>
-                  {couponMessage && (
-                    <p className={"text-xs " + (activeCouponPreview ? "text-[#3DDC84]" : "text-[#FFB3B3]")}>{couponMessage}</p>
-                  )}
                 </div>
+
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between"><span className="text-[#B5B5B5]">Subtotal</span><span>{formatMoney(cartTotal)}</span></div>
                   {activeCartDiscountAmount > 0 && (
@@ -1478,7 +1478,7 @@ export default function ShopPage() {
                   )}
                   <div className="flex justify-between border-t border-[#1E1E1E] pt-2 text-lg font-semibold"><span>Total</span><span className="text-[#3DDC84]">{formatMoney(activeCartPayableTotal)}</span></div>
                 </div>
-                <button onClick={() => { closeCart(); void doCheckout(); }} disabled={submitting} className="w-full rounded-[14px] bg-[#2F9BE6] py-3 font-medium transition-all hover:bg-[#49B6FF] primary-hover-glow disabled:opacity-50">{submitting ? "Processing..." : "Checkout"}</button>
+                <button onClick={() => { closeCart(); void doCheckout(); }} disabled={submitting} className="w-full rounded-[14px] bg-[#2F9BE6] py-3 font-medium transition-all hover:bg-[#49B6FF] primary-hover-glow disabled:opacity-50">{submitting ? 'Processing...' : 'Checkout'}</button>
               </div>
             )}
           </div>

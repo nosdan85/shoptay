@@ -2663,6 +2663,7 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
         const dbUser = discordId ? await User.findOne({ discordId }).lean() : null;
 
         checkoutStep = 'calculate_summary';
+        const validatedRefCode = String(req.body?.referralCode || '').trim();
         const cartSummary = await calculateCartSummary({ cartItems, couponCodeRaw });
         if (cartSummary.error) {
             log.warn('[CHECKOUT] Cart summary error', {

@@ -2209,12 +2209,12 @@ const maybeGrantReferralReward = async (order) => {
         { $set: { status: 'rewarded', refereeFirstOrderId: order.orderId } }
     );
     await DeviceFingerprint.updateMany({ discordId: refereeId }, { $inc: { orderCount: 1 } });
-    const coupon = await createRewardCoupon({ discountPercent: 30, discordId: referrerId, source: 'referral' });
+    const coupon = await createRewardCoupon({ discountPercent: 20, discordId: referrerId, source: 'referral' });
     await Referral.updateOne(
         { referrerDiscordId: referrerId, refereeDiscordId: refereeId },
         { $set: { rewardCouponCode: coupon.couponCode } }
     );
-    await sendDmToUser(referrerId, 'You referred a buyer! Your referral reward: ' + coupon.couponCode + ' — 30% off your next order!');
+    await sendDmToUser(referrerId, 'You referred a buyer! Your referral reward: ' + coupon.couponCode + ' — 20% off your next order!');
     await Order.updateOne({ _id: order._id }, { $set: { referralRewardSent: true } });
     console.log('[REWARD] Referral 30% coupon sent to referrer', referrerId, coupon.couponCode);
 };

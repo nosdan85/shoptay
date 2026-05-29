@@ -2172,6 +2172,8 @@ router.post('/coupon/preview', async (req, res) => {
     try {
         const cartItems = Array.isArray(req.body?.cartItems) ? req.body.cartItems : [];
         const couponCodeRaw = req.body?.couponCode;
+        const referralCodeRaw = req.body?.referralCode || '';
+        const validatedRefCode = normalizeReferralCode(referralCodeRaw);
         if (cartItems.length === 0) {
             return res.status(400).json({ error: 'Cart is empty' });
         }
@@ -2741,6 +2743,62 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
         if (!newOrder) {
             log.error('[CHECKOUT] Failed to create order after retries', { requestId: req.requestId });
             return res.status(503).json({ error: 'Could not create order right now. Please retry.' });
+        }
+
+        // Referral entry: notify referrer immediately + issue 20% one-time coupon
+        if (referredByDiscordId) {
+            try {
+                const existing = await Referral.findOne({ referrerDiscordId: referredByDiscordId, refereeDiscordId: discordId }).lean();
+                if (!existing) {
+                    await Referral.create({
+                        referrerDiscordId: referredByDiscordId,
+                        refereeDiscordId: discordId,
+                        refereeFingerprintHash: '',
+                        status: 'pending',
+                        rewardCouponCode: ''
+                    });
+                    // create 20% coupon and DM to referrer
+                    const coupon = await (async () => {
+                        for (let attempt = 0; attempt < 8; attempt += 1) {
+                            const couponCode = buildGeneratedCouponCode();
+                            try {
+                                return await GeneratedCoupon.create({ couponCode, discountPercent: 20, discordId: referredByDiscordId, source: 'referral' });
+                            } catch (err) {
+                                if (Number(err?.code) !== 11000 || attempt >= 7) throw err;
+                            }
+                        }
+                        return null;
+                    })();
+
+                    if (coupon) {
+                        await Referral.updateOne({ referrerDiscordId: referredByDiscordId, refereeDiscordId: discordId }, { $set: { rewardCouponCode: coupon.couponCode } });
+                        // DM via Discord API
+                        const botToken = getDiscordBotToken();
+                        if (botToken) {
+                            const dm = await discordRequest({
+                                method: 'post',
+                                url: `https://discord.com/api/v10/users/@me/channels`,
+                                headers: { Authorization: `Bot ${botToken}` },
+                                data: { recipient_id: referredByDiscordId },
+                                timeout: 8000
+                            }, 0, { maxRetries: 1, maxDelayMs: 1500 });
+                            const channelId = String(dm?.data?.id || '').trim();
+                            if (channelId) {
+                                await discordRequest({
+                                    method: 'post',
+                                    url: `https://discord.com/api/v10/channels/${channelId}/messages`,
+                                    headers: { Authorization: `Bot ${botToken}` },
+                                    data: { content: coupon.couponCode },
+                                    timeout: 8000
+                                }, 0, { maxRetries: 1, maxDelayMs: 1500 });
+                            }
+                        }
+                        log.info('[REFERRAL] Referrer notified', { referrer: referredByDiscordId, referee: discordId, couponCode: coupon.couponCode });
+                    }
+                }
+            } catch (e) {
+                log.warn('[REFERRAL] Notify failed', { error: e?.message || e });
+            }
         }
 
         log.info('[CHECKOUT] Order created successfully', {

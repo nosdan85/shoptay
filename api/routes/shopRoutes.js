@@ -15,6 +15,8 @@ const VisitorNotice = require('../models/VisitorNotice');
 const Game = require('../models/Game');
 const ShopConfig = require('../models/ShopConfig');
 const GeneratedCoupon = require('../models/GeneratedCoupon');
+const DeviceFingerprint = require('../models/DeviceFingerprint');
+const Referral = require('../models/Referral');
 const {
     createOrderTicket,
     createWalletDeliveryTicket,
@@ -69,6 +71,11 @@ const {
     pickWheelSlice,
     validateGeneratedCouponDiscount
 } = require('../utils/luckyWheel');
+const {
+    buildReferralCode,
+    hashFingerprint,
+    normalizeReferralCode
+} = require('../utils/referralRewards');
 const {
     buildPublicDeliverySlotQuery,
     buildSelectableDeliverySlotQuery,
@@ -2076,6 +2083,90 @@ router.delete('/proofs/:proofId/images/:imageIndex', authRequired, async (req, r
         return res.status(500).json({ error: 'Failed to delete proof image' });
     }
 });
+
+// --- REFERRAL + DEVICE FINGERPRINT -------------------------------------------
+router.post('/fingerprint', authRequired, async (req, res) => {
+    try {
+        const discordId = String(req.user?.discordId || '').trim();
+        if (!discordId) return res.status(401).json({ error: 'Authentication required' });
+
+        const fingerprintHashRaw = String(req.body?.fingerprintHash || '').trim();
+        if (!fingerprintHashRaw) return res.status(400).json({ error: 'fingerprintHash is required' });
+
+        const fingerprintHash = hashFingerprint(fingerprintHashRaw);
+        const existingOther = await DeviceFingerprint.findOne({
+            fingerprintHash,
+            discordId: { $ne: discordId },
+            orderCount: { $gt: 0 }
+        }).lean();
+
+        const update = {
+            $setOnInsert: { discordId, fingerprintHash }
+        };
+        if (existingOther) {
+            update.$addToSet = { flags: 'suspicious_device' };
+        }
+
+        const record = await DeviceFingerprint.findOneAndUpdate(
+            { discordId, fingerprintHash },
+            update,
+            { upsert: true, new: true }
+        ).lean();
+
+        return res.json({
+            safe: !existingOther,
+            flag: Boolean(existingOther),
+            flags: Array.isArray(record?.flags) ? record.flags : []
+        });
+    } catch (error) {
+        console.error('Fingerprint error:', error);
+        return res.status(500).json({ error: 'Could not save fingerprint.' });
+    }
+});
+
+router.get('/my-referral-code', authRequired, async (req, res) => {
+    try {
+        const discordId = String(req.user?.discordId || '').trim();
+        if (!discordId) return res.status(401).json({ error: 'Authentication required' });
+
+        const referralCode = buildReferralCode(discordId);
+        const rewarded = await Referral.countDocuments({
+            referrerDiscordId: discordId,
+            status: 'rewarded'
+        });
+
+        return res.json({
+            referralCode,
+            usedCount: rewarded,
+            rewardEarned: rewarded
+        });
+    } catch (error) {
+        console.error('My referral code error:', error);
+        return res.status(500).json({ error: 'Could not load referral code.' });
+    }
+});
+
+router.get('/my-coupons', authRequired, async (req, res) => {
+    try {
+        const discordId = String(req.user?.discordId || '').trim();
+        if (!discordId) return res.status(401).json({ error: 'Authentication required' });
+
+        const coupons = await GeneratedCoupon.find({
+            discordId,
+            status: 'unused',
+            source: { $in: ['new_user', 'referral', 'lucky_wheel'] }
+        })
+            .sort({ createdAt: -1 })
+            .select('couponCode discountPercent source status createdAt')
+            .lean();
+
+        return res.json({ coupons: Array.isArray(coupons) ? coupons : [] });
+    } catch (error) {
+        console.error('My coupons error:', error);
+        return res.status(500).json({ error: 'Could not load coupons.' });
+    }
+});
+
 
 router.post('/coupon/preview', async (req, res) => {
     try {

@@ -23,6 +23,11 @@ const {
 } = require('./utils/paymentProofLog');
 const { buildDeliveryWindowFields } = require('./utils/ticketDeliveryFields');
 const { bitmapOffsetFromHash, bitmapCheckAndSet } = require('./cache/redis');
+const DeviceFingerprint = require('./models/DeviceFingerprint');
+const Referral = require('./models/Referral');
+const GeneratedCoupon = require('./models/GeneratedCoupon');
+const { hashFingerprint, hasSuspiciousDeviceFlag, shouldGrantFirstOrderReward } = require('./utils/referralRewards');
+const { buildGeneratedCouponCode } = require('./utils/luckyWheel');
 
 const { log } = require('./utils/loggingService');
 
@@ -1518,6 +1523,7 @@ const buildPaymentTicketFields = ({ order, paymentLine, note, orderTotalAmount =
         { name: 'Order Total', value: formatUsdAmount(resolvedOrderTotalAmount), inline: true },
         { name: 'Payment', value: paymentLine, inline: false },
         { name: 'Items (Qty + Price)', value: formatOrderItemsWithPrice(order.items), inline: false },
+        ...buildCouponTicketFields(order),
         ...buildDeliveryWindowFields(order),
         { name: 'Proof', value: 'Send your payment screenshot in this ticket after you pay.', inline: false }
     ];
@@ -1528,10 +1534,18 @@ const buildPaymentTicketFields = ({ order, paymentLine, note, orderTotalAmount =
     return fields;
 };
 
+const buildCouponTicketFields = (order) => {
+    const code = String(order?.couponCode || '').trim().toUpperCase();
+    const percent = Number(order?.discountPercent || 0);
+    if (!code || percent <= 0) return [];
+    return [{ name: 'Discount', value: percent + '% discount applied — ' + code, inline: false }];
+};
+
 const buildDeliveryTicketFields = (order) => [
     { name: 'Discord Account', value: order.discordId ? `<@${order.discordId}>` : (order.discordUsername || '-Normalized'), inline: true },
     { name: 'Order Total', value: formatUsdAmount(order.totalAmount || order.total || 0), inline: true },
     { name: 'Items (Qty + Price)', value: formatOrderItemsWithPrice(order.items), inline: false },
+    ...buildCouponTicketFields(order),
     ...buildDeliveryWindowFields(order)
 ];
 
@@ -1650,7 +1664,6 @@ const createPayPalFFTicket = async (order, paypalSeq) => {
             content: buildOrderMention(order.discordId),
             embed
         });
-        await sendRobloxAccountMessage({ channelId, order });
     } catch (error) {
         console.error('PayPal F&F ticket message error:', error?.message || error);
     }
@@ -1682,7 +1695,6 @@ const createLTCTicket = async (order, ltcSeq) => {
             content: buildOrderMention(order.discordId),
             embed
         });
-        await sendRobloxAccountMessage({ channelId, order });
     } catch (error) {
         console.error('LTC ticket message error:', error?.message || error);
     }
@@ -1712,7 +1724,6 @@ const createOrderTicket = async (order) => {
             content: buildOrderMention(order.discordId),
             embed
         });
-        await sendRobloxAccountMessage({ channelId, order });
     } catch (error) {
         console.error('Order ticket message error:', error?.message || error);
     }
@@ -1753,7 +1764,6 @@ const createWalletDeliveryTicket = async (order) => {
             content: buildOrderMention(order.discordId),
             embed
         });
-        await sendRobloxAccountMessage({ channelId, order });
     } catch (error) {
         console.error('Wallet delivery ticket message error:', error?.message || error);
     }
@@ -2140,6 +2150,74 @@ client.on('disconnect', () => {
 client.on('reconnecting', () => {
     log.info('[DISCORD BOT] Reconnecting to gateway...');
 });
+
+
+// --- REFERRAL + NEW-USER REWARD HELPERS ---
+const sendDmToUser = async (discordId, content) => {
+    try {
+        const user = await client.users.fetch(discordId).catch(() => null);
+        if (user) await user.send(content);
+        return true;
+    } catch (e) {
+        console.error('DM send error:', e?.message || e);
+        return false;
+    }
+};
+
+const createRewardCoupon = async ({ discountPercent, discordId, source }) => {
+    for (let attempt = 0; attempt < 8; attempt++) {
+        const couponCode = buildGeneratedCouponCode();
+        try {
+            return await GeneratedCoupon.create({ couponCode, discountPercent, discordId, source });
+        } catch (err) {
+            if (Number(err?.code) !== 11000 || attempt >= 7) throw err;
+        }
+    }
+    throw new Error('Could not generate reward coupon.');
+};
+
+const maybeGrantNewUserReward = async (order) => {
+    const discordId = String(order?.discordId || '').trim();
+    if (!discordId || order.newUserRewardSent) return;
+    const fp = await DeviceFingerprint.findOne({ discordId }).sort({ orderCount: -1 }).lean();
+    if (!shouldGrantFirstOrderReward(fp)) {
+        if (fp) console.warn('[REWARD] New-user reward blocked for', discordId, 'flags:', fp.flags);
+        return;
+    }
+    const coupon = await createRewardCoupon({ discountPercent: 50, discordId, source: 'new_user' });
+    await sendDmToUser(discordId, 'Here is your NEW USER coupon: ' + coupon.couponCode + ' — 50% off your next order!');
+    await DeviceFingerprint.updateMany({ discordId }, { $set: { orderCount: 1, firstOrderAt: new Date() } });
+    await Order.updateOne({ _id: order._id }, { $set: { newUserRewardSent: true } });
+    console.log('[REWARD] New-user 50% coupon sent to', discordId, coupon.couponCode);
+};
+
+const maybeGrantReferralReward = async (order) => {
+    const referrerId = String(order?.referredByDiscordId || '').trim();
+    if (!referrerId || order.referralRewardSent) return;
+    const refereeId = String(order?.discordId || '').trim();
+    const fp = await DeviceFingerprint.findOne({ discordId: refereeId }).sort({ orderCount: -1 }).lean();
+    if (hasSuspiciousDeviceFlag(fp)) {
+        await Referral.updateOne(
+            { referrerDiscordId: referrerId, refereeDiscordId: refereeId },
+            { $set: { status: 'flagged' } }
+        );
+        console.warn('[REWARD] Referral reward blocked — suspicious device for referee', refereeId);
+        return;
+    }
+    await Referral.updateOne(
+        { referrerDiscordId: referrerId, refereeDiscordId: refereeId },
+        { $set: { status: 'rewarded', refereeFirstOrderId: order.orderId } }
+    );
+    await DeviceFingerprint.updateMany({ discordId: refereeId }, { $inc: { orderCount: 1 } });
+    const coupon = await createRewardCoupon({ discountPercent: 30, discordId: referrerId, source: 'referral' });
+    await Referral.updateOne(
+        { referrerDiscordId: referrerId, refereeDiscordId: refereeId },
+        { $set: { rewardCouponCode: coupon.couponCode } }
+    );
+    await sendDmToUser(referrerId, 'You referred a buyer! Your referral reward: ' + coupon.couponCode + ' — 30% off your next order!');
+    await Order.updateOne({ _id: order._id }, { $set: { referralRewardSent: true } });
+    console.log('[REWARD] Referral 30% coupon sent to referrer', referrerId, coupon.couponCode);
+};
 
 module.exports = {
     client,

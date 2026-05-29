@@ -5,6 +5,7 @@ import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
 import { ALL_TIMEZONES, detectUserTimezone, filterTimezones, getTimezonesGroupedByCountry, type CountryGroup } from "@/lib/timezones";
 import { resolveImageUrl } from "@/lib/imageUrl";
+import { getDeviceFingerprintHash } from "@/lib/fingerprint";
 import {
   Search,
   ShoppingCart,
@@ -403,6 +404,9 @@ export default function ShopPage() {
   const [orderId, setOrderId] = useState<string | null>(null);
   const [checkoutSummary, setCheckoutSummary] = useState<CheckoutSummary | null>(null);
   const [couponCode, setCouponCode] = useState("");
+  const [referralCode, setReferralCode] = useState("");
+  const [myCoupons, setMyCoupons] = useState<{ couponCode: string; discountPercent: number; source: string }[]>([]);
+  const [myReferralCode, setMyReferralCode] = useState<string>("");
   const [couponPreview, setCouponPreview] = useState<CheckoutSummary | null>(null);
   const [couponPreviewKey, setCouponPreviewKey] = useState("");
   const [couponLoading, setCouponLoading] = useState(false);
@@ -562,6 +566,56 @@ export default function ShopPage() {
   useEffect(() => {
     latestLuckyWheelTokenRef.current = token || null;
   }, [token]);
+
+  const loadMyCoupons = useCallback(async () => {
+    if (!token) return;
+    const res = await fetch('/api/shop/my-coupons', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
+    const data = await res.json();
+    if (res.ok) setMyCoupons(Array.isArray(data?.coupons) ? data.coupons : []);
+  }, [token]);
+
+  const loadMyReferral = useCallback(async () => {
+    if (!token) return;
+    const res = await fetch('/api/shop/my-referral-code', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
+    const data = await res.json();
+    if (res.ok) setMyReferralCode(String(data?.referralCode || ''));
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    queueMicrotask(() => {
+      void loadMyCoupons().catch(() => {});
+      void loadMyReferral().catch(() => {});
+    });
+  }, [token, loadMyCoupons, loadMyReferral]);
+
+  useEffect(() => {
+    if (!token) return;
+    void (async () => {
+      try {
+        const fingerprintHash = await getDeviceFingerprintHash();
+        if (!fingerprintHash) return;
+        await fetch('/api/shop/fingerprint', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ fingerprintHash })
+        });
+      } catch {}
+    })();
+  }, [token]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    const ref = url.searchParams.get('ref');
+    if (ref && ref.trim()) {
+      window.localStorage.setItem('pendingReferralCode', ref.trim());
+    }
+    const pending = window.localStorage.getItem('pendingReferralCode');
+    if (pending) {
+      queueMicrotask(() => setReferralCode((current) => current || pending));
+    }
+  }, []);
 
   useEffect(() => {
     if (authLoading) return;
@@ -1066,6 +1120,7 @@ export default function ShopPage() {
         },
         body: JSON.stringify({
           couponCode: codeForCheckout,
+          referralCode: referralCode.trim(),
           cartItems: cart.map((i) => ({ product: i._id, name: i.name, quantity: i.quantity, price: i.price })),
         }),
       });
@@ -1333,6 +1388,65 @@ export default function ShopPage() {
               <div className="border-t border-[#1E1E1E] px-4 py-4 space-y-3 sticky bottom-0 bg-[#111111]">
                 <div className="space-y-2 rounded-[16px] border border-[#1E1E1E] bg-[#050505] p-3">
                   <label className="text-xs font-medium uppercase tracking-[0.08em] text-[#B5B5B5]" htmlFor="cart-coupon">Discount code</label>
+                  <label className="mt-3 block text-xs font-medium uppercase tracking-[0.08em] text-[#B5B5B5]" htmlFor="cart-referral">Referral code (optional)</label>
+                  <div className="flex gap-2">
+                    <input
+                      id="cart-referral"
+                      value={referralCode}
+                      onChange={(event) => setReferralCode(event.target.value)}
+                      placeholder="Enter referral code"
+                      className="min-w-0 flex-1 rounded-[12px] border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm text-white outline-none focus:border-[#2F9BE6]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => { try { window.localStorage.setItem('pendingReferralCode', referralCode.trim()); } catch {} }}
+                      disabled={!referralCode.trim()}
+                      className="rounded-[12px] bg-[#1E1E1E] px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                      title="Save referral"
+                    >
+                      Save
+                    </button>
+                  </div>
+                  {token && myReferralCode && (
+                    <div className="mt-3 rounded-[12px] border border-[#1E1E1E] bg-[#0B0B0B] p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-xs font-medium uppercase tracking-[0.08em] text-[#B5B5B5]">Your referral code</div>
+                          <div className="mt-1 truncate font-mono text-sm text-white">{myReferralCode}</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void navigator.clipboard.writeText(myReferralCode)}
+                          className="rounded-[10px] bg-[#1E1E1E] p-2 text-white"
+                          title="Copy"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {token && myCoupons.length > 0 && (
+                    <div className="mt-3 rounded-[12px] border border-[#1E1E1E] bg-[#0B0B0B] p-3">
+                      <div className="text-xs font-medium uppercase tracking-[0.08em] text-[#B5B5B5]">Your coupons</div>
+                      <div className="mt-2 space-y-2">
+                        {myCoupons.slice(0, 3).map((c) => (
+                          <div key={c.couponCode} className="flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="truncate font-mono text-sm text-white">{c.couponCode}</div>
+                              <div className="text-xs text-[#B5B5B5]">{Number(c.discountPercent || 0)}% off</div>
+                            </div>
+                            <div className="flex gap-2">
+                              <button type="button" onClick={() => setCouponCode(c.couponCode)} className="rounded-[10px] bg-[#1E1E1E] px-2 py-1 text-xs font-medium text-white">Use</button>
+                              <button type="button" onClick={() => void navigator.clipboard.writeText(c.couponCode)} className="rounded-[10px] bg-[#1E1E1E] p-2 text-white" title="Copy">
+                                <Copy className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex gap-2">
                     <input
                       id="cart-coupon"

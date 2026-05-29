@@ -2687,7 +2687,8 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
         let referredByDiscordId = '';
         if (validatedRefCode) {
             const suffix = validatedRefCode.replace(/^REF-/, '');
-            const match = await User.findOne({ discordId: { $ne: discordId }, $expr: { $eq: [ { $substrCP: ['$discordId', { $subtract: [ { $strLenCP: '$discordId' }, 6 ] }, 6 ] }, suffix ] } }).select('discordId').lean().catch(() => null);
+            const candidates = await User.find({ discordId: { $ne: discordId } }).select('discordId').lean();
+            const match = candidates.find((u) => String(u?.discordId || '').slice(-6) === suffix);
             if (match?.discordId) referredByDiscordId = String(match.discordId);
         }
         if (!Number.isFinite(totalCents) || totalCents <= 0) {

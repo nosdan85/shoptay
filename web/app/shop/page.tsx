@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type SyntheticEvent } from "react";
 import Navbar from "../components/Navbar";
@@ -87,10 +87,10 @@ function formatPurchasedProductName(item: { name: string; packQuantity?: number;
 
 function formatSlotNote(note?: string): string {
   const map: Record<string, string> = {
-    "Ca sáng": "Morning shift",
-    "Ca trưa": "Midday shift",
-    "Ca chiều": "Afternoon shift",
-    "Ca tối": "Evening shift",
+    "Ca s�ng": "Morning shift",
+    "Ca trua": "Midday shift",
+    "Ca chi?u": "Afternoon shift",
+    "Ca t?i": "Evening shift",
   };
   return map[String(note || "").trim()] || String(note || "");
 }
@@ -147,6 +147,8 @@ interface CheckoutSummary {
   subtotalAmount: number;
   discountAmount: number;
   discountPercent: number;
+  couponDiscountPercent?: number;
+  referralDiscountPercent?: number;
   totalAmount: number;
   couponCode?: string;
   items: Array<{ product?: string; _id?: string; name: string; quantity: number; packQuantity?: number; price: number }>;
@@ -980,6 +982,8 @@ export default function ShopPage() {
   );
   const activeCouponPreview = couponPreview && couponPreviewKey === cartCouponKey ? couponPreview : null;
   const activeCartDiscountAmount = Number(activeCouponPreview?.discountAmount || 0);
+  const activeCartCouponPercent = Number(activeCouponPreview?.couponDiscountPercent || 0);
+  const activeCartReferralPercent = Number(activeCouponPreview?.referralDiscountPercent || 0);
   const activeCartDiscountPercent = Number(activeCouponPreview?.discountPercent || 0);
   const activeCartPayableTotal = Number.isFinite(Number(activeCouponPreview?.totalAmount)) ? Number(activeCouponPreview?.totalAmount) : cartTotal;
 
@@ -1087,6 +1091,8 @@ export default function ShopPage() {
         subtotalAmount: Number(data.subtotalAmount || items.reduce((sum, item) => sum + item.price * item.quantity, 0)),
         discountAmount: Number(data.discountAmount || 0),
         discountPercent: Number(data.discountPercent || 0),
+        couponDiscountPercent: Number(data.couponDiscountPercent || 0),
+        referralDiscountPercent: Number(data.referralDiscountPercent || 0),
         totalAmount: Number(data.totalAmount || items.reduce((sum, item) => sum + item.price * item.quantity, 0)),
         couponCode: data.couponCode || normalizedCode,
         items: Array.isArray(data.items) ? data.items : items,
@@ -1114,8 +1120,8 @@ export default function ShopPage() {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data?.error || 'Referral preview failed');
-    setReferralPreviewOwner(String(data.ownerDiscordUsername || data.ownerDiscordId || ''));
-    const ok = window.confirm(`Referral code owner: ${String(data.ownerDiscordUsername || data.ownerDiscordId || '')}\nYou get 5% coupon now (one-time). Referrer gets 20% after your first completed order.\nConfirm apply?`);
+    setReferralPreviewOwner(String(data.referrerUsername || data.referrerDiscordId || ''));
+    const ok = window.confirm(`Referral code owner: ${String(data.referrerUsername || data.referrerDiscordId || '')}\nYou get 5% discount on this order. Referrer gets 20% after your first completed order.\nConfirm apply?`);
     if (!ok) return;
 
     setReferralApplying(true);
@@ -1130,7 +1136,7 @@ export default function ShopPage() {
     setReferralApplied(true);
     if (applyData?.selfCouponCode) {
       setCouponCode(String(applyData.selfCouponCode));
-      setCouponMessage('Referral applied: You received 5% coupon (one-time).');
+      setCouponMessage('Referral applied: 5% discount will be applied at checkout.');
     }
   };
 
@@ -1163,6 +1169,8 @@ export default function ShopPage() {
         subtotalAmount: Number(data.subtotalAmount || 0),
         discountAmount: Number(data.discountAmount || 0),
         discountPercent: Number(data.discountPercent || 0),
+        couponDiscountPercent: Number(data.couponDiscountPercent || 0),
+        referralDiscountPercent: Number(data.referralDiscountPercent || 0),
         totalAmount: Number(data.totalAmount || 0),
         couponCode: data.couponCode || "",
         items: Array.isArray(data.items) ? data.items : cart,
@@ -1526,7 +1534,15 @@ export default function ShopPage() {
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between"><span className="text-[#B5B5B5]">Subtotal</span><span>{formatMoney(cartTotal)}</span></div>
                   {activeCartDiscountAmount > 0 && (
-                    <div className="flex justify-between text-[#3DDC84]"><span>Discount ({activeCartDiscountPercent}%)</span><span>-{formatMoney(activeCartDiscountAmount)}</span></div>
+                    <>
+                      {activeCartCouponPercent > 0 && (
+                        <div className="flex justify-between text-[#3DDC84]"><span>Coupon ({activeCartCouponPercent}%)</span><span>-{formatMoney(cartTotal * activeCartCouponPercent / 100)}</span></div>
+                      )}
+                      {activeCartReferralPercent > 0 && (
+                        <div className="flex justify-between text-[#3DDC84]"><span>Referral ({activeCartReferralPercent}%)</span><span>-{formatMoney(cartTotal * activeCartReferralPercent / 100)}</span></div>
+                      )}
+                      <div className="flex justify-between text-[#3DDC84]"><span>Total Discount ({activeCartDiscountPercent}%)</span><span>-{formatMoney(activeCartDiscountAmount)}</span></div>
+                    </>
                   )}
                   <div className="flex justify-between border-t border-[#1E1E1E] pt-2 text-lg font-semibold"><span>Total</span><span className="text-[#3DDC84]">{formatMoney(activeCartPayableTotal)}</span></div>
                 </div>

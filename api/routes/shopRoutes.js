@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const qs = require('qs');
@@ -73,9 +73,11 @@ const {
 } = require('../utils/luckyWheel');
 const {
     buildReferralCode,
+    findUserByReferralCode,
     hashFingerprint,
     normalizeReferralCode
 } = require('../utils/referralRewards');
+const findUserByReferralCodeForUser = findUserByReferralCode(User);
 const {
     buildPublicDeliverySlotQuery,
     buildSelectableDeliverySlotQuery,
@@ -1045,7 +1047,7 @@ const toPublicLuckyWheelPayload = (config, user = null, latestCoupon = null) => 
     };
 };
 
-const createUniqueGeneratedCoupon = async ({ discountPercent, discordId }) => {
+const createUniqueGeneratedCoupon = async ({ discountPercent, discordId, source = 'lucky_wheel' }) => {
     for (let attempt = 0; attempt < 8; attempt += 1) {
         const couponCode = buildGeneratedCouponCode();
         try {
@@ -1053,7 +1055,7 @@ const createUniqueGeneratedCoupon = async ({ discountPercent, discordId }) => {
                 couponCode,
                 discountPercent,
                 discordId,
-                source: 'lucky_wheel'
+                source
             });
         } catch (error) {
             if (Number(error?.code) !== 11000 || attempt >= 7) throw error;
@@ -1117,7 +1119,7 @@ const buildQuantityMapFromCartItems = (cartItems) => {
     return quantityByProductId;
 };
 
-const calculateCartSummary = async ({ cartItems, couponCodeRaw = '' }) => {
+const calculateCartSummary = async ({ cartItems, couponCodeRaw = '', referralDiscountPercent = 0 }) => {
     const quantityByProductId = buildQuantityMapFromCartItems(cartItems);
     if (quantityByProductId.size === 0) {
         return { error: 'Cart contains invalid products', status: 400 };
@@ -1154,9 +1156,12 @@ const calculateCartSummary = async ({ cartItems, couponCodeRaw = '' }) => {
         return { error: couponValidation.error, status: 400 };
     }
 
-    const discountPercent = Number(couponValidation.discountPercent) || 0;
-    const discountAmount = discountPercent > 0
-        ? roundMoney(subtotalAmount * discountPercent / 100)
+    const couponDiscountPercent = Number(couponValidation.discountPercent) || 0;
+    const safeReferralDiscountPercent = Math.max(0, Math.min(100, Number(referralDiscountPercent) || 0));
+    const combinedDiscountPercent = Math.min(100, couponDiscountPercent + safeReferralDiscountPercent);
+
+    const discountAmount = combinedDiscountPercent > 0
+        ? roundMoney(subtotalAmount * combinedDiscountPercent / 100)
         : 0;
     const totalAmount = roundMoney(Math.max(0, subtotalAmount - discountAmount));
 
@@ -1164,7 +1169,9 @@ const calculateCartSummary = async ({ cartItems, couponCodeRaw = '' }) => {
         items,
         subtotalAmount,
         discountAmount,
-        discountPercent,
+        discountPercent: combinedDiscountPercent,
+        couponDiscountPercent,
+        referralDiscountPercent: safeReferralDiscountPercent,
         totalAmount,
         couponCode: couponValidation.couponCode || ''
     };
@@ -2134,18 +2141,19 @@ router.get('/my-referral-code', authRequired, async (req, res) => {
             referrerDiscordId: discordId,
             status: 'rewarded'
         });
+        const me = await User.findOne({ discordId }).select('referralAppliedCode').lean();
 
         return res.json({
             referralCode,
             usedCount: rewarded,
-            rewardEarned: rewarded
+            rewardEarned: rewarded,
+            referralApplied: Boolean(me?.referralAppliedCode)
         });
     } catch (error) {
         console.error('My referral code error:', error);
         return res.status(500).json({ error: 'Could not load referral code.' });
     }
 });
-
 router.get('/my-coupons', authRequired, async (req, res) => {
     try {
         const discordId = String(req.user?.discordId || '').trim();
@@ -2154,7 +2162,7 @@ router.get('/my-coupons', authRequired, async (req, res) => {
         const coupons = await GeneratedCoupon.find({
             discordId,
             status: 'unused',
-            source: { $in: ['new_user', 'referral', 'lucky_wheel'] }
+            source: { $in: ['new_user', 'referral', 'referral_self', 'lucky_wheel'] }
         })
             .sort({ createdAt: -1 })
             .select('couponCode discountPercent source status createdAt')
@@ -2176,7 +2184,12 @@ router.post('/coupon/preview', async (req, res) => {
             return res.status(400).json({ error: 'Cart is empty' });
         }
 
-        const summary = await calculateCartSummary({ cartItems, couponCodeRaw });
+        const viewer = getOptionalRequestUser(req);
+        const discordId = String(viewer?.discordId || '').trim();
+        const dbUser = discordId ? await User.findOne({ discordId }).select('referralAppliedCode').lean() : null;
+        const referralDiscountPercent = normalizeReferralCode(dbUser?.referralAppliedCode || '') ? 5 : 0;
+
+        const summary = await calculateCartSummary({ cartItems, couponCodeRaw, referralDiscountPercent });
         if (summary.error) {
             return res.status(summary.status || 400).json({ error: summary.error });
         }
@@ -2184,6 +2197,8 @@ router.post('/coupon/preview', async (req, res) => {
         return res.json({
             success: true,
             couponCode: summary.couponCode || '',
+            couponDiscountPercent: summary.couponDiscountPercent || 0,
+            referralDiscountPercent: summary.referralDiscountPercent || 0,
             discountPercent: summary.discountPercent || 0,
             discountAmount: summary.discountAmount || 0,
             subtotalAmount: summary.subtotalAmount || 0,
@@ -2312,8 +2327,7 @@ router.post('/wallet/topup', authRequired, async (req, res) => {
         const dbUser = await User.findOne({ discordId });
         if (!dbUser) return res.status(401).json({ error: 'Discord account not linked' });
 
-        checkoutStep = 'counter_increment';
-                const counter = await Counter.findOneAndUpdate(
+        const counter = await Counter.findOneAndUpdate(
             { id: 'walletTopup' },
             { $inc: { seq: 1 } },
             { new: true, upsert: true }
@@ -2648,19 +2662,16 @@ router.post('/referral/preview', authRequired, async (req, res) => {
     const existingByReferee = await Referral.findOne({ refereeDiscordId: discordId }).lean();
     if (existingByReferee) return res.status(409).json({ error: 'This account has already used a referral code.' });
 
-    const suffix = validatedRefCode.replace(/^REF-/, '');
-    const users = await User.find({ discordId: { $exists: true, $ne: discordId } }).select('discordId discordUsername').lean();
-    const match = users.find((u) => String(u?.discordId || '').slice(-6) === suffix);
-    if (!match?.discordId) return res.status(404).json({ error: 'Referral code not found.' });
+    const match = await findUserByReferralCodeForUser(validatedRefCode, discordId);
 
     return res.json({
       valid: true,
       referralCode: validatedRefCode,
       referrerDiscordId: String(match.discordId),
       referrerUsername: String(match.discordUsername || ''),
-      refereeRewardPercent: 5,
+      refereeDiscountPercent: 5,
       referrerRewardPercent: 20,
-      note: 'Referrer gets 20% after your first completed order. You get 5% one-time coupon after confirming.'
+      note: 'Referrer gets 20% after your first completed order. You get 5% discount on this order.'
     });
   } catch (error) {
     return res.status(500).json({ error: 'Could not preview referral code.' });
@@ -2685,15 +2696,12 @@ router.post('/referral/apply', authRequired, async (req, res) => {
     if (me.referralAppliedCode) return res.status(409).json({ error: 'This account already applied a referral code.' });
 
     const fp = await DeviceFingerprint.findOne({ discordId }).sort({ updatedAt: -1 }).lean();
-    if (hasSuspiciousDeviceFlag(fp)) {
+    if (fp && Array.isArray(fp.flags) && fp.flags.length > 0) {
       return res.status(409).json({ error: 'Referral apply blocked on this device.' });
     }
 
     const suffix = validatedRefCode.replace(/^REF-/, '');
-    const users = await User.find({ discordId: { $exists: true, $ne: discordId } }).select('discordId discordUsername').lean();
-    const match = users.find((u) => String(u?.discordId || '').slice(-6) === suffix);
-    if (!match?.discordId) return res.status(404).json({ error: 'Referral code not found.' });
-
+    const match = await findUserByReferralCodeForUser(validatedRefCode, discordId);
     const selfCoupon = await createUniqueGeneratedCoupon({
       discountPercent: 5,
       discordId,
@@ -2767,8 +2775,33 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
             validatedRefCode = normalizeReferralCode(dbUser?.referralAppliedCode || '');
         }
 
+        let referredByDiscordId = '';
+        let referralDiscountPercent = 0;
+        if (validatedRefCode) {
+            const match = await findUserByReferralCodeForUser(validatedRefCode, discordId);
+            if (match?.discordId) {
+                referredByDiscordId = String(match.discordId);
+                referralDiscountPercent = 5;
+            }
+        }
+
+        if (discordId) {
+            checkoutStep = 'check_existing_pending_order';
+            const existingPendingOrder = await Order.findOne({
+                discordId,
+                status: { $in: ['Pending', 'Waiting Payment'] },
+                paymentStatus: { $in: ['pending', 'unpaid', ''] }
+            }).sort({ createdAt: -1 }).lean();
+            if (existingPendingOrder) {
+                return res.status(409).json({
+                    error: 'You already have a pending order. Please complete or cancel it before creating a new one.',
+                    existingOrderId: existingPendingOrder.orderId
+                });
+            }
+        }
+
         checkoutStep = 'calculate_summary';
-        const cartSummary = await calculateCartSummary({ cartItems, couponCodeRaw });
+        const cartSummary = await calculateCartSummary({ cartItems, couponCodeRaw, referralDiscountPercent });
         if (cartSummary.error) {
             log.warn('[CHECKOUT] Cart summary error', {
                 requestId: req.requestId,
@@ -2783,6 +2816,7 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
             subtotalAmount,
             discountAmount,
             discountPercent,
+            couponDiscountPercent,
             totalAmount,
             couponCode
         } = cartSummary;
@@ -2793,12 +2827,11 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
             return res.status(400).json({ error: 'Invalid checkout total' });
         }
 
-        let referredByDiscordId = '';
-        if (validatedRefCode) {
-            const suffix = validatedRefCode.replace(/^REF-/, '');
-            const candidates = await User.find({ discordId: { $ne: discordId } }).select('discordId').lean();
-            const match = candidates.find((u) => String(u?.discordId || '').slice(-6) === suffix);
-            if (match?.discordId) referredByDiscordId = String(match.discordId);
+        // Self-referral guard
+        if (referredByDiscordId && referredByDiscordId === discordId) {
+            referredByDiscordId = '';
+            referralDiscountPercent = 0;
+            validatedRefCode = '';
         }
 
         let newOrder = null;
@@ -2833,6 +2866,8 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
                     subtotalAmount,
                     discountAmount,
                     discountPercent,
+                    couponDiscountPercent,
+                    referralDiscountPercent,
                     couponCode,
                     referralCode: validatedRefCode,
                     referredByDiscordId,
@@ -2864,20 +2899,21 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
             return res.status(503).json({ error: 'Could not create order right now. Please retry.' });
         }
 
-        // Referral pair: one-time per referee; 20% reward issued on first completed order (!done).
+        // Referral pair: only create if no record exists yet (apply already creates one)
         if (referredByDiscordId) {
-            try {
-                await Referral.create({
-                    referrerDiscordId: referredByDiscordId,
-                    refereeDiscordId: discordId,
-                    refereeFingerprintHash: '',
-                    status: 'pending',
-                    rewardCouponCode: ''
-                }).catch((err) => {
-                    if (Number(err?.code) !== 11000) throw err;
-                });
-            } catch (e) {
-                log.warn('[REFERRAL] Create pending failed', { error: e?.message || e });
+            const existingReferral = await Referral.findOne({ refereeDiscordId: discordId }).lean();
+            if (!existingReferral) {
+                try {
+                    await Referral.create({
+                        referrerDiscordId: referredByDiscordId,
+                        refereeDiscordId: discordId,
+                        refereeFingerprintHash: '',
+                        status: 'pending',
+                        rewardCouponCode: ''
+                    });
+                } catch (e) {
+                    log.warn('[REFERRAL] Create pending failed', { error: e?.message || e });
+                }
             }
         }
 
@@ -2901,7 +2937,10 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
             subtotalAmount: newOrder.subtotalAmount,
             discountAmount: newOrder.discountAmount || 0,
             discountPercent: newOrder.discountPercent || 0,
+            couponDiscountPercent: newOrder.couponDiscountPercent || 0,
+            referralDiscountPercent: newOrder.referralDiscountPercent || 0,
             couponCode: newOrder.couponCode || '',
+            referralCode: newOrder.referralCode || '',
             totalAmount: newOrder.totalAmount,
             items: newOrder.items || [],
             customerEmail: '',
@@ -2949,7 +2988,10 @@ router.get('/order-payment-info', async (req, res) => {
             subtotalAmount: Number(order.subtotalAmount || order.totalAmount || 0),
             discountAmount: Number(order.discountAmount || 0),
             discountPercent: Number(order.discountPercent || 0),
+            couponDiscountPercent: Number(order.couponDiscountPercent || 0),
+            referralDiscountPercent: Number(order.referralDiscountPercent || 0),
             couponCode: order.couponCode || '',
+            referralCode: order.referralCode || '',
             totalAmount: order.totalAmount,
             items: Array.isArray(order.items)
                 ? order.items.map((item) => ({
@@ -4932,7 +4974,7 @@ const maskUsername = (username) => {
 
 // --- PUBLIC SHOP ENDPOINTS ----------------------------------------------------
 
-// GET /api/shop/games — list active games
+// GET /api/shop/games � list active games
 router.get('/games', async (req, res) => {
     try {
         const games = await Game.find({ active: true }).sort({ name: 1 }).lean();
@@ -4943,7 +4985,7 @@ router.get('/games', async (req, res) => {
     }
 });
 
-// GET /api/shop/config — banners + best sellers
+// GET /api/shop/config � banners + best sellers
 router.get('/config', async (req, res) => {
     try {
         const config = await ShopConfig.getConfig();
@@ -4958,7 +5000,7 @@ router.get('/config', async (req, res) => {
     }
 });
 
-// GET /api/shop/recent-purchases — public feed of confirmed orders (masked usernames)
+// GET /api/shop/recent-purchases � public feed of confirmed orders (masked usernames)
 // GET /api/shop/recent-purchases ? public feed of confirmed orders (masked usernames)
 router.get('/recent-purchases', async (req, res) => {
     try {
@@ -5113,7 +5155,7 @@ router.post('/owner/config/banners/upload', authRequired, bannerUpload.single('b
     }
 });
 
-// PUT /api/shop/owner/config/banners — body: { bannerUrl }
+// PUT /api/shop/owner/config/banners � body: { bannerUrl }
 router.put('/owner/config/banners', authRequired, async (req, res) => {
     try {
         const discordId = String(req.user?.discordId || '').trim();
@@ -5137,7 +5179,7 @@ router.put('/owner/config/banners', authRequired, async (req, res) => {
     }
 });
 
-// DELETE /api/shop/owner/config/banners — body: { bannerUrl }
+// DELETE /api/shop/owner/config/banners � body: { bannerUrl }
 router.delete('/owner/config/banners', authRequired, async (req, res) => {
     try {
         const discordId = String(req.user?.discordId || '').trim();

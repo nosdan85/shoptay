@@ -20,10 +20,26 @@ const shouldGrantFirstOrderReward = (fingerprint) => {
     return true;
 };
 
+// Extract the 6-char suffix from a referral code and resolve the matching
+// Discord user directly via a regex query instead of loading the entire
+// User collection into memory.
+const findUserByReferralCode = (User) => async (referralCode, excludeDiscordId = '') => {
+    const suffix = String(referralCode || '').replace(/^REF-/, '');
+    if (!suffix) return null;
+    // Match discordId values that end with this suffix (6 chars).
+    // We also exclude the caller so nobody can self-refer.
+    const regex = new RegExp(suffix + '$');
+    const candidates = await User.find({
+        discordId: { $regex: regex, $ne: excludeDiscordId || undefined }
+    }).select('discordId discordUsername').limit(1).lean();
+    return candidates[0] || null;
+};
+
 module.exports = {
     buildReferralCode,
     hashFingerprint,
     hasSuspiciousDeviceFlag,
     normalizeReferralCode,
-    shouldGrantFirstOrderReward
+    shouldGrantFirstOrderReward,
+    findUserByReferralCode
 };

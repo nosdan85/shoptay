@@ -3,6 +3,7 @@ const qs = require('qs');
 const Order = require('../models/Order');
 const PaymentLog = require('../models/PaymentLog');
 const WalletTransaction = require('../models/WalletTransaction');
+const { issueReferralRewardForCompletedOrder } = require('./referralService');
 const { creditPendingWalletTopup } = require('./walletService');
 const {
     normalizeEmail,
@@ -189,6 +190,18 @@ const markOrderPaid = async (order, {
     if (confirmedBy) order.manualPaymentConfirmedBy = confirmedBy;
 
     await order.save();
+
+    // Issue the one-time 20% referral reward to the referrer on first completed order
+    if (!wasPaid && order.referredByDiscordId) {
+        try {
+            const rewardResult = await issueReferralRewardForCompletedOrder(order);
+            if (rewardResult.issued) {
+                console.log('[REFERRAL] Reward issued to ' + rewardResult.referrerDiscordId + ': ' + rewardResult.couponCode);
+            }
+        } catch (e) {
+            console.error('[REFERRAL] Reward issue error:', e && e.message ? e.message : e);
+        }
+    }
 
     if (!wasPaid && order.customerEmail && !order.paymentConfirmationEmailSentAt) {
         try {

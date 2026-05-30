@@ -37,6 +37,8 @@ const orderSchema = new mongoose.Schema({
     subtotalAmount: { type: Number, default: 0 },
     discountAmount: { type: Number, default: 0 },
     discountPercent: { type: Number, default: 0 },
+    couponDiscountPercent: { type: Number, default: 0 },
+    referralDiscountPercent: { type: Number, default: 0 },
     couponCode: { type: String, default: '' },
     referralCode: { type: String, default: '', trim: true, uppercase: true, index: true },
     referredByDiscordId: { type: String, default: '', trim: true, index: true },

@@ -18,6 +18,9 @@ interface OrderData {
   totalAmount?: number;
   subtotalAmount?: number;
   discountAmount?: number;
+  discountPercent?: number;
+  couponDiscountPercent?: number;
+  referralDiscountPercent?: number;
   items?: OrderItem[];
   status?: string;
   paymentMethod?: string;
@@ -219,7 +222,9 @@ function PayContent() {
 
   const timezoneInfo = getTimezoneInfo(order?.customerTimezone || "America/Los_Angeles");
   const subtotal = order?.subtotalAmount ?? 0;
-  const discount = order?.discountAmount ?? 0;
+  const couponDiscount = Math.round(subtotal * (order?.couponDiscountPercent || 0) / 100);
+  const referralDiscount = Math.round(subtotal * (order?.referralDiscountPercent || 0) / 100);
+  const discount = order?.discountAmount ?? (couponDiscount + referralDiscount);
   const total = order?.totalAmount ?? Math.max(subtotal - discount, 0);
   const items = order?.items ?? [];
   const amount = formatPrice(total, timezoneInfo.currencyCode, timezoneInfo.currencySymbol);
@@ -343,7 +348,21 @@ function PayContent() {
                 <span className="text-[#B5B5B5]">{formatPrice(subtotal, timezoneInfo.currencyCode, timezoneInfo.currencySymbol)}</span>
               </div>
 
-              {discount > 0 && (
+              {couponDiscount > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-[#B5B5B5]/80">Coupon ({order?.couponDiscountPercent || 0}%)</span>
+                  <span className="text-[#3DDC84]">-{formatPrice(couponDiscount, timezoneInfo.currencyCode, timezoneInfo.currencySymbol)}</span>
+                </div>
+              )}
+
+              {referralDiscount > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-[#B5B5B5]/80">Referral ({order?.referralDiscountPercent || 0}%)</span>
+                  <span className="text-[#3DDC84]">-{formatPrice(referralDiscount, timezoneInfo.currencyCode, timezoneInfo.currencySymbol)}</span>
+                </div>
+              )}
+
+              {discount > 0 && !couponDiscount && !referralDiscount && (
                 <div className="flex justify-between text-sm">
                   <span className="text-[#B5B5B5]/80">Discount</span>
                   <span className="text-[#3DDC84]">-{formatPrice(discount, timezoneInfo.currencyCode, timezoneInfo.currencySymbol)}</span>

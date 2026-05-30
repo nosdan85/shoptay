@@ -1389,13 +1389,13 @@ export default function ShopPage() {
 
       {(cartOpen || cartClosing) && (
         <div className={"fixed inset-0 z-[70] flex items-end sm:items-stretch bg-black/60 backdrop-blur-sm " + (cartClosing ? "animate-fade-out" : "animate-fade-in")} onClick={closeCart}>
-          <div className={"w-full sm:my-4 sm:mr-4 sm:ml-auto sm:h-[calc(100%-2rem)] sm:max-w-md max-h-[80vh] bg-[#111111] border-t sm:border border-[#1E1E1E] flex flex-col rounded-t-[24px] sm:rounded-[24px] " + (cartClosing ? "animate-cart-slide-out" : "animate-cart-slide-in")} onClick={(e) => e.stopPropagation()}>
+          <div className={"w-full h-[100dvh] sm:my-4 sm:mr-4 sm:ml-auto sm:h-[calc(100%-2rem)] sm:max-w-md bg-[#111111] border-t sm:border border-[#1E1E1E] flex flex-col rounded-none sm:rounded-[24px] " + (cartClosing ? "animate-cart-slide-out" : "animate-cart-slide-in")} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-[#1E1E1E] px-4 py-4 sticky top-0 bg-[#111111] z-10">
               <div className="mx-auto h-1.5 w-12 rounded-full bg-[#2A2A2A] absolute top-2 left-1/2 -translate-x-1/2 sm:hidden" />
               <h2 className="text-base sm:text-lg font-semibold">Cart ({cartCount})</h2>
               <button onClick={closeCart} className="rounded-full bg-[#161616] p-2"><X className="h-5 w-5" /></button>
             </div>
-            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0">
               {cart.map((item) => (
                 <div key={item._id} className="flex gap-3 rounded-[16px] border border-[#1E1E1E] bg-[#050505] p-3 sm:p-3">
                   <div className="h-12 w-12 sm:h-14 sm:w-14 flex-shrink-0 overflow-hidden rounded-[12px] sm:rounded-[14px] bg-[#111111]">
@@ -1417,7 +1417,7 @@ export default function ShopPage() {
               ))}
             </div>
             {cart.length > 0 && (
-              <div className="border-t border-[#1E1E1E] px-4 py-4 space-y-3 sticky bottom-0 bg-[#111111]">
+              <div className="border-t border-[#1E1E1E] px-4 py-4 space-y-3 bg-[#111111]">
                 <div className="space-y-3 rounded-[16px] border border-[#1E1E1E] bg-[#050505] p-3">
                   <div className="rounded-[12px] border border-[#2F9BE6]/40 bg-[#0A0E1A] p-3">
                     <div className="mb-2 flex items-center gap-2">

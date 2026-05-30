@@ -2667,6 +2667,75 @@ router.post('/referral/preview', authRequired, async (req, res) => {
   }
 });
 
+
+router.post('/referral/apply', authRequired, async (req, res) => {
+  try {
+    const discordId = String(req.user?.discordId || '').trim();
+    if (!discordId) return res.status(401).json({ error: 'Authentication required' });
+
+    const referralCodeRaw = String(req.body?.referralCode || '').trim();
+    const validatedRefCode = normalizeReferralCode(referralCodeRaw);
+    if (!validatedRefCode) return res.status(400).json({ error: 'Referral code is required.' });
+
+    const existingByReferee = await Referral.findOne({ refereeDiscordId: discordId }).lean();
+    if (existingByReferee) return res.status(409).json({ error: 'This account has already used a referral code.' });
+
+    const me = await User.findOne({ discordId }).lean();
+    if (!me) return res.status(404).json({ error: 'User not found.' });
+    if (me.referralAppliedCode) return res.status(409).json({ error: 'This account already applied a referral code.' });
+
+    const fp = await DeviceFingerprint.findOne({ discordId }).sort({ updatedAt: -1 }).lean();
+    if (hasSuspiciousDeviceFlag(fp)) {
+      return res.status(409).json({ error: 'Referral apply blocked on this device.' });
+    }
+
+    const suffix = validatedRefCode.replace(/^REF-/, '');
+    const users = await User.find({ discordId: { $exists: true, $ne: discordId } }).select('discordId discordUsername').lean();
+    const match = users.find((u) => String(u?.discordId || '').slice(-6) === suffix);
+    if (!match?.discordId) return res.status(404).json({ error: 'Referral code not found.' });
+
+    const selfCoupon = await createUniqueGeneratedCoupon({
+      discountPercent: 5,
+      discordId,
+      source: 'referral_self'
+    });
+
+    await User.updateOne(
+      { discordId },
+      {
+        $set: {
+          referralAppliedCode: validatedRefCode,
+          referralAppliedAt: new Date(),
+          referralSelfCouponCode: selfCoupon.couponCode
+        }
+      }
+    );
+
+    await Referral.create({
+      referrerDiscordId: String(match.discordId),
+      refereeDiscordId: discordId,
+      refereeFingerprintHash: String(fp?.fingerprintHash || ''),
+      status: 'pending',
+      rewardCouponCode: ''
+    }).catch((err) => {
+      if (Number(err?.code) !== 11000) throw err;
+    });
+
+    return res.json({
+      success: true,
+      referralCode: validatedRefCode,
+      referrerDiscordId: String(match.discordId),
+      referrerUsername: String(match.discordUsername || ''),
+      selfCouponCode: selfCoupon.couponCode,
+      selfRewardPercent: 5,
+      referrerRewardPercent: 20
+    });
+  } catch (error) {
+    console.error('Referral apply error:', error);
+    return res.status(500).json({ error: error?.message || 'Could not apply referral code.' });
+  }
+});
+
 router.post('/checkout', checkoutLimiter, async (req, res) => {
     const startTime = Date.now();
     log.info('[CHECKOUT] Incoming checkout request', {

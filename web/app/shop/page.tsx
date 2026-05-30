@@ -410,6 +410,7 @@ export default function ShopPage() {
   const [referralPreviewOwner, setReferralPreviewOwner] = useState<string>("");
   const [referralApplying, setReferralApplying] = useState(false);
   const [referralApplied, setReferralApplied] = useState(false);
+  const [cartToolsOpen, setCartToolsOpen] = useState(false);
   const [couponPreview, setCouponPreview] = useState<CheckoutSummary | null>(null);
   const [couponPreviewKey, setCouponPreviewKey] = useState("");
   const [couponLoading, setCouponLoading] = useState(false);
@@ -1418,7 +1419,12 @@ export default function ShopPage() {
             </div>
             {cart.length > 0 && (
               <div className="border-t border-[#1E1E1E] px-4 py-4 space-y-3 bg-[#111111]">
-                <div className="space-y-3 rounded-[16px] border border-[#1E1E1E] bg-[#050505] p-3">
+                <div className="rounded-[16px] border border-[#1E1E1E] bg-[#050505] p-3">
+                  <button type="button" onClick={() => setCartToolsOpen((v) => !v)} className="flex w-full items-center justify-between rounded-[12px] border border-[#1E1E1E] bg-[#0A0A0A] px-3 py-2 text-sm font-semibold">
+                    <span>Codes</span>
+                    <span className="text-xs text-[#B5B5B5]">{cartToolsOpen ? 'Hide' : 'Show'}</span>
+                  </button>
+                  <div className={"mt-3 space-y-3 " + (cartToolsOpen ? '' : 'hidden sm:block')}>
                   <div className="rounded-[12px] border border-[#2F9BE6]/40 bg-[#0A0E1A] p-3">
                     <div className="mb-2 flex items-center gap-2">
                       <span className="text-xs font-bold uppercase tracking-widest text-[#49B6FF]">Referral (one code per account)</span>
@@ -1514,6 +1520,7 @@ export default function ShopPage() {
                       <p className={'text-xs ' + (activeCouponPreview ? 'text-[#3DDC84]' : 'text-[#FFB3B3]')}>{couponMessage}</p>
                     )}
                   </div>
+                </div>
                 </div>
 
                 <div className="space-y-1 text-sm">

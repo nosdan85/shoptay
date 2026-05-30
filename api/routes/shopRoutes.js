@@ -2678,24 +2678,27 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
         hasCoupon: Boolean(req.body?.couponCode)
     });
 
+    let checkoutStep = 'start';
     try {
         const viewer = getOptionalRequestUser(req);
         const discordId = String(viewer?.discordId || '').trim();
         const cartItems = Array.isArray(req.body?.cartItems) ? req.body.cartItems : [];
         const couponCodeRaw = req.body?.couponCode;
+
         if (cartItems.length === 0) {
             log.warn('[CHECKOUT] Empty cart items', { requestId: req.requestId });
             return res.status(400).json({ error: 'Invalid request payload' });
         }
 
-        let checkoutStep = 'load_user';
+        checkoutStep = 'load_user';
         const dbUser = discordId ? await User.findOne({ discordId }).lean() : null;
+
+        let validatedRefCode = normalizeReferralCode(req.body?.referralCode || '');
         if (!validatedRefCode) {
             validatedRefCode = normalizeReferralCode(dbUser?.referralAppliedCode || '');
         }
 
         checkoutStep = 'calculate_summary';
-        let validatedRefCode = normalizeReferralCode(req.body?.referralCode || '');
         const cartSummary = await calculateCartSummary({ cartItems, couponCodeRaw });
         if (cartSummary.error) {
             log.warn('[CHECKOUT] Cart summary error', {
@@ -2716,6 +2719,10 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
         } = cartSummary;
 
         const totalCents = moneyToCents(totalAmount);
+        if (!Number.isFinite(totalCents) || totalCents <= 0) {
+            log.warn('[CHECKOUT] Invalid total', { requestId: req.requestId, totalAmount });
+            return res.status(400).json({ error: 'Invalid checkout total' });
+        }
 
         let referredByDiscordId = '';
         if (validatedRefCode) {
@@ -2724,65 +2731,63 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
             const match = candidates.find((u) => String(u?.discordId || '').slice(-6) === suffix);
             if (match?.discordId) referredByDiscordId = String(match.discordId);
         }
-        if (!Number.isFinite(totalCents) || totalCents <= 0) {
-            log.warn('[CHECKOUT] Invalid total', { requestId: req.requestId, totalAmount });
-            return res.status(400).json({ error: 'Invalid checkout total' });
-        }
 
         let newOrder = null;
         let orderId = '';
         let products = [];
-        try {
-            for (let attempt = 0; attempt < 3; attempt += 1) {
-                const counter = await Counter.findOneAndUpdate(
-                    { id: 'orderId' },
-                    { $inc: { seq: 1 } },
-                    { new: true, upsert: true }
-                );
-                orderId = `nm_${counter.seq}`;
 
-                try {
-                    products = items.map((item) => ({
-                        product: item.product || null,
-                        name: item.name || '',
-                        quantity: Number(item.quantity || 1),
-                        packQuantity: Math.max(1, Number(item.packQuantity) || 1),
-                        price: Number(item.price || 0)
-                    }));
-                    newOrder = new Order({
-                        orderId,
-                        customerEmail: '',
-                        discordId,
-                        discordUsername: dbUser?.discordUsername || '',
-                        items,
-                        products,
-                        subtotalAmount,
-                        discountAmount,
-                        discountPercent,
-                        couponCode,
-                        total: totalAmount,
-                        totalAmount,
-                        paymentMethod: 'paypal_ff',
-                        paymentStatus: 'pending',
-                        memoExpected: buildMemoExpected({ orderId }),
-                        txnId: '',
-                        paidAt: null,
-                        status: 'Waiting Payment',
-                        ticketStatus: 'pending',
-                        ticketError: ''
-                    });
-                    checkoutStep = 'order_save';
-                    await newOrder.save();
-                    break;
-                } catch (saveError) {
-                    const duplicateOrderId = Number(saveError?.code) === 11000 && saveError?.keyPattern?.orderId;
-                    if (!duplicateOrderId || attempt >= 2) {
-                        throw saveError;
-                    }
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+            checkoutStep = 'counter_increment';
+            const counter = await Counter.findOneAndUpdate(
+                { id: 'orderId' },
+                { $inc: { seq: 1 } },
+                { new: true, upsert: true }
+            );
+            orderId = 'nm_' + counter.seq;
+
+            try {
+                products = items.map((item) => ({
+                    product: item.product || null,
+                    name: item.name || '',
+                    quantity: Number(item.quantity || 1),
+                    packQuantity: Math.max(1, Number(item.packQuantity) || 1),
+                    price: Number(item.price || 0)
+                }));
+
+                newOrder = new Order({
+                    orderId,
+                    customerEmail: '',
+                    discordId,
+                    discordUsername: dbUser?.discordUsername || '',
+                    items,
+                    products,
+                    subtotalAmount,
+                    discountAmount,
+                    discountPercent,
+                    couponCode,
+                    referralCode: validatedRefCode,
+                    referredByDiscordId,
+                    total: totalAmount,
+                    totalAmount,
+                    paymentMethod: 'paypal_ff',
+                    paymentStatus: 'pending',
+                    memoExpected: buildMemoExpected({ orderId }),
+                    txnId: '',
+                    paidAt: null,
+                    status: 'Waiting Payment',
+                    ticketStatus: 'pending',
+                    ticketError: ''
+                });
+
+                checkoutStep = 'order_save';
+                await newOrder.save();
+                break;
+            } catch (saveError) {
+                const duplicateOrderId = Number(saveError?.code) === 11000 && saveError?.keyPattern?.orderId;
+                if (!duplicateOrderId || attempt >= 2) {
+                    throw saveError;
                 }
             }
-        } catch (saveError) {
-            throw saveError;
         }
 
         if (!newOrder) {
@@ -2790,10 +2795,9 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
             return res.status(503).json({ error: 'Could not create order right now. Please retry.' });
         }
 
-        // Referral entry: one-time per referee, coupon issued on first completed order
+        // Referral pair: one-time per referee; 20% reward issued on first completed order (!done).
         if (referredByDiscordId) {
             try {
-        let checkoutStep = 'start';
                 await Referral.create({
                     referrerDiscordId: referredByDiscordId,
                     refereeDiscordId: discordId,
@@ -2819,7 +2823,7 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
             couponCode,
             totalAmount,
             itemCount: items.length,
-            duration: `${Date.now() - startTime}ms`
+            duration: String(Date.now() - startTime) + 'ms'
         });
 
         return res.json({
@@ -2845,12 +2849,12 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
             requestId: req.requestId,
             error: err?.message || err,
             stack: err?.stack,
-            duration: `${Date.now() - startTime}ms`
+            step: checkoutStep,
+            duration: String(Date.now() - startTime) + 'ms'
         });
         return res.status(500).json({ error: err?.message || 'Server error', step: checkoutStep });
     }
 });
-
 router.get('/order-payment-info', async (req, res) => {
     const orderId = req.query?.orderId;
     if (!orderId) return res.status(400).json({ error: 'Missing orderId' });

@@ -2793,6 +2793,7 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
         // Referral entry: one-time per referee, coupon issued on first completed order
         if (referredByDiscordId) {
             try {
+        let checkoutStep = 'start';
                 await Referral.create({
                     referrerDiscordId: referredByDiscordId,
                     refereeDiscordId: discordId,

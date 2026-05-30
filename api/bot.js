@@ -2190,7 +2190,7 @@ const maybeGrantNewUserReward = async (order) => {
         return;
     }
     const coupon = await createRewardCoupon({ discountPercent: 50, discordId, source: 'new_user' });
-    await sendDmToUser(discordId, 'Here is your NEW USER coupon: ' + coupon.couponCode + ' — 50% off your next order!');
+    await sendDmToUser(discordId, 'Here is your NEW USER coupon:\n```' + coupon.couponCode + '```\n50% off your next order!');
     await DeviceFingerprint.updateMany({ discordId }, { $set: { orderCount: 1, firstOrderAt: new Date() } });
     await Order.updateOne({ _id: order._id }, { $set: { newUserRewardSent: true } });
     console.log('[REWARD] New-user 50% coupon sent to', discordId, coupon.couponCode);
@@ -2201,7 +2201,9 @@ const maybeGrantReferralReward = async (order) => {
     const refereeId = String(order?.discordId || '').trim();
     if (!referrerId || !refereeId) return;
 
-    // If referee device is suspicious, keep referral flagged.
+    const referral = await Referral.findOne({ referrerDiscordId: referrerId, refereeDiscordId: refereeId }).lean();
+    if (!referral) return;
+
     const fp = await DeviceFingerprint.findOne({ discordId: refereeId }).sort({ updatedAt: -1 }).lean();
     if (hasSuspiciousDeviceFlag(fp)) {
         await Referral.updateOne(
@@ -2211,11 +2213,23 @@ const maybeGrantReferralReward = async (order) => {
         return;
     }
 
-    // Mark referral as rewarded after first completed order.
+    let rewardCode = String(referral.rewardCouponCode || '').trim().toUpperCase();
+    if (!rewardCode) {
+        const coupon = await createRewardCoupon({ discountPercent: 20, discordId: referrerId, source: 'referral' });
+        rewardCode = coupon.couponCode;
+        await Referral.updateOne(
+            { referrerDiscordId: referrerId, refereeDiscordId: refereeId },
+            { $set: { rewardCouponCode: rewardCode } }
+        ).catch(() => {});
+    }
+
     await Referral.updateOne(
         { referrerDiscordId: referrerId, refereeDiscordId: refereeId },
         { $set: { status: 'rewarded', refereeFirstOrderId: String(order?.orderId || '') } }
     ).catch(() => {});
+
+    const fence = String.fromCharCode(96).repeat(3);
+    await sendDmToUser(referrerId, 'Your referral reward (20%):\n' + fence + rewardCode + fence);
 };
 
 module.exports = {

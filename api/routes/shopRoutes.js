@@ -2636,6 +2636,37 @@ router.delete('/cart', authRequired, cartSyncLimiter, async (req, res) => {
     }
 });
 
+
+router.post('/referral/preview', authRequired, async (req, res) => {
+  try {
+    const discordId = String(req.user?.discordId || '').trim();
+    if (!discordId) return res.status(401).json({ error: 'Authentication required' });
+    const referralCodeRaw = String(req.body?.referralCode || '').trim();
+    const validatedRefCode = normalizeReferralCode(referralCodeRaw);
+    if (!validatedRefCode) return res.status(400).json({ error: 'Referral code is required.' });
+
+    const existingByReferee = await Referral.findOne({ refereeDiscordId: discordId }).lean();
+    if (existingByReferee) return res.status(409).json({ error: 'This account has already used a referral code.' });
+
+    const suffix = validatedRefCode.replace(/^REF-/, '');
+    const users = await User.find({ discordId: { $exists: true, $ne: discordId } }).select('discordId discordUsername').lean();
+    const match = users.find((u) => String(u?.discordId || '').slice(-6) === suffix);
+    if (!match?.discordId) return res.status(404).json({ error: 'Referral code not found.' });
+
+    return res.json({
+      valid: true,
+      referralCode: validatedRefCode,
+      referrerDiscordId: String(match.discordId),
+      referrerUsername: String(match.discordUsername || ''),
+      refereeRewardPercent: 5,
+      referrerRewardPercent: 20,
+      note: 'Referrer gets 20% after your first completed order. You get 5% one-time coupon after confirming.'
+    });
+  } catch (error) {
+    return res.status(500).json({ error: 'Could not preview referral code.' });
+  }
+});
+
 router.post('/checkout', checkoutLimiter, async (req, res) => {
     const startTime = Date.now();
     log.info('[CHECKOUT] Incoming checkout request', {
@@ -2659,6 +2690,9 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
 
         checkoutStep = 'load_user';
         const dbUser = discordId ? await User.findOne({ discordId }).lean() : null;
+        if (!validatedRefCode) {
+            validatedRefCode = normalizeReferralCode(dbUser?.referralAppliedCode || '');
+        }
 
         checkoutStep = 'calculate_summary';
         const validatedRefCode = String(req.body?.referralCode || '').trim();
@@ -2756,59 +2790,20 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
             return res.status(503).json({ error: 'Could not create order right now. Please retry.' });
         }
 
-        // Referral entry: notify referrer immediately + issue 20% one-time coupon
+        // Referral entry: one-time per referee, coupon issued on first completed order
         if (referredByDiscordId) {
             try {
-                const existing = await Referral.findOne({ referrerDiscordId: referredByDiscordId, refereeDiscordId: discordId }).lean();
-                if (!existing) {
-                    await Referral.create({
-                        referrerDiscordId: referredByDiscordId,
-                        refereeDiscordId: discordId,
-                        refereeFingerprintHash: '',
-                        status: 'pending',
-                        rewardCouponCode: ''
-                    });
-                    // create 20% coupon and DM to referrer
-                    const coupon = await (async () => {
-                        for (let attempt = 0; attempt < 8; attempt += 1) {
-                            const couponCode = buildGeneratedCouponCode();
-                            try {
-                                return await GeneratedCoupon.create({ couponCode, discountPercent: 20, discordId: referredByDiscordId, source: 'referral' });
-                            } catch (err) {
-                                if (Number(err?.code) !== 11000 || attempt >= 7) throw err;
-                            }
-                        }
-                        return null;
-                    })();
-
-                    if (coupon) {
-                        await Referral.updateOne({ referrerDiscordId: referredByDiscordId, refereeDiscordId: discordId }, { $set: { rewardCouponCode: coupon.couponCode } });
-                        // DM via Discord API
-                        const botToken = getDiscordBotToken();
-                        if (botToken) {
-                            const dm = await discordRequest({
-                                method: 'post',
-                                url: `https://discord.com/api/v10/users/@me/channels`,
-                                headers: { Authorization: `Bot ${botToken}` },
-                                data: { recipient_id: referredByDiscordId },
-                                timeout: 8000
-                            }, 0, { maxRetries: 1, maxDelayMs: 1500 });
-                            const channelId = String(dm?.data?.id || '').trim();
-                            if (channelId) {
-                                await discordRequest({
-                                    method: 'post',
-                                    url: `https://discord.com/api/v10/channels/${channelId}/messages`,
-                                    headers: { Authorization: `Bot ${botToken}` },
-                                    data: { content: coupon.couponCode },
-                                    timeout: 8000
-                                }, 0, { maxRetries: 1, maxDelayMs: 1500 });
-                            }
-                        }
-                        log.info('[REFERRAL] Referrer notified', { referrer: referredByDiscordId, referee: discordId, couponCode: coupon.couponCode });
-                    }
-                }
+                await Referral.create({
+                    referrerDiscordId: referredByDiscordId,
+                    refereeDiscordId: discordId,
+                    refereeFingerprintHash: '',
+                    status: 'pending',
+                    rewardCouponCode: ''
+                }).catch((err) => {
+                    if (Number(err?.code) !== 11000) throw err;
+                });
             } catch (e) {
-                log.warn('[REFERRAL] Notify failed', { error: e?.message || e });
+                log.warn('[REFERRAL] Create pending failed', { error: e?.message || e });
             }
         }
 

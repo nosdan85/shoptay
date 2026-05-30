@@ -27,6 +27,11 @@ const userSchema = new mongoose.Schema({
     cartUpdatedAt: { type: Date, default: null },
     ticketCreationLockUntil: { type: Date, default: null },
 
+    referralCode: { type: String, default: '', trim: true, uppercase: true, index: true },
+    referralAppliedCode: { type: String, default: '', trim: true, uppercase: true, index: true },
+    referralAppliedAt: { type: Date, default: null },
+    referralSelfCouponCode: { type: String, default: '', trim: true, uppercase: true },
+
     joinedAt: { type: Date, default: Date.now }
 });
 

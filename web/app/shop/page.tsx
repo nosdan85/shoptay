@@ -407,6 +407,9 @@ export default function ShopPage() {
   const [referralCode, setReferralCode] = useState("");
   const [myCoupons, setMyCoupons] = useState<{ couponCode: string; discountPercent: number; source: string }[]>([]);
   const [myReferralCode, setMyReferralCode] = useState<string>("");
+  const [referralPreviewOwner, setReferralPreviewOwner] = useState<string>("");
+  const [referralApplying, setReferralApplying] = useState(false);
+  const [referralApplied, setReferralApplied] = useState(false);
   const [couponPreview, setCouponPreview] = useState<CheckoutSummary | null>(null);
   const [couponPreviewKey, setCouponPreviewKey] = useState("");
   const [couponLoading, setCouponLoading] = useState(false);
@@ -1101,6 +1104,35 @@ export default function ShopPage() {
     }
   };
 
+  const previewReferralCode = async () => {
+    if (!token || !referralCode.trim()) return;
+    const res = await fetch('/api/shop/referral/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ referralCode: referralCode.trim() })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error || 'Referral preview failed');
+    setReferralPreviewOwner(String(data.ownerDiscordUsername || data.ownerDiscordId || ''));
+    const ok = window.confirm(`Referral code owner: ${String(data.ownerDiscordUsername || data.ownerDiscordId || '')}\nYou get 5% coupon now (one-time). Referrer gets 20% after your first completed order.\nConfirm apply?`);
+    if (!ok) return;
+
+    setReferralApplying(true);
+    const applyRes = await fetch('/api/shop/referral/apply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ referralCode: referralCode.trim() })
+    });
+    const applyData = await applyRes.json();
+    setReferralApplying(false);
+    if (!applyRes.ok) throw new Error(applyData?.error || 'Referral apply failed');
+    setReferralApplied(true);
+    if (applyData?.selfCouponCode) {
+      setCouponCode(String(applyData.selfCouponCode));
+      setCouponMessage('Referral applied: You received 5% coupon (one-time).');
+    }
+  };
+
   const doCheckout = async () => {
     if (!canAct()) return;
     if (cart.length === 0 || submitting) return;
@@ -1389,7 +1421,7 @@ export default function ShopPage() {
                 <div className="space-y-3 rounded-[16px] border border-[#1E1E1E] bg-[#050505] p-3">
                   <div className="rounded-[12px] border border-[#2F9BE6]/40 bg-[#0A0E1A] p-3">
                     <div className="mb-2 flex items-center gap-2">
-                      <span className="text-xs font-bold uppercase tracking-widest text-[#49B6FF]">Referral</span>
+                      <span className="text-xs font-bold uppercase tracking-widest text-[#49B6FF]">Referral (one code per account)</span>
                     </div>
                     <input
                       id="cart-referral"
@@ -1399,6 +1431,19 @@ export default function ShopPage() {
                       placeholder="Enter referral code (e.g. REF-123456)"
                       className="w-full rounded-[10px] border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm text-white outline-none focus:border-[#49B6FF]"
                     />
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void previewReferralCode().catch((e) => setError(e instanceof Error ? e.message : 'Referral apply failed'))}
+                        disabled={!token || !referralCode.trim() || referralApplying || referralApplied}
+                        className="rounded-[8px] bg-[#1E1E1E] px-3 py-2 text-xs font-bold text-[#49B6FF] disabled:opacity-50"
+                      >
+                        {referralApplying ? 'Applying...' : (referralApplied ? 'Applied' : 'Apply Referral')}
+                      </button>
+                    </div>
+                    {referralPreviewOwner && <p className="mt-1 text-[11px] text-[#B5B5B5]">Owner: {referralPreviewOwner}</p>}
+                    <p className="mt-1 text-[11px] text-[#B5B5B5]">You get 5% after applying. Referrer gets 20% after your first completed order. New linked users get 50% after first completed order.</p>
+
                     {token && myReferralCode && (
                       <div className="mt-2 flex items-center justify-between gap-2">
                         <div>

@@ -2702,6 +2702,9 @@ router.post('/referral/apply', authRequired, async (req, res) => {
 
     const suffix = validatedRefCode.replace(/^REF-/, '');
     const match = await findUserByReferralCodeForUser(validatedRefCode, discordId);
+    if (!match?.discordId) {
+      return res.status(400).json({ error: 'Invalid or expired referral code.' });
+    }
     const selfCoupon = await createUniqueGeneratedCoupon({
       discountPercent: 5,
       discordId,
@@ -2790,7 +2793,8 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
             const existingPendingOrder = await Order.findOne({
                 discordId,
                 status: { $in: ['Pending', 'Waiting Payment'] },
-                paymentStatus: { $in: ['pending', 'unpaid', ''] }
+                paymentStatus: 'pending',
+                ticketStatus: { $in: ['pending', 'failed'] }
             }).sort({ createdAt: -1 }).lean();
             if (existingPendingOrder) {
                 return res.status(409).json({

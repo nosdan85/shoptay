@@ -2201,7 +2201,7 @@ router.get('/my-coupons', authRequired, async (req, res) => {
         const coupons = await GeneratedCoupon.find({
             discordId,
             status: 'unused',
-            source: { $in: ['new_user', 'referral', 'referral_self', 'lucky_wheel'] }
+            source: { $in: ['lucky_wheel'] }
         })
             .sort({ createdAt: -1 })
             .select('couponCode discountPercent source status createdAt')
@@ -2727,12 +2727,14 @@ router.post('/referral/apply', authRequired, async (req, res) => {
     const validatedRefCode = normalizeReferralCode(referralCodeRaw);
     if (!validatedRefCode) return res.status(400).json({ error: 'Referral code is required.' });
 
-    const existingByReferee = await Referral.findOne({ refereeDiscordId: discordId }).lean();
-    if (existingByReferee) return res.status(409).json({ error: 'This account has already used a referral code.' });
+    const existingConsumed = await Referral.findOne({
+      refereeDiscordId: discordId,
+      status: { $in: ['consumed', 'rewarded'] }
+    }).lean();
+    if (existingConsumed) return res.status(409).json({ error: 'This account has already used a referral code.' });
 
     const me = await User.findOne({ discordId }).lean();
     if (!me) return res.status(404).json({ error: 'User not found.' });
-    if (me.referralAppliedCode) return res.status(409).json({ error: 'This account already applied a referral code.' });
 
     const fp = await DeviceFingerprint.findOne({ discordId }).sort({ updatedAt: -1 }).lean();
     if (fp && Array.isArray(fp.flags) && fp.flags.length > 0) {
@@ -2744,7 +2746,8 @@ router.post('/referral/apply', authRequired, async (req, res) => {
     if (!match?.discordId) {
       return res.status(400).json({ error: 'Invalid or expired referral code.' });
     }
-await User.updateOne(
+
+    await User.updateOne(
       { discordId },
       {
         $set: {
@@ -2755,15 +2758,18 @@ await User.updateOne(
       }
     );
 
-    await Referral.create({
-      referrerDiscordId: String(match.discordId),
-      refereeDiscordId: discordId,
-      refereeFingerprintHash: String(fp?.fingerprintHash || ''),
-      status: 'pending',
-      rewardCouponCode: ''
-    }).catch((err) => {
-      if (Number(err?.code) !== 11000) throw err;
-    });
+    await Referral.findOneAndUpdate(
+      { refereeDiscordId: discordId },
+      {
+        $set: {
+          referrerDiscordId: String(match.discordId),
+          refereeFingerprintHash: String(fp?.fingerprintHash || ''),
+          status: 'pending',
+          rewardCouponCode: ''
+        }
+      },
+      { upsert: true }
+    );
 
     return res.json({
       success: true,
@@ -3954,14 +3960,16 @@ router.post('/create-ticket-paypal-ff', authRequired, ticketCreateLimiter, requi
                     paypalTicketChannel: channelName,
                     paypalTicketChannelId: channelId,
                     paypalTicketStatus: 'created',
-
-        // Tạo mã 5% cho referee khi PayPal ticket thành công
-        issueRefereeCouponOnTicketCreated(lockedOrder.orderId, lockedOrder.discordId).catch(err => console.error('[REFERRAL] Tao ma 5% loi:', err));
                     paypalTicketError: ''
                 },
                 $unset: { paypalTicketLockUntil: 1 }
             }
         );
+
+        await Referral.updateOne(
+            { refereeDiscordId: lockedOrder.discordId, status: 'pending' },
+            { $set: { status: 'consumed' } }
+        ).catch(err => console.error('[REFERRAL] Mark consumed error:', err));
         if (!persistResult?.matchedCount) {
             const fresh = await Order.findById(lockedOrder._id).lean();
             if (fresh?.paypalTicketChannelId) {
@@ -3990,9 +3998,6 @@ router.post('/create-ticket-paypal-ff', authRequired, ticketCreateLimiter, requi
                         paypalTicketChannel: channelName,
                         paypalTicketChannelId: channelId,
                         paypalTicketStatus: 'created',
-
-        // Tạo mã 5% cho referee khi PayPal ticket thành công
-        issueRefereeCouponOnTicketCreated(lockedOrder.orderId, lockedOrder.discordId).catch(err => console.error('[REFERRAL] Tao ma 5% loi:', err));
                         paypalTicketError: ''
                     },
                     $unset: { paypalTicketLockUntil: 1 }
@@ -4179,14 +4184,16 @@ router.post('/create-ticket-ltc', authRequired, ticketCreateLimiter, requirePaym
                     ltcTicketChannel: channelName,
                     ltcTicketChannelId: channelId,
                     ltcTicketStatus: 'created',
-
-        // Tạo mã 5% cho referee khi LTC ticket thành công
-        issueRefereeCouponOnTicketCreated(lockedOrder.orderId, lockedOrder.discordId).catch(err => console.error('[REFERRAL] Tao ma 5% loi:', err));
                     ltcTicketError: ''
                 },
                 $unset: { ltcTicketLockUntil: 1 }
             }
         );
+
+        await Referral.updateOne(
+            { refereeDiscordId: lockedOrder.discordId, status: 'pending' },
+            { $set: { status: 'consumed' } }
+        ).catch(err => console.error('[REFERRAL] Mark consumed error:', err));
         if (!persistResult?.matchedCount) {
             const fresh = await Order.findById(lockedOrder._id).lean();
             if (fresh?.ltcTicketChannelId) {
@@ -4213,9 +4220,6 @@ router.post('/create-ticket-ltc', authRequired, ticketCreateLimiter, requirePaym
                         ltcTicketChannel: channelName,
                         ltcTicketChannelId: channelId,
                         ltcTicketStatus: 'created',
-
-        // Tạo mã 5% cho referee khi LTC ticket thành công
-        issueRefereeCouponOnTicketCreated(lockedOrder.orderId, lockedOrder.discordId).catch(err => console.error('[REFERRAL] Tao ma 5% loi:', err));
                         ltcTicketError: ''
                     },
                     $unset: { ltcTicketLockUntil: 1 }

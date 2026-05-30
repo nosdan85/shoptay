@@ -2688,14 +2688,14 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
             return res.status(400).json({ error: 'Invalid request payload' });
         }
 
-        checkoutStep = 'load_user';
+        let checkoutStep = 'load_user';
         const dbUser = discordId ? await User.findOne({ discordId }).lean() : null;
         if (!validatedRefCode) {
             validatedRefCode = normalizeReferralCode(dbUser?.referralAppliedCode || '');
         }
 
         checkoutStep = 'calculate_summary';
-        const validatedRefCode = String(req.body?.referralCode || '').trim();
+        let validatedRefCode = normalizeReferralCode(req.body?.referralCode || '');
         const cartSummary = await calculateCartSummary({ cartItems, couponCodeRaw });
         if (cartSummary.error) {
             log.warn('[CHECKOUT] Cart summary error', {

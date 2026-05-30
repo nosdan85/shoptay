@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const qs = require('qs');
@@ -78,46 +78,7 @@ const {
     normalizeReferralCode
 } = require('../utils/referralRewards');
 const findUserByReferralCodeForUser = findUserByReferralCode(User);
-
-
-// === Tạo mã 5% cho referee khi ticket thành công ===
-const issueRefereeCouponOnTicketCreated = async (orderId, discordId) => {
-    try {
-        // Kiểm tra order có referral không
-        const order = await Order.findOne({ orderId }).lean();
-        if (!order?.referredByDiscordId) return { ok: false, reason: 'no_referral' };
-        
-        // Kiểm tra referee đã có mã 5% chưa
-        const existing = await GeneratedCoupon.findOne({
-            discordId: order.referredByDiscordId,
-            source: 'referral_self',
-            status: 'unused'
-        }).lean();
-        if (existing) return { ok: false, reason: 'already_has_coupon' };
-        
-        // Kiểm tra order đã được áp dụng referral chưa
-        if (!order.referralAppliedCode) return { ok: false, reason: 'no_referral_applied' };
-        
-        // Tạo mã 5%
-        const coupon = await createUniqueGeneratedCoupon({
-            discountPercent: 5,
-            discordId: order.referredByDiscordId,
-            source: 'referral_self'
-        });
-        
-        // Cập nhật User - đánh dấu đã nhập mã (không cho nhập lại)
-        await User.updateOne(
-            { discordId: order.referredByDiscordId },
-            { $set: { referralSelfCouponCode: coupon.couponCode } }
-        );
-        
-        console.log('[REFERRAL] Mã 5% đã tạo cho referee:', order.referredByDiscordId, coupon.couponCode);
-        return { ok: true, couponCode: coupon.couponCode };
-    } catch (err) {
-        console.error('[REFERRAL] Lỗi tạo mã 5% cho referee:', err);
-        return { ok: false, reason: 'error', error: err.message };
-    }
-};const {
+const {
     buildPublicDeliverySlotQuery,
     buildSelectableDeliverySlotQuery,
     isFutureDeliverySlotRange,
@@ -2744,13 +2705,19 @@ router.post('/referral/apply', authRequired, async (req, res) => {
     if (!match?.discordId) {
       return res.status(400).json({ error: 'Invalid or expired referral code.' });
     }
-await User.updateOne(
+    const selfCoupon = await createUniqueGeneratedCoupon({
+      discountPercent: 5,
+      discordId,
+      source: 'referral_self'
+    });
+
+    await User.updateOne(
       { discordId },
       {
         $set: {
           referralAppliedCode: validatedRefCode,
           referralAppliedAt: new Date(),
-          referralSelfCouponCode: ""
+          referralSelfCouponCode: selfCoupon.couponCode
         }
       }
     );
@@ -2770,8 +2737,8 @@ await User.updateOne(
       referralCode: validatedRefCode,
       referrerDiscordId: String(match.discordId),
       referrerUsername: String(match.discordUsername || ''),
-      selfCouponCode: "",
-      selfRewardPercent: 0,
+      selfCouponCode: selfCoupon.couponCode,
+      selfRewardPercent: 5,
       referrerRewardPercent: 20
     });
   } catch (error) {
@@ -2818,6 +2785,22 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
             if (match?.discordId) {
                 referredByDiscordId = String(match.discordId);
                 referralDiscountPercent = 5;
+            }
+        }
+
+        if (discordId) {
+            checkoutStep = 'check_existing_pending_order';
+            const existingPendingOrder = await Order.findOne({
+                discordId,
+                status: { $in: ['Pending', 'Waiting Payment'] },
+                paymentStatus: 'pending',
+                ticketStatus: { $in: ['pending', 'failed'] }
+            }).sort({ createdAt: -1 }).lean();
+            if (existingPendingOrder) {
+                return res.status(409).json({
+                    error: 'You already have a pending order. Please complete or cancel it before creating a new one.',
+                    existingOrderId: existingPendingOrder.orderId
+                });
             }
         }
 
@@ -3954,9 +3937,6 @@ router.post('/create-ticket-paypal-ff', authRequired, ticketCreateLimiter, requi
                     paypalTicketChannel: channelName,
                     paypalTicketChannelId: channelId,
                     paypalTicketStatus: 'created',
-
-        // Tạo mã 5% cho referee khi PayPal ticket thành công
-        issueRefereeCouponOnTicketCreated(lockedOrder.orderId, lockedOrder.discordId).catch(err => console.error('[REFERRAL] Tao ma 5% loi:', err));
                     paypalTicketError: ''
                 },
                 $unset: { paypalTicketLockUntil: 1 }
@@ -3990,9 +3970,6 @@ router.post('/create-ticket-paypal-ff', authRequired, ticketCreateLimiter, requi
                         paypalTicketChannel: channelName,
                         paypalTicketChannelId: channelId,
                         paypalTicketStatus: 'created',
-
-        // Tạo mã 5% cho referee khi PayPal ticket thành công
-        issueRefereeCouponOnTicketCreated(lockedOrder.orderId, lockedOrder.discordId).catch(err => console.error('[REFERRAL] Tao ma 5% loi:', err));
                         paypalTicketError: ''
                     },
                     $unset: { paypalTicketLockUntil: 1 }
@@ -4179,9 +4156,6 @@ router.post('/create-ticket-ltc', authRequired, ticketCreateLimiter, requirePaym
                     ltcTicketChannel: channelName,
                     ltcTicketChannelId: channelId,
                     ltcTicketStatus: 'created',
-
-        // Tạo mã 5% cho referee khi LTC ticket thành công
-        issueRefereeCouponOnTicketCreated(lockedOrder.orderId, lockedOrder.discordId).catch(err => console.error('[REFERRAL] Tao ma 5% loi:', err));
                     ltcTicketError: ''
                 },
                 $unset: { ltcTicketLockUntil: 1 }
@@ -4213,9 +4187,6 @@ router.post('/create-ticket-ltc', authRequired, ticketCreateLimiter, requirePaym
                         ltcTicketChannel: channelName,
                         ltcTicketChannelId: channelId,
                         ltcTicketStatus: 'created',
-
-        // Tạo mã 5% cho referee khi LTC ticket thành công
-        issueRefereeCouponOnTicketCreated(lockedOrder.orderId, lockedOrder.discordId).catch(err => console.error('[REFERRAL] Tao ma 5% loi:', err));
                         ltcTicketError: ''
                     },
                     $unset: { ltcTicketLockUntil: 1 }
@@ -4385,10 +4356,7 @@ router.post('/create-ticket', authRequired, ticketCreateLimiter, async (req, res
                     channelId,
                     ticketStatus: 'created',
                     ticketError: '',
-                    paymentMethod: 'cashapp'
-
-        // Tạo mã 5% cho referee khi ticket thành công
-        issueRefereeCouponOnTicketCreated(lockedOrder.orderId, lockedOrder.discordId).catch(err => console.error('[REFERRAL] Tao ma 5% loi:', err));,
+                    paymentMethod: 'cashapp',
                     status: lockedOrder.status === 'Pending' ? 'Waiting Payment' : lockedOrder.status
                 },
                 $unset: { ticketLockUntil: 1 }
@@ -4418,10 +4386,7 @@ router.post('/create-ticket', authRequired, ticketCreateLimiter, async (req, res
                         channelId,
                         ticketStatus: 'created',
                         ticketError: '',
-                        paymentMethod: 'cashapp'
-
-        // Tạo mã 5% cho referee khi ticket thành công
-        issueRefereeCouponOnTicketCreated(lockedOrder.orderId, lockedOrder.discordId).catch(err => console.error('[REFERRAL] Tao ma 5% loi:', err));,
+                        paymentMethod: 'cashapp',
                         status: lockedOrder.status === 'Pending' ? 'Waiting Payment' : lockedOrder.status
                     },
                     $unset: { ticketLockUntil: 1 }
@@ -5013,7 +4978,7 @@ const maskUsername = (username) => {
 
 // --- PUBLIC SHOP ENDPOINTS ----------------------------------------------------
 
-// GET /api/shop/games ï¿½ list active games
+// GET /api/shop/games � list active games
 router.get('/games', async (req, res) => {
     try {
         const games = await Game.find({ active: true }).sort({ name: 1 }).lean();
@@ -5024,7 +4989,7 @@ router.get('/games', async (req, res) => {
     }
 });
 
-// GET /api/shop/config ï¿½ banners + best sellers
+// GET /api/shop/config � banners + best sellers
 router.get('/config', async (req, res) => {
     try {
         const config = await ShopConfig.getConfig();
@@ -5039,7 +5004,7 @@ router.get('/config', async (req, res) => {
     }
 });
 
-// GET /api/shop/recent-purchases ï¿½ public feed of confirmed orders (masked usernames)
+// GET /api/shop/recent-purchases � public feed of confirmed orders (masked usernames)
 // GET /api/shop/recent-purchases ? public feed of confirmed orders (masked usernames)
 router.get('/recent-purchases', async (req, res) => {
     try {
@@ -5194,7 +5159,7 @@ router.post('/owner/config/banners/upload', authRequired, bannerUpload.single('b
     }
 });
 
-// PUT /api/shop/owner/config/banners ï¿½ body: { bannerUrl }
+// PUT /api/shop/owner/config/banners � body: { bannerUrl }
 router.put('/owner/config/banners', authRequired, async (req, res) => {
     try {
         const discordId = String(req.user?.discordId || '').trim();
@@ -5218,7 +5183,7 @@ router.put('/owner/config/banners', authRequired, async (req, res) => {
     }
 });
 
-// DELETE /api/shop/owner/config/banners ï¿½ body: { bannerUrl }
+// DELETE /api/shop/owner/config/banners � body: { bannerUrl }
 router.delete('/owner/config/banners', authRequired, async (req, res) => {
     try {
         const discordId = String(req.user?.discordId || '').trim();

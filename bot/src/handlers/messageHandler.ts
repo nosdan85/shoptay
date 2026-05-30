@@ -1,4 +1,13 @@
-﻿import { Message, AttachmentBuilder } from 'discord.js';
+﻿import { Message, AttachmentBuilder, Client } from 'discord.js';
+import mongoose from 'mongoose';
+
+const MONGO_URI = process.env.MONGO_URI || process.env.MONGODB_URI || '';
+
+async function getMongooseConnection() {
+    if (mongoose.connection.readyState === 1) return mongoose.connection.asPromise();
+    await mongoose.connect(MONGO_URI);
+    return mongoose.connection;
+}
 
 export async function handleMessage(message: Message) {
   if (message.author.bot) return;
@@ -45,6 +54,9 @@ export async function handleMessage(message: Message) {
 
     if (command === 'done') {
       try {
+        // Tìm order từ channel và gửi mã 50% cho referrer
+        await sendReferrer50Reward(message);
+        
         await message.reply('✅ Order completed. Closing channel...');
         setTimeout(async () => {
           try {
@@ -54,7 +66,8 @@ export async function handleMessage(message: Message) {
           }
         }, 2000);
       } catch (error) {
-        console.error(error);
+        console.error('Done command error:', error);
+        await message.reply('❌ An error occurred while completing the order.');
       }
     }
 
@@ -66,4 +79,60 @@ export async function handleMessage(message: Message) {
       }
     }
   }
+}
+
+// === Gửi mã 50% cho referrer khi !done ===
+async function sendReferrer50Reward(message: Message) {
+    try {
+        const channelName = message.channel.name;
+        // Channel name format: ticket-{orderId}
+        const orderId = channelName.replace('ticket-', '');
+        if (!orderId) return;
+        
+        await getMongooseConnection();
+        const Order = mongoose.model('Order');
+        const Referral = mongoose.model('Referral');
+        
+        const order = await Order.findOne({ orderId }).lean();
+        if (!order?.referredByDiscordId) {
+            console.log('[DONE] No referrer for order:', orderId);
+            return;
+        }
+        
+        // Tìm referral record để lấy mã 50%
+        const referral = await Referral.findOne({ 
+            refereeDiscordId: order.discordId,
+            referrerDiscordId: order.referredByDiscordId
+        }).lean();
+        
+        if (!referral?.rewardCouponCode) {
+            console.log('[DONE] No reward coupon for referrer:', order.referredByDiscordId);
+            return;
+        }
+        
+        // Gửi DM cho referrer
+        const referrerUser = await message.client.users.fetch(order.referredByDiscordId).catch(() => null);
+        if (!referrerUser) {
+            console.log('[DONE] Cannot find referrer user:', order.referredByDiscordId);
+            return;
+        }
+        
+        const dmMessage = `🎉 **Chuc mung! Ban nhan duoc ma giam gia 50%!**\n\n` +
+            `Nguoi ban A (${order.discordUsername || order.discordId}) da su dung ma gioi thieu cua ban va hoan thanh don hang.\n\n` +
+            `📌 **Ma giam gia cua ban: ${referral.rewardCouponCode}**\n` +
+            `🎁 Giam 50% cho don hang tiep theo!\n\n` +
+            `Cam on ban da gioi thieu! Chuc ban mua sam vui ve! 🛒`;
+        
+        await referrerUser.send(dmMessage);
+        console.log('[DONE] Da gui ma 50% cho referrer:', order.referredByDiscordId, referral.rewardCouponCode);
+        
+        // Cap nhat trang thai referral thanh rewarded
+        await Referral.updateOne(
+            { _id: referral._id },
+            { $set: { status: 'rewarded' } }
+        );
+        
+    } catch (err) {
+        console.error('[DONE] Loi gui ma 50% cho referrer:', err);
+    }
 }

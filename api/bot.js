@@ -2189,17 +2189,23 @@ const maybeGrantNewUserReward = async (order) => {
         if (fp) console.warn('[REWARD] New-user reward blocked for', discordId, 'flags:', fp.flags);
         return;
     }
-    const coupon = await createRewardCoupon({ discountPercent: 50, discordId, source: 'new_user' });
-    await sendDmToUser(discordId, 'Here is your NEW USER coupon:\n```' + coupon.couponCode + '```\n50% off your next order!');
+    const coupon = await createRewardCoupon({ discountPercent: 20, discordId, source: 'new_user' });
+    await sendDmToUser(discordId, 'Here is your NEW USER coupon:\n```' + coupon.couponCode + '```\n20% off your next order!');
     await DeviceFingerprint.updateMany({ discordId }, { $set: { orderCount: 1, firstOrderAt: new Date() } });
     await Order.updateOne({ _id: order._id }, { $set: { newUserRewardSent: true } });
-    console.log('[REWARD] New-user 50% coupon sent to', discordId, coupon.couponCode);
+    console.log('[REWARD] New-user 20% coupon sent to', discordId, coupon.couponCode);
 };
 
 const maybeGrantReferralReward = async (order) => {
     const referrerId = String(order?.referredByDiscordId || '').trim();
     const refereeId = String(order?.discordId || '').trim();
     if (!referrerId || !refereeId) return;
+
+    const orderTotal = Number(order?.totalAmount || 0);
+    if (orderTotal < 5) {
+        console.log('[REWARD] Referral reward skipped: order total', orderTotal, '< $5');
+        return;
+    }
 
     const referral = await Referral.findOne({ referrerDiscordId: referrerId, refereeDiscordId: refereeId }).lean();
     if (!referral) return;

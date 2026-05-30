@@ -236,7 +236,29 @@ function PayContent() {
   const currentMethodLabel = PAYMENT_METHODS.find((paymentMethod) => paymentMethod.value === selectedMethod)?.label || "Payment";
 
   return (
-    <main className="max-w-7xl mx-auto px-4 py-12">
+    <>
+      {paymentError && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-md rounded-[20px] border border-[#FF4D4F]/30 bg-[#111111] p-6 shadow-2xl animate-bounce-in">
+            <div className="mb-4 flex items-start gap-4">
+              <div className="flex-shrink-0 rounded-full bg-[#FF4D4F]/10 p-3">
+                <AlertCircle className="h-6 w-6 text-[#FF4D4F]" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-lg font-semibold text-white mb-2">Error</h3>
+                <p className="text-sm text-[#B5B5B5] leading-relaxed break-words">{paymentError}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setPaymentError(null)}
+              className="w-full rounded-[14px] bg-[#FF4D4F] px-4 py-3 text-sm font-medium text-white hover:bg-[#FF6B6B] transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+      <main className="max-w-7xl mx-auto px-4 py-12">
       <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
         <section className="space-y-6">
           <div>
@@ -269,12 +291,6 @@ function PayContent() {
                 </button>
               ))}
             </div>
-
-            {paymentError && (
-              <div className="rounded-[14px] border border-[#FF4D4F]/40 bg-red-950/30 p-3 text-sm text-[#FF4D4F]">
-                {paymentError}
-              </div>
-            )}
           </div>
 
           <div className="bg-[#111111] border border-[#1E1E1E] rounded-[16px] p-6 space-y-5">
@@ -397,6 +413,7 @@ function PayContent() {
         </aside>
       </div>
     </main>
+    </>
   );
 }
 

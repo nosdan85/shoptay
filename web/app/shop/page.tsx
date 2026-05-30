@@ -25,6 +25,7 @@ import {
   Copy,
   CreditCard,
   QrCode,
+  AlertCircle,
 } from "lucide-react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
@@ -1597,8 +1598,29 @@ export default function ShopPage() {
         </div>
       )}
 
+      {error && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-md rounded-[20px] border border-[#FF4D4F]/30 bg-[#111111] p-6 shadow-2xl animate-bounce-in">
+            <div className="mb-4 flex items-start gap-4">
+              <div className="flex-shrink-0 rounded-full bg-[#FF4D4F]/10 p-3">
+                <AlertCircle className="h-6 w-6 text-[#FF4D4F]" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-lg font-semibold text-white mb-2">Error</h3>
+                <p className="text-sm text-[#B5B5B5] leading-relaxed break-words">{error}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setError(null)}
+              className="w-full rounded-[14px] bg-[#FF4D4F] px-4 py-3 text-sm font-medium text-white hover:bg-[#FF6B6B] transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
       <main className="mx-auto max-w-7xl px-4 py-4 sm:px-4 sm:py-6 animate-page-enter">
-        {error && <div className="mb-4 rounded-[16px] border border-[#FF4D4F]/20 bg-[#FF4D4F]/10 px-4 py-3 text-sm text-[#FF4D4F]">{error}</div>}
 
         {step !== "shop" && (
           <div className="mx-auto max-w-2xl space-y-6 animate-page-enter">

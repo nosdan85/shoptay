@@ -1519,14 +1519,18 @@ export default function ShopPage() {
                         {referralApplying ? '...' : (referralApplied ? 'Applied' : 'Apply')}
                       </button>
                     </div>
-                    {(referralPreviewOwner || myReferralCode) && (
+                    {token && myReferralCode && (
+                      <div className="grid grid-cols-[76px_minmax(0,1fr)_auto] items-center gap-2 text-[11px]">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-[#B5B5B5]">Your invite</span>
+                        <span className="min-w-0 truncate font-mono font-semibold text-[#49B6FF]">{myReferralCode}</span>
+                        <button type="button" onClick={() => void navigator.clipboard.writeText(myReferralCode)} className="rounded-[8px] bg-[#1E1E1E] p-1.5 text-white" title="Copy">
+                          <Copy className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
+                    {referralPreviewOwner && (
                       <div className="flex items-center justify-between gap-2 pl-[84px] text-[11px] text-[#B5B5B5]">
-                        <span className="min-w-0 truncate">{referralPreviewOwner ? `Owner: ${referralPreviewOwner}` : `Your code: ${myReferralCode}`}</span>
-                        {myReferralCode && (
-                          <button type="button" onClick={() => void navigator.clipboard.writeText(myReferralCode)} className="rounded-[8px] bg-[#1E1E1E] p-1.5 text-white" title="Copy">
-                            <Copy className="h-3.5 w-3.5" />
-                          </button>
-                        )}
+                        <span className="min-w-0 truncate">Owner: {referralPreviewOwner}</span>
                       </div>
                     )}
 

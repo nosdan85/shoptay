@@ -44,3 +44,12 @@ test('checkout submits referralCode only after the invite has been applied', () 
   assert.notEqual(checkoutEnd, -1);
   assert.match(checkoutSource, /referralCode:\s*referralApplied\s*\?\s*referralCode\.trim\(\)\s*:\s*""/);
 });
+
+test('shop cart renders the signed-in user invite code as its own compact row', () => {
+  const source = readWebFile('app', 'shop', 'page.tsx');
+
+  assert.match(source, /token && myReferralCode/);
+  assert.match(source, /Your invite/);
+  assert.match(source, /navigator\.clipboard\.writeText\(myReferralCode\)/);
+  assert.doesNotMatch(source, /referralPreviewOwner \? `Owner: \$\{referralPreviewOwner\}` : `Your code: \$\{myReferralCode\}`/);
+});

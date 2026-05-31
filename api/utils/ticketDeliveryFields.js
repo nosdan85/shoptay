@@ -20,22 +20,35 @@ const formatDeliveryWindow = (startAt, endAt, timezone) => {
 
 const buildDeliveryWindowFields = (order = {}) => {
     const fields = [];
-    const adminWindow = formatDeliveryWindow(
-        order.deliveryOwnerStartAt,
-        order.deliveryOwnerEndAt,
-        order.deliveryOwnerTimezone
-    );
+
+    // Only show customer's selected time and its conversion to Vietnam timezone
     const customerWindow = formatDeliveryWindow(
         order.deliveryCustomerStartAt,
         order.deliveryCustomerEndAt,
         order.deliveryCustomerTimezone
     );
 
-    if (adminWindow) {
-        fields.push({ name: 'Admin delivery time', value: adminWindow, inline: false });
-    }
+    const vnWindow = formatDeliveryWindow(
+        order.deliveryCustomerStartAt,
+        order.deliveryCustomerEndAt,
+        'Asia/Ho_Chi_Minh'
+    );
+
     if (customerWindow) {
-        fields.push({ name: 'Customer delivery time', value: customerWindow, inline: false });
+        fields.push({
+            name: 'Customer Selected Time',
+            value: customerWindow,
+            inline: false
+        });
+    }
+
+    // Only show VN time if it's different from customer time
+    if (vnWindow && vnWindow !== customerWindow) {
+        fields.push({
+            name: 'Converted to Vietnam Time',
+            value: vnWindow,
+            inline: false
+        });
     }
 
     return fields;

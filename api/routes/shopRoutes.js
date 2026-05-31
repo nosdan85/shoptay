@@ -2870,9 +2870,17 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
         checkoutStep = 'load_user';
         const dbUser = discordId ? await User.findOne({ discordId }).lean() : null;
 
+        // Check if user typed referral code but didn't click Apply
+        const referralCodeFromBody = normalizeReferralCode(req.body?.referralCode || '');
+        const referralCodeApplied = normalizeReferralCode(dbUser?.referralAppliedCode || '');
+
+        if (referralCodeFromBody && referralCodeFromBody !== referralCodeApplied) {
+            log.warn('[CHECKOUT] Referral code not applied', { requestId: req.requestId, discordId });
+            return res.status(400).json({ error: 'Please click Apply button for the referral code before checkout.' });
+        }
+
         // Only use referral code if user has clicked Apply (saved in database)
-        // Do NOT use req.body.referralCode directly - user must click Apply first
-        let validatedRefCode = normalizeReferralCode(dbUser?.referralAppliedCode || '');
+        let validatedRefCode = referralCodeApplied;
 
         let referredByDiscordId = '';
         let referralDiscountPercent = 0;

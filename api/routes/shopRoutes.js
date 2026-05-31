@@ -921,12 +921,12 @@ const validateCouponCode = async (couponCodeRaw, discordId = null) => {
 
     // Special handling for WELCOME20 coupon
     if (couponCode === 'WELCOME20') {
+        // If no discordId (not logged in), allow preview but will check on actual checkout
         if (!discordId) {
             return {
-                couponCode: '',
-                discountPercent: 0,
-                discountAmount: 0,
-                error: 'Authentication required to use this coupon.'
+                couponCode,
+                discountPercent: 20,
+                discountAmount: 0
             };
         }
 

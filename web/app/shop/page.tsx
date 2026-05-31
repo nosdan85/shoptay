@@ -1108,7 +1108,10 @@ export default function ShopPage() {
     try {
       const res = await fetch("/api/shop/coupon/preview", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           couponCode: normalizedCode,
           cartItems: items.map((i) => ({ product: i._id, name: i.name, quantity: i.quantity, price: i.price })),

@@ -71,11 +71,15 @@ const {
     pickWheelSlice,
     validateGeneratedCouponDiscount
 } = require('../utils/luckyWheel');
+const { USER_VISIBLE_GENERATED_COUPON_SOURCES } = require('../utils/generatedCoupons');
 const {
+    buildReferralPreviewPayload,
     buildReferralCode,
     findUserByReferralCode,
     hashFingerprint,
-    normalizeReferralCode
+    normalizeReferralCode,
+    REFEREE_DISCOUNT_PERCENT,
+    REFERRER_REWARD_PERCENT
 } = require('../utils/referralRewards');
 const findUserByReferralCodeForUser = findUserByReferralCode(User);
 
@@ -2222,7 +2226,7 @@ router.get('/my-coupons', authRequired, async (req, res) => {
         const coupons = await GeneratedCoupon.find({
             discordId,
             status: 'unused',
-            source: { $in: ['lucky_wheel'] }
+            source: { $in: USER_VISIBLE_GENERATED_COUPON_SOURCES }
         })
             .sort({ createdAt: -1 })
             .select('couponCode discountPercent source status createdAt')
@@ -2254,7 +2258,7 @@ router.post('/coupon/preview', async (req, res) => {
         if (referralCodeApplied) {
             const match = await findUserByReferralCodeForUser(referralCodeApplied, discordId);
             if (match?.discordId) {
-                referralDiscountPercent = 5;
+                referralDiscountPercent = REFEREE_DISCOUNT_PERCENT;
             } else {
                 // Invalid invite code - clear it from database
                 await User.updateOne({ discordId }, { $unset: { referralAppliedCode: 1, referralAppliedAt: 1 } }).catch(() => {});
@@ -2736,15 +2740,10 @@ router.post('/referral/preview', authRequired, async (req, res) => {
 
     const match = await findUserByReferralCodeForUser(validatedRefCode, discordId);
 
-    return res.json({
-      valid: true,
-      referralCode: validatedRefCode,
-      referrerDiscordId: String(match.discordId),
-      referrerUsername: String(match.discordUsername || ''),
-      refereeDiscountPercent: 5,
-      referrerRewardPercent: 20,
-      note: 'Referrer gets 20% after your first completed order. You get 5% discount on this order.'
-    });
+    const payload = buildReferralPreviewPayload(match, validatedRefCode);
+    if (!payload) return res.status(400).json({ error: 'Invalid or expired invite code.' });
+
+    return res.json(payload);
   } catch (error) {
     return res.status(500).json({ error: 'Could not preview referral code.' });
   }
@@ -2857,7 +2856,7 @@ router.post('/referral/apply', authRequired, async (req, res) => {
       referrerUsername: String(match.discordUsername || ''),
       selfCouponCode: "",
       selfRewardPercent: 0,
-      referrerRewardPercent: 20
+      referrerRewardPercent: REFERRER_REWARD_PERCENT
     });
   } catch (error) {
     console.error('Referral apply error:', error);
@@ -2976,7 +2975,7 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
             const match = await findUserByReferralCodeForUser(validatedRefCode, discordId);
             if (match?.discordId) {
                 referredByDiscordId = String(match.discordId);
-                referralDiscountPercent = 5;
+                referralDiscountPercent = REFEREE_DISCOUNT_PERCENT;
                 log.info('[CHECKOUT] Referral code valid, applying 5% discount', {
                     requestId: req.requestId,
                     referredByDiscordId

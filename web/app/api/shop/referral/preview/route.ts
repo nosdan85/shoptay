@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     });
 
     const raw = await res.text();
-    let data: any;
+    let data: unknown;
     try {
       data = raw ? JSON.parse(raw) : {};
     } catch {

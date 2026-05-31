@@ -5,9 +5,13 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || process.env.API_BASE_URL
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    const token = request.headers.get("authorization") || "";
     const res = await fetch(`${API_BASE_URL}/api/shop/coupon/preview`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: token } : {}),
+      },
       body: JSON.stringify(body),
     });
 

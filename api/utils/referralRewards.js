@@ -1,5 +1,8 @@
 const crypto = require('crypto');
 
+const REFEREE_DISCOUNT_PERCENT = 5;
+const REFERRER_REWARD_PERCENT = 50;
+
 const normalizeReferralCode = (value) => String(value || '').trim().toUpperCase().replace(/[^A-Z0-9-]/g, '');
 
 const buildReferralCode = (discordId) => {
@@ -35,10 +38,28 @@ const findUserByReferralCode = (User) => async (referralCode, excludeDiscordId =
     return candidates[0] || null;
 };
 
+const buildReferralPreviewPayload = (match, referralCode) => {
+    if (!match?.discordId) return null;
+    const normalizedCode = normalizeReferralCode(referralCode);
+    if (!normalizedCode) return null;
+    return {
+        valid: true,
+        referralCode: normalizedCode,
+        referrerDiscordId: String(match.discordId),
+        referrerUsername: String(match.discordUsername || ''),
+        refereeDiscountPercent: REFEREE_DISCOUNT_PERCENT,
+        referrerRewardPercent: REFERRER_REWARD_PERCENT,
+        note: `Referrer gets ${REFERRER_REWARD_PERCENT}% after your first completed order. You get ${REFEREE_DISCOUNT_PERCENT}% discount on this order.`
+    };
+};
+
 module.exports = {
     buildReferralCode,
+    buildReferralPreviewPayload,
     hashFingerprint,
     hasSuspiciousDeviceFlag,
+    REFERRER_REWARD_PERCENT,
+    REFEREE_DISCOUNT_PERCENT,
     normalizeReferralCode,
     shouldGrantFirstOrderReward,
     findUserByReferralCode

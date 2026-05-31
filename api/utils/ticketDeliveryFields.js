@@ -21,33 +21,29 @@ const formatDeliveryWindow = (startAt, endAt, timezone) => {
 const buildDeliveryWindowFields = (order = {}) => {
     const fields = [];
 
-    // Show customer's selected time
+    const ownerWindow = formatDeliveryWindow(
+        order.deliveryOwnerStartAt,
+        order.deliveryOwnerEndAt,
+        order.deliveryOwnerTimezone
+    );
     const customerWindow = formatDeliveryWindow(
         order.deliveryCustomerStartAt,
         order.deliveryCustomerEndAt,
         order.deliveryCustomerTimezone
     );
 
-    // Show converted time (Asia/Ho_Chi_Minh) without mentioning "Vietnam"
-    const convertedWindow = formatDeliveryWindow(
-        order.deliveryCustomerStartAt,
-        order.deliveryCustomerEndAt,
-        'Asia/Ho_Chi_Minh'
-    );
-
-    if (customerWindow) {
+    if (ownerWindow) {
         fields.push({
-            name: 'Customer Selected Time',
-            value: customerWindow,
+            name: 'Admin delivery time',
+            value: ownerWindow,
             inline: false
         });
     }
 
-    // Only show converted time if it's different from customer time
-    if (convertedWindow && convertedWindow !== customerWindow) {
+    if (customerWindow) {
         fields.push({
-            name: 'Converted Time',
-            value: convertedWindow,
+            name: 'Customer delivery time',
+            value: customerWindow,
             inline: false
         });
     }

@@ -909,12 +909,45 @@ const creditSquareWalletPayment = async ({ payment, source = 'square' }) => {
         adminNotes: `Square Cash App Pay status=${paymentStatus}`
     });
 };
-const validateCouponCode = async (couponCodeRaw) => {
+const validateCouponCode = async (couponCodeRaw, discordId = null) => {
     const couponCode = normalizeCouponCode(couponCodeRaw);
     if (!couponCode) {
         return {
             couponCode: '',
             discountPercent: 0,
+            discountAmount: 0
+        };
+    }
+
+    // Special handling for WELCOME20 coupon
+    if (couponCode === 'WELCOME20') {
+        if (!discordId) {
+            return {
+                couponCode: '',
+                discountPercent: 0,
+                discountAmount: 0,
+                error: 'Authentication required to use this coupon.'
+            };
+        }
+
+        // Check if user has ever created a ticket (completed order)
+        const hasCompletedOrder = await Order.findOne({
+            discordId,
+            status: { $in: ['Completed', 'Waiting Payment', 'Pending'] }
+        }).select('_id').lean();
+
+        if (hasCompletedOrder) {
+            return {
+                couponCode: '',
+                discountPercent: 0,
+                discountAmount: 0,
+                error: 'Welcome coupon is only for first-time customers.'
+            };
+        }
+
+        return {
+            couponCode,
+            discountPercent: 20,
             discountAmount: 0
         };
     }
@@ -1121,7 +1154,7 @@ const buildQuantityMapFromCartItems = (cartItems) => {
     return quantityByProductId;
 };
 
-const calculateCartSummary = async ({ cartItems, couponCodeRaw = '', referralDiscountPercent = 0 }) => {
+const calculateCartSummary = async ({ cartItems, couponCodeRaw = '', referralDiscountPercent = 0, discordId = null }) => {
     const quantityByProductId = buildQuantityMapFromCartItems(cartItems);
     if (quantityByProductId.size === 0) {
         return { error: 'Cart contains invalid products', status: 400 };
@@ -1153,7 +1186,7 @@ const calculateCartSummary = async ({ cartItems, couponCodeRaw = '', referralDis
         return { error: 'Invalid cart total', status: 400 };
     }
 
-    const couponValidation = await validateCouponCode(couponCodeRaw);
+    const couponValidation = await validateCouponCode(couponCodeRaw, discordId);
     if (couponValidation.error) {
         return { error: couponValidation.error, status: 400 };
     }
@@ -2191,7 +2224,7 @@ router.post('/coupon/preview', async (req, res) => {
         const dbUser = discordId ? await User.findOne({ discordId }).select('referralAppliedCode').lean() : null;
         const referralDiscountPercent = normalizeReferralCode(dbUser?.referralAppliedCode || '') ? 5 : 0;
 
-        const summary = await calculateCartSummary({ cartItems, couponCodeRaw, referralDiscountPercent });
+        const summary = await calculateCartSummary({ cartItems, couponCodeRaw, referralDiscountPercent, discordId });
         if (summary.error) {
             return res.status(summary.status || 400).json({ error: summary.error });
         }
@@ -2843,7 +2876,7 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
         }
 
         checkoutStep = 'calculate_summary';
-        const cartSummary = await calculateCartSummary({ cartItems, couponCodeRaw, referralDiscountPercent });
+        const cartSummary = await calculateCartSummary({ cartItems, couponCodeRaw, referralDiscountPercent, discordId });
         if (cartSummary.error) {
             log.warn('[CHECKOUT] Cart summary error', {
                 requestId: req.requestId,

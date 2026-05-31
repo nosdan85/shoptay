@@ -2247,7 +2247,19 @@ router.post('/coupon/preview', async (req, res) => {
         const viewer = getOptionalRequestUser(req);
         const discordId = String(viewer?.discordId || '').trim();
         const dbUser = discordId ? await User.findOne({ discordId }).select('referralAppliedCode').lean() : null;
-        const referralDiscountPercent = normalizeReferralCode(dbUser?.referralAppliedCode || '') ? 5 : 0;
+
+        // Validate referral code before applying discount
+        const referralCodeApplied = normalizeReferralCode(dbUser?.referralAppliedCode || '');
+        let referralDiscountPercent = 0;
+        if (referralCodeApplied) {
+            const match = await findUserByReferralCodeForUser(referralCodeApplied, discordId);
+            if (match?.discordId) {
+                referralDiscountPercent = 5;
+            } else {
+                // Invalid invite code - clear it from database
+                await User.updateOne({ discordId }, { $unset: { referralAppliedCode: 1, referralAppliedAt: 1 } }).catch(() => {});
+            }
+        }
 
         const summary = await calculateCartSummary({ cartItems, couponCodeRaw, referralDiscountPercent, discordId });
         if (summary.error) {
@@ -2864,9 +2876,35 @@ router.post('/referral/clear', authRequired, async (req, res) => {
       { $unset: { referralAppliedCode: 1, referralAppliedAt: 1 } }
     );
 
+    console.log('[REFERRAL] Cleared invite code for user:', discordId);
+
     return res.json({ success: true, message: 'Invite code cleared successfully.' });
   } catch (error) {
     console.error('Referral clear error:', error);
+    return res.status(500).json({ error: 'Could not clear invite code.' });
+  }
+});
+
+router.post('/referral/admin-clear', authRequired, async (req, res) => {
+  try {
+    const targetDiscordId = String(req.body?.discordId || '').trim();
+    if (!targetDiscordId) return res.status(400).json({ error: 'Discord ID required' });
+
+    // Clear invite code from target user
+    const result = await User.updateOne(
+      { discordId: targetDiscordId },
+      { $unset: { referralAppliedCode: 1, referralAppliedAt: 1 } }
+    );
+
+    console.log('[REFERRAL] Admin cleared invite code for user:', targetDiscordId, 'Modified:', result.modifiedCount);
+
+    return res.json({
+      success: true,
+      message: 'Invite code cleared successfully.',
+      modified: result.modifiedCount
+    });
+  } catch (error) {
+    console.error('Referral admin clear error:', error);
     return res.status(500).json({ error: 'Could not clear invite code.' });
   }
 });
@@ -2915,6 +2953,14 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
         checkoutStep = 'load_user';
         const dbUser = discordId ? await User.findOne({ discordId }).lean() : null;
 
+        // Debug logging
+        log.info('[CHECKOUT] User referral status', {
+            requestId: req.requestId,
+            discordId,
+            hasReferralAppliedCode: Boolean(dbUser?.referralAppliedCode),
+            referralAppliedCode: dbUser?.referralAppliedCode || 'NONE'
+        });
+
         // Only use invite code if user has clicked Apply (saved in database)
         // Frontend does NOT send referralCode in body anymore
         const referralCodeApplied = normalizeReferralCode(dbUser?.referralAppliedCode || '');
@@ -2923,16 +2969,30 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
         let referredByDiscordId = '';
         let referralDiscountPercent = 0;
         if (validatedRefCode) {
+            log.info('[CHECKOUT] Validating referral code', {
+                requestId: req.requestId,
+                referralCodeApplied
+            });
             const match = await findUserByReferralCodeForUser(validatedRefCode, discordId);
             if (match?.discordId) {
                 referredByDiscordId = String(match.discordId);
                 referralDiscountPercent = 5;
+                log.info('[CHECKOUT] Referral code valid, applying 5% discount', {
+                    requestId: req.requestId,
+                    referredByDiscordId
+                });
             } else {
                 // Invalid invite code - clear it from database
+                log.warn('[CHECKOUT] Referral code invalid, clearing from database', {
+                    requestId: req.requestId,
+                    referralCodeApplied
+                });
                 validatedRefCode = '';
                 referralDiscountPercent = 0;
                 await User.updateOne({ discordId }, { $unset: { referralAppliedCode: 1, referralAppliedAt: 1 } }).catch(() => {});
             }
+        } else {
+            log.info('[CHECKOUT] No referral code applied', { requestId: req.requestId });
         }
 
         // Double check: only apply invite discount if we have valid invite code
@@ -2940,6 +3000,12 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
             referralDiscountPercent = 0;
             referredByDiscordId = '';
         }
+
+        log.info('[CHECKOUT] Final referral discount', {
+            requestId: req.requestId,
+            referralDiscountPercent,
+            validatedRefCode: validatedRefCode || 'NONE'
+        });
 
         checkoutStep = 'calculate_summary';
         const cartSummary = await calculateCartSummary({ cartItems, couponCodeRaw, referralDiscountPercent, discordId });

@@ -2853,6 +2853,24 @@ router.post('/referral/apply', authRequired, async (req, res) => {
   }
 });
 
+router.post('/referral/clear', authRequired, async (req, res) => {
+  try {
+    const discordId = String(req.user?.discordId || '').trim();
+    if (!discordId) return res.status(401).json({ error: 'Authentication required' });
+
+    // Clear invite code from user
+    await User.updateOne(
+      { discordId },
+      { $unset: { referralAppliedCode: 1, referralAppliedAt: 1 } }
+    );
+
+    return res.json({ success: true, message: 'Invite code cleared successfully.' });
+  } catch (error) {
+    console.error('Referral clear error:', error);
+    return res.status(500).json({ error: 'Could not clear invite code.' });
+  }
+});
+
 router.post('/checkout', checkoutLimiter, async (req, res) => {
     const startTime = Date.now();
     log.info('[CHECKOUT] Incoming checkout request', {
@@ -2879,16 +2897,17 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
         checkoutStep = 'load_user';
         const dbUser = discordId ? await User.findOne({ discordId }).lean() : null;
 
-        // Check if user typed referral code but didn't click Apply
+        // Check if user typed invite code but didn't click Apply
         const referralCodeFromBody = normalizeReferralCode(req.body?.referralCode || '');
         const referralCodeApplied = normalizeReferralCode(dbUser?.referralAppliedCode || '');
 
+        // If user typed something in the invite code field but it's not applied, reject
         if (referralCodeFromBody && referralCodeFromBody !== referralCodeApplied) {
-            log.warn('[CHECKOUT] Referral code not applied', { requestId: req.requestId, discordId });
+            log.warn('[CHECKOUT] Invite code not applied', { requestId: req.requestId, discordId, referralCodeFromBody, referralCodeApplied });
             return res.status(400).json({ error: 'Please click Apply button for the invite code before checkout.' });
         }
 
-        // Only use referral code if user has clicked Apply (saved in database)
+        // Only use invite code if user has clicked Apply (saved in database)
         let validatedRefCode = referralCodeApplied;
 
         let referredByDiscordId = '';
@@ -2899,13 +2918,14 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
                 referredByDiscordId = String(match.discordId);
                 referralDiscountPercent = 5;
             } else {
-                // Invalid referral code - clear it
+                // Invalid invite code - clear it from database
                 validatedRefCode = '';
+                referralDiscountPercent = 0;
                 await User.updateOne({ discordId }, { $unset: { referralAppliedCode: 1, referralAppliedAt: 1 } }).catch(() => {});
             }
         }
 
-        // Double check: only apply referral discount if we have valid referral code
+        // Double check: only apply invite discount if we have valid invite code
         if (!validatedRefCode) {
             referralDiscountPercent = 0;
             referredByDiscordId = '';

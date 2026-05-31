@@ -1123,10 +1123,19 @@ export default function ShopPage() {
       body: JSON.stringify({ referralCode: referralCode.trim() })
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data?.error || 'Referral preview failed');
-    setReferralPreviewOwner(String(data.referrerUsername || data.referrerDiscordId || ''));
-    const ok = window.confirm(`Referral code owner: ${String(data.referrerUsername || data.referrerDiscordId || '')}\nYou get 5% discount on this order. Referrer gets 20% after your first completed order.\nConfirm apply?`);
-    if (!ok) return;
+    if (!res.ok) throw new Error(data?.error || 'Invite preview failed');
+
+    const inviterName = String(data.referrerUsername || data.referrerDiscordId || 'Unknown');
+    setReferralPreviewOwner(inviterName);
+
+    // Show custom confirmation dialog
+    const confirmed = window.confirm(
+      `Invite Code Owner:\n${inviterName}\n\n` +
+      `You will get 5% discount on this order.\n` +
+      `Inviter gets 50% coupon after your first completed order.\n\n` +
+      `Confirm apply?`
+    );
+    if (!confirmed) return;
 
     setReferralApplying(true);
     const applyRes = await fetch('/api/shop/referral/apply', {
@@ -1136,11 +1145,15 @@ export default function ShopPage() {
     });
     const applyData = await applyRes.json();
     setReferralApplying(false);
-    if (!applyRes.ok) throw new Error(applyData?.error || 'Referral apply failed');
+    if (!applyRes.ok) throw new Error(applyData?.error || 'Invite apply failed');
     setReferralApplied(true);
+
+    // Show success message
+    alert(`✅ Invite code applied successfully!\n\nInviter: ${inviterName}\nYour discount: 5%`);
+
     if (applyData?.selfCouponCode) {
       setCouponCode(String(applyData.selfCouponCode));
-      setCouponMessage('Referral applied: 5% discount will be applied at checkout.');
+      setCouponMessage('Invite applied: 5% discount will be applied at checkout.');
     }
   };
 

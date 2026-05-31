@@ -2795,28 +2795,15 @@ router.post('/referral/apply', authRequired, async (req, res) => {
       return res.status(400).json({ error: 'Invalid or expired referral code.' });
     }
 
+    // Only save to User.referralAppliedCode for preview, don't create Referral record yet
     await User.updateOne(
       { discordId },
       {
         $set: {
           referralAppliedCode: validatedRefCode,
-          referralAppliedAt: new Date(),
-          referralSelfCouponCode: ""
+          referralAppliedAt: new Date()
         }
       }
-    );
-
-    await Referral.findOneAndUpdate(
-      { refereeDiscordId: discordId },
-      {
-        $set: {
-          referrerDiscordId: String(match.discordId),
-          refereeFingerprintHash: String(fp?.fingerprintHash || ''),
-          status: 'pending',
-          rewardCouponCode: ''
-        }
-      },
-      { upsert: true }
     );
 
     return res.json({
@@ -2871,7 +2858,7 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
             const match = await findUserByReferralCodeForUser(validatedRefCode, discordId);
             if (match?.discordId) {
                 referredByDiscordId = String(match.discordId);
-                referralDiscountPercent = 0;
+                referralDiscountPercent = 5;
             }
         }
 
@@ -2974,15 +2961,16 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
             return res.status(503).json({ error: 'Could not create order right now. Please retry.' });
         }
 
-        // Referral pair: only create if no record exists yet (apply already creates one)
+        // Referral pair: create when order is created (not when code is applied)
         if (referredByDiscordId) {
             const existingReferral = await Referral.findOne({ refereeDiscordId: discordId }).lean();
             if (!existingReferral) {
                 try {
+                    const fp = await DeviceFingerprint.findOne({ discordId }).sort({ updatedAt: -1 }).lean();
                     await Referral.create({
                         referrerDiscordId: referredByDiscordId,
                         refereeDiscordId: discordId,
-                        refereeFingerprintHash: '',
+                        refereeFingerprintHash: String(fp?.fingerprintHash || ''),
                         status: 'pending',
                         rewardCouponCode: ''
                     });

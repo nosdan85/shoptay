@@ -909,7 +909,7 @@ const creditSquareWalletPayment = async ({ payment, source = 'square' }) => {
         adminNotes: `Square Cash App Pay status=${paymentStatus}`
     });
 };
-const validateCouponCode = async (couponCodeRaw, discordId = null) => {
+const validateCouponCode = async (couponCodeRaw, discordId = null, subtotalAmount = 0) => {
     const couponCode = normalizeCouponCode(couponCodeRaw);
     if (!couponCode) {
         return {
@@ -974,6 +974,18 @@ const validateCouponCode = async (couponCodeRaw, discordId = null) => {
                 error: validation.error
             };
         }
+
+        // Check minimum order amount for generated coupons
+        const minOrderAmount = Number(generatedCoupon?.minOrderAmount || 0);
+        if (minOrderAmount > 0 && subtotalAmount < minOrderAmount) {
+            return {
+                couponCode: '',
+                discountPercent: 0,
+                discountAmount: 0,
+                error: `Minimum order amount is $${minOrderAmount.toFixed(2)} for this coupon.`
+            };
+        }
+
         const existingGeneratedCouponOrder = await Order.findOne({
             couponCode,
             status: { $ne: 'Cancelled' }
@@ -1197,7 +1209,7 @@ const calculateCartSummary = async ({ cartItems, couponCodeRaw = '', referralDis
         return { error: 'Invalid cart total', status: 400 };
     }
 
-    const couponValidation = await validateCouponCode(couponCodeRaw, discordId);
+    const couponValidation = await validateCouponCode(couponCodeRaw, discordId, subtotalAmount);
     if (couponValidation.error) {
         return { error: couponValidation.error, status: 400 };
     }
@@ -2858,10 +2870,9 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
         checkoutStep = 'load_user';
         const dbUser = discordId ? await User.findOne({ discordId }).lean() : null;
 
-        let validatedRefCode = normalizeReferralCode(req.body?.referralCode || '');
-        if (!validatedRefCode) {
-            validatedRefCode = normalizeReferralCode(dbUser?.referralAppliedCode || '');
-        }
+        // Only use referral code if user has clicked Apply (saved in database)
+        // Do NOT use req.body.referralCode directly - user must click Apply first
+        let validatedRefCode = normalizeReferralCode(dbUser?.referralAppliedCode || '');
 
         let referredByDiscordId = '';
         let referralDiscountPercent = 0;

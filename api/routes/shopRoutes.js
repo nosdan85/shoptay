@@ -2786,7 +2786,7 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
             const match = await findUserByReferralCodeForUser(validatedRefCode, discordId);
             if (match?.discordId) {
                 referredByDiscordId = String(match.discordId);
-                referralDiscountPercent = 5;
+                referralDiscountPercent = 0;
             }
         }
 

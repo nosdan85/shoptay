@@ -1517,13 +1517,22 @@ const buildPaymentTicketFields = ({ order, paymentLine, note, orderTotalAmount =
     const resolvedOrderTotalAmount = Number.isFinite(normalizedOrderTotalAmount)
         ? normalizedOrderTotalAmount
         : Number(order?.totalAmount || 0);
+
+    const robloxUsername = String(order?.robloxUsername || '').trim();
+    const robloxUserId = String(order?.robloxUserId || '').trim();
+    const robloxField = robloxUsername
+        ? `**${robloxUsername}**${robloxUserId ? ` (${robloxUserId})` : ''}`
+        : '-';
+
     const fields = [
         { name: 'Buyer', value: `<@${order.discordId}>`, inline: true },
         { name: 'Owner Role', value: ownerMention, inline: true },
-        { name: 'Order Total', value: formatUsdAmount(resolvedOrderTotalAmount), inline: true },
-        { name: 'Payment', value: paymentLine, inline: false },
+        { name: 'Order Total', value: `**${formatUsdAmount(resolvedOrderTotalAmount)}**`, inline: true },
+        { name: 'Roblox Account', value: robloxField, inline: false },
+        { name: 'Payment', value: `**${paymentLine}**`, inline: false },
         { name: 'Items (Qty + Price)', value: formatOrderItemsWithPrice(order.items), inline: false },
         ...buildCouponTicketFields(order),
+        ...buildReferralTicketFields(order),
         ...buildDeliveryWindowFields(order),
         { name: 'Proof', value: 'Send your payment screenshot in this ticket after you pay.', inline: false }
     ];
@@ -1538,14 +1547,21 @@ const buildCouponTicketFields = (order) => {
     const code = String(order?.couponCode || '').trim().toUpperCase();
     const percent = Number(order?.discountPercent || 0);
     if (!code || percent <= 0) return [];
-    return [{ name: 'Discount', value: percent + '% discount applied — ' + code, inline: false }];
+    return [{ name: 'Discount', value: `**${percent}%** discount applied — **${code}**`, inline: false }];
+};
+
+const buildReferralTicketFields = (order) => {
+    const referralCode = String(order?.referralAppliedCode || '').trim();
+    if (!referralCode) return [];
+    return [{ name: 'Referral Bonus', value: '✅ **Referrer gets 20% coupon** after your first completed order', inline: false }];
 };
 
 const buildDeliveryTicketFields = (order) => [
     { name: 'Discord Account', value: order.discordId ? `<@${order.discordId}>` : (order.discordUsername || '-Normalized'), inline: true },
-    { name: 'Order Total', value: formatUsdAmount(order.totalAmount || order.total || 0), inline: true },
+    { name: 'Order Total', value: `**${formatUsdAmount(order.totalAmount || order.total || 0)}**`, inline: true },
     { name: 'Items (Qty + Price)', value: formatOrderItemsWithPrice(order.items), inline: false },
     ...buildCouponTicketFields(order),
+    ...buildReferralTicketFields(order),
     ...buildDeliveryWindowFields(order)
 ];
 

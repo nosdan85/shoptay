@@ -598,15 +598,20 @@ export default function ShopPage() {
         headers: { Authorization: `Bearer ${token}` },
         cache: 'no-store'
       });
+      if (!res.ok) {
+        console.warn('Failed to load invite status:', res.status);
+        return;
+      }
       const data = await res.json();
-      if (res.ok && data.hasApplied) {
+      if (data.hasApplied) {
         setReferralApplied(true);
         setReferralCode(String(data.referralCode || ''));
       } else {
         setReferralApplied(false);
       }
     } catch (error) {
-      console.error('Failed to load invite status:', error);
+      console.warn('Failed to load invite status:', error);
+      // Ignore error - not critical
     }
   }, [token]);
 

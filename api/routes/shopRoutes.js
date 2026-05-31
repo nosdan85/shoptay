@@ -80,44 +80,7 @@ const {
 const findUserByReferralCodeForUser = findUserByReferralCode(User);
 
 
-// === Tạo mã 5% cho referee khi ticket thành công ===
-const issueRefereeCouponOnTicketCreated = async (orderId, discordId) => {
-    try {
-        // Kiểm tra order có referral không
-        const order = await Order.findOne({ orderId }).lean();
-        if (!order?.referredByDiscordId) return { ok: false, reason: 'no_referral' };
-        
-        // Kiểm tra referee đã có mã 5% chưa
-        const existing = await GeneratedCoupon.findOne({
-            discordId: order.referredByDiscordId,
-            source: 'referral_self',
-            status: 'unused'
-        }).lean();
-        if (existing) return { ok: false, reason: 'already_has_coupon' };
-        
-        // Kiểm tra order đã được áp dụng referral chưa
-        if (!order.referralAppliedCode) return { ok: false, reason: 'no_referral_applied' };
-        
-        // Tạo mã 5%
-        const coupon = await createUniqueGeneratedCoupon({
-            discountPercent: 5,
-            discordId: order.referredByDiscordId,
-            source: 'referral_self'
-        });
-        
-        // Cập nhật User - đánh dấu đã nhập mã (không cho nhập lại)
-        await User.updateOne(
-            { discordId: order.referredByDiscordId },
-            { $set: { referralSelfCouponCode: coupon.couponCode } }
-        );
-        
-        console.log('[REFERRAL] Mã 5% đã tạo cho referee:', order.referredByDiscordId, coupon.couponCode);
-        return { ok: true, couponCode: coupon.couponCode };
-    } catch (err) {
-        console.error('[REFERRAL] Lỗi tạo mã 5% cho referee:', err);
-        return { ok: false, reason: 'error', error: err.message };
-    }
-};const {
+const {
     buildPublicDeliverySlotQuery,
     buildSelectableDeliverySlotQuery,
     isFutureDeliverySlotRange,
@@ -4389,15 +4352,17 @@ router.post('/create-ticket', authRequired, ticketCreateLimiter, async (req, res
                     channelId,
                     ticketStatus: 'created',
                     ticketError: '',
-                    paymentMethod: 'cashapp'
-
-        // Tạo mã 5% cho referee khi ticket thành công
-        issueRefereeCouponOnTicketCreated(lockedOrder.orderId, lockedOrder.discordId).catch(err => console.error('[REFERRAL] Tao ma 5% loi:', err));,
+                    paymentMethod: 'cashapp',
                     status: lockedOrder.status === 'Pending' ? 'Waiting Payment' : lockedOrder.status
                 },
                 $unset: { ticketLockUntil: 1 }
             }
         );
+
+        await Referral.updateOne(
+            { refereeDiscordId: lockedOrder.discordId, status: 'pending' },
+            { $set: { status: 'consumed' } }
+        ).catch(err => console.error('[REFERRAL] Mark consumed error:', err));
         if (!persistResult?.matchedCount) {
             const fresh = await Order.findById(lockedOrder._id).lean();
             if (fresh?.channelId) {
@@ -4422,10 +4387,7 @@ router.post('/create-ticket', authRequired, ticketCreateLimiter, async (req, res
                         channelId,
                         ticketStatus: 'created',
                         ticketError: '',
-                        paymentMethod: 'cashapp'
-
-        // Tạo mã 5% cho referee khi ticket thành công
-        issueRefereeCouponOnTicketCreated(lockedOrder.orderId, lockedOrder.discordId).catch(err => console.error('[REFERRAL] Tao ma 5% loi:', err));,
+                        paymentMethod: 'cashapp',
                         status: lockedOrder.status === 'Pending' ? 'Waiting Payment' : lockedOrder.status
                     },
                     $unset: { ticketLockUntil: 1 }

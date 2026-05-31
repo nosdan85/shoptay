@@ -446,6 +446,9 @@ export default function ShopPage() {
   const [modalClosing, setModalClosing] = useState(false);
   const [robloxSearchResult, setRobloxSearchResult] = useState<null | { userId: string; username: string; displayName: string; avatar: string }>(null);
   const [bestSellerPage, setBestSellerPage] = useState(0);
+  const [welcomeVoucher, setWelcomeVoucher] = useState<{ code: string; discount: number } | null>(null);
+  const [welcomeVoucherVisible, setWelcomeVoucherVisible] = useState(false);
+  const [copiedWelcomeCode, setCopiedWelcomeCode] = useState(false);
   const remoteCartHydratedRef = useRef(false);
   const skipNextRemoteCartSyncRef = useRef(false);
   const checkoutInFlightRef = useRef(false);
@@ -588,13 +591,24 @@ export default function ShopPage() {
     if (res.ok) setMyReferralCode(String(data?.referralCode || ''));
   }, [token]);
 
+  const loadWelcomeVoucher = useCallback(async () => {
+    if (!token) return;
+    const res = await fetch('/api/shop/welcome-voucher', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
+    const data = await res.json();
+    if (res.ok && data.eligible && data.voucher) {
+      setWelcomeVoucher({ code: data.voucher.code, discount: data.voucher.discount });
+      setWelcomeVoucherVisible(true);
+    }
+  }, [token]);
+
   useEffect(() => {
     if (!token) return;
     queueMicrotask(() => {
       void loadMyCoupons().catch(() => {});
       void loadMyReferral().catch(() => {});
+      void loadWelcomeVoucher().catch(() => {});
     });
-  }, [token, loadMyCoupons, loadMyReferral]);
+  }, [token, loadMyCoupons, loadMyReferral, loadWelcomeVoucher]);
 
   useEffect(() => {
     if (!token) return;
@@ -1180,6 +1194,11 @@ export default function ShopPage() {
       setCheckoutSummary(nextSummary);
       persistPendingCheckout(data.orderId, cart, customerTz, nextSummary);
       setStep("roblox");
+
+      // Hide welcome banner if welcome voucher was used
+      if (welcomeVoucher && nextSummary.couponCode === welcomeVoucher.code) {
+        setWelcomeVoucherVisible(false);
+      }
     } catch (e) { setError(e instanceof Error ? e.message : "Checkout failed"); }
     finally { setSubmitting(false); setCheckoutLoading(false); checkoutInFlightRef.current = false; }
   };
@@ -1318,6 +1337,47 @@ export default function ShopPage() {
   return (
     <div className="min-h-screen bg-[#050505] text-white">
       <Navbar cartCount={cartCount} showCart={step === "shop" && cartCount > 0} onCartClick={openCart} />
+
+      {welcomeVoucherVisible && welcomeVoucher && (
+        <div className="mx-auto max-w-7xl px-4 pt-4">
+          <div className="relative overflow-hidden rounded-[20px] border border-[#3DDC84]/30 bg-gradient-to-r from-[#3DDC84]/10 to-[#2F9BE6]/10 p-4 animate-section-enter">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="rounded-full bg-[#3DDC84]/20 p-2">
+                  <Package className="h-5 w-5 text-[#3DDC84]" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-white">Welcome! Get 20% OFF your first order</h3>
+                  <p className="text-xs text-[#B5B5B5]">Minimum order: $5 • Use code at checkout</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="rounded-[12px] border border-[#1E1E1E] bg-[#050505] px-3 py-2 font-mono text-sm font-semibold text-[#3DDC84]">
+                  {welcomeVoucher.code}
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(welcomeVoucher.code);
+                    setCopiedWelcomeCode(true);
+                    setTimeout(() => setCopiedWelcomeCode(false), 2000);
+                  }}
+                  className="rounded-[12px] bg-[#1E1E1E] px-3 py-2 text-white hover:bg-[#2A2A2A]"
+                >
+                  {copiedWelcomeCode ? <CheckCircle2 className="h-4 w-4 text-[#3DDC84]" /> : <Copy className="h-4 w-4" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWelcomeVoucherVisible(false)}
+                  className="rounded-[12px] bg-[#1E1E1E] p-2 text-white hover:bg-[#2A2A2A]"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {checkoutLoading && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in">

@@ -2680,6 +2680,58 @@ router.post('/referral/preview', authRequired, async (req, res) => {
   }
 });
 
+router.get('/welcome-voucher', authRequired, async (req, res) => {
+  try {
+    const discordId = String(req.user?.discordId || '').trim();
+    if (!discordId) return res.status(401).json({ error: 'Authentication required' });
+
+    const fp = await DeviceFingerprint.findOne({ discordId }).sort({ updatedAt: -1 }).lean();
+
+    // Check if user is eligible (first time, no orders, no suspicious flags)
+    if (!shouldGrantFirstOrderReward(fp)) {
+      return res.json({ eligible: false, voucher: null });
+    }
+
+    // Check if user already has a welcome voucher
+    let existingVoucher = await GeneratedCoupon.findOne({
+      discordId,
+      source: 'welcome',
+      status: 'unused'
+    }).lean();
+
+    if (existingVoucher) {
+      return res.json({
+        eligible: true,
+        voucher: {
+          code: existingVoucher.couponCode,
+          discount: existingVoucher.discountPercent,
+          minAmount: 5
+        }
+      });
+    }
+
+    // Create new welcome voucher
+    const coupon = await createUniqueGeneratedCoupon({
+      discountPercent: 20,
+      discordId,
+      source: 'welcome',
+      minOrderAmount: 5
+    });
+
+    return res.json({
+      eligible: true,
+      voucher: {
+        code: coupon.couponCode,
+        discount: coupon.discountPercent,
+        minAmount: 5
+      }
+    });
+  } catch (error) {
+    console.error('Welcome voucher error:', error);
+    return res.status(500).json({ error: 'Could not load welcome voucher.' });
+  }
+});
+
 
 router.post('/referral/apply', authRequired, async (req, res) => {
   try {

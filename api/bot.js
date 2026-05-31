@@ -1533,13 +1533,9 @@ const buildPaymentTicketFields = ({ order, paymentLine, note, orderTotalAmount =
         { name: 'Items (Qty + Price)', value: formatOrderItemsWithPrice(order.items), inline: false },
         ...buildCouponTicketFields(order),
         ...buildReferralTicketFields(order),
-        ...buildDeliveryWindowFields(order),
-        { name: 'Proof', value: 'Send your payment screenshot in this ticket after you pay.', inline: false }
+        ...buildFirstOrderRewardFields(order),
+        ...buildDeliveryWindowFields(order)
     ];
-    const safeNote = String(note || '').trim();
-    if (safeNote) {
-        fields.push({ name: 'Note', value: safeNote, inline: false });
-    }
     return fields;
 };
 
@@ -1556,14 +1552,31 @@ const buildReferralTicketFields = (order) => {
     return [{ name: 'Referral Bonus', value: '✅ **Referrer gets 20% coupon** after your first completed order', inline: false }];
 };
 
-const buildDeliveryTicketFields = (order) => [
-    { name: 'Discord Account', value: order.discordId ? `<@${order.discordId}>` : (order.discordUsername || '-Normalized'), inline: true },
-    { name: 'Order Total', value: `**${formatUsdAmount(order.totalAmount || order.total || 0)}**`, inline: true },
-    { name: 'Items (Qty + Price)', value: formatOrderItemsWithPrice(order.items), inline: false },
-    ...buildCouponTicketFields(order),
-    ...buildReferralTicketFields(order),
-    ...buildDeliveryWindowFields(order)
-];
+const buildFirstOrderRewardFields = (order) => {
+    // Check if this is potentially a first order (will be verified by bot after !done)
+    const totalAmount = Number(order?.totalAmount || 0);
+    if (totalAmount < 5) return [];
+    return [{ name: '🎁 First Order Reward', value: '**Complete this order and get 20% OFF coupon** (for orders $5+)\nBot will DM you after admin confirms with **!done**', inline: false }];
+};
+
+const buildDeliveryTicketFields = (order) => {
+    const robloxUsername = String(order?.robloxUsername || '').trim();
+    const robloxUserId = String(order?.robloxUserId || '').trim();
+    const robloxField = robloxUsername
+        ? `**${robloxUsername}**${robloxUserId ? ` (${robloxUserId})` : ''}`
+        : '-';
+
+    return [
+        { name: 'Discord Account', value: order.discordId ? `<@${order.discordId}>` : (order.discordUsername || '-Normalized'), inline: true },
+        { name: 'Order Total', value: `**${formatUsdAmount(order.totalAmount || order.total || 0)}**`, inline: true },
+        { name: 'Roblox Account', value: robloxField, inline: false },
+        { name: 'Items (Qty + Price)', value: formatOrderItemsWithPrice(order.items), inline: false },
+        ...buildCouponTicketFields(order),
+        ...buildReferralTicketFields(order),
+        ...buildFirstOrderRewardFields(order),
+        ...buildDeliveryWindowFields(order)
+    ];
+};
 
 const sendRobloxAccountMessage = async ({ channelId, order }) => {
     const username = String(order?.robloxUsername || '').trim();

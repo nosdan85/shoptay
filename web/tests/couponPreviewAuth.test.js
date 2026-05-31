@@ -24,3 +24,23 @@ test('shop coupon preview sends the bearer token when a user is logged in', () =
   assert.match(previewSource, /fetch\(["']\/api\/shop\/coupon\/preview["']/);
   assert.match(previewSource, /Authorization: `Bearer \$\{token\}`/);
 });
+
+test('shop cart no longer renders saved coupon inventory in the code panel', () => {
+  const source = readWebFile('app', 'shop', 'page.tsx');
+
+  assert.doesNotMatch(source, /Your coupons/i);
+  assert.doesNotMatch(source, /myCoupons/);
+  assert.doesNotMatch(source, /\/api\/shop\/my-coupons/);
+  assert.doesNotMatch(source, /\/api\/shop\/referral\/status/);
+});
+
+test('checkout submits referralCode only after the invite has been applied', () => {
+  const source = readWebFile('app', 'shop', 'page.tsx');
+  const checkoutStart = source.indexOf('const doCheckout = async');
+  const checkoutEnd = source.indexOf('const lookupRobloxUsername = async');
+  const checkoutSource = source.slice(checkoutStart, checkoutEnd);
+
+  assert.notEqual(checkoutStart, -1);
+  assert.notEqual(checkoutEnd, -1);
+  assert.match(checkoutSource, /referralCode:\s*referralApplied\s*\?\s*referralCode\.trim\(\)\s*:\s*""/);
+});

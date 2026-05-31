@@ -76,10 +76,12 @@ const {
     buildReferralPreviewPayload,
     buildReferralCode,
     findUserByReferralCode,
+    hasDifferentAppliedReferralCode,
     hashFingerprint,
     normalizeReferralCode,
     REFEREE_DISCOUNT_PERCENT,
-    REFERRER_REWARD_PERCENT
+    REFERRER_REWARD_PERCENT,
+    resolveAppliedReferralCode
 } = require('../utils/referralRewards');
 const findUserByReferralCodeForUser = findUserByReferralCode(User);
 
@@ -2252,8 +2254,11 @@ router.post('/coupon/preview', async (req, res) => {
         const discordId = String(viewer?.discordId || '').trim();
         const dbUser = discordId ? await User.findOne({ discordId }).select('referralAppliedCode').lean() : null;
 
-        // Validate referral code before applying discount
-        const referralCodeApplied = normalizeReferralCode(dbUser?.referralAppliedCode || '');
+        const referralCodeRequested = req.body?.referralCode;
+        const referralCodeApplied = resolveAppliedReferralCode({
+            requestedReferralCode: referralCodeRequested,
+            storedReferralCode: dbUser?.referralAppliedCode || ''
+        });
         let referralDiscountPercent = 0;
         if (referralCodeApplied) {
             const match = await findUserByReferralCodeForUser(referralCodeApplied, discordId);
@@ -2815,7 +2820,7 @@ router.post('/referral/apply', authRequired, async (req, res) => {
     const me = await User.findOne({ discordId }).lean();
     if (!me) return res.status(404).json({ error: 'User not found.' });
 
-    if (me.referralAppliedCode) {
+    if (hasDifferentAppliedReferralCode({ requestedReferralCode: validatedRefCode, storedReferralCode: me.referralAppliedCode })) {
       return res.status(409).json({ error: 'You have already applied an invite code. Each account can only use one invite code.' });
     }
 
@@ -2960,9 +2965,11 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
             referralAppliedCode: dbUser?.referralAppliedCode || 'NONE'
         });
 
-        // Only use invite code if user has clicked Apply (saved in database)
-        // Frontend does NOT send referralCode in body anymore
-        const referralCodeApplied = normalizeReferralCode(dbUser?.referralAppliedCode || '');
+        const referralCodeRequested = req.body?.referralCode;
+        const referralCodeApplied = resolveAppliedReferralCode({
+            requestedReferralCode: referralCodeRequested,
+            storedReferralCode: dbUser?.referralAppliedCode || ''
+        });
         let validatedRefCode = referralCodeApplied;
 
         let referredByDiscordId = '';

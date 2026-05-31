@@ -4,7 +4,9 @@ const assert = require('node:assert/strict');
 const {
     buildReferralCode,
     buildReferralPreviewPayload,
+    hasDifferentAppliedReferralCode,
     normalizeReferralCode,
+    resolveAppliedReferralCode,
     hashFingerprint,
     hasSuspiciousDeviceFlag,
     REFERRER_REWARD_PERCENT,
@@ -43,6 +45,36 @@ test('referral preview payload matches checkout and reward discount percentages'
             note: 'Referrer gets 50% after your first completed order. You get 5% discount on this order.'
         }
     );
+});
+
+test('resolveAppliedReferralCode only returns a code when the request explicitly includes the applied invite', () => {
+    assert.equal(resolveAppliedReferralCode({
+        requestedReferralCode: '',
+        storedReferralCode: 'REF-123456'
+    }), '');
+    assert.equal(resolveAppliedReferralCode({
+        requestedReferralCode: 'ref-123456',
+        storedReferralCode: 'REF-123456'
+    }), 'REF-123456');
+    assert.equal(resolveAppliedReferralCode({
+        requestedReferralCode: 'REF-000000',
+        storedReferralCode: 'REF-123456'
+    }), '');
+});
+
+test('hasDifferentAppliedReferralCode allows re-applying the same saved invite before checkout', () => {
+    assert.equal(hasDifferentAppliedReferralCode({
+        requestedReferralCode: 'ref-123456',
+        storedReferralCode: 'REF-123456'
+    }), false);
+    assert.equal(hasDifferentAppliedReferralCode({
+        requestedReferralCode: 'REF-000000',
+        storedReferralCode: 'REF-123456'
+    }), true);
+    assert.equal(hasDifferentAppliedReferralCode({
+        requestedReferralCode: 'REF-123456',
+        storedReferralCode: ''
+    }), false);
 });
 
 test('hashFingerprint returns a deterministic sha256 hex digest', () => {

@@ -53,14 +53,29 @@ const buildReferralPreviewPayload = (match, referralCode) => {
     };
 };
 
+const resolveAppliedReferralCode = ({ requestedReferralCode = '', storedReferralCode = '' } = {}) => {
+    const requested = normalizeReferralCode(requestedReferralCode);
+    const stored = normalizeReferralCode(storedReferralCode);
+    if (!requested || !stored || requested !== stored) return '';
+    return stored;
+};
+
+const hasDifferentAppliedReferralCode = ({ requestedReferralCode = '', storedReferralCode = '' } = {}) => {
+    const requested = normalizeReferralCode(requestedReferralCode);
+    const stored = normalizeReferralCode(storedReferralCode);
+    return Boolean(requested && stored && requested !== stored);
+};
+
 module.exports = {
     buildReferralCode,
     buildReferralPreviewPayload,
     hashFingerprint,
+    hasDifferentAppliedReferralCode,
     hasSuspiciousDeviceFlag,
     REFERRER_REWARD_PERCENT,
     REFEREE_DISCOUNT_PERCENT,
     normalizeReferralCode,
+    resolveAppliedReferralCode,
     shouldGrantFirstOrderReward,
     findUserByReferralCode
 };

@@ -408,7 +408,6 @@ export default function ShopPage() {
   const [checkoutSummary, setCheckoutSummary] = useState<CheckoutSummary | null>(null);
   const [couponCode, setCouponCode] = useState("");
   const [referralCode, setReferralCode] = useState("");
-  const [myCoupons, setMyCoupons] = useState<{ couponCode: string; discountPercent: number; source: string }[]>([]);
   const [myReferralCode, setMyReferralCode] = useState<string>("");
   const [referralPreviewOwner, setReferralPreviewOwner] = useState<string>("");
   const [referralApplying, setReferralApplying] = useState(false);
@@ -577,13 +576,6 @@ export default function ShopPage() {
     latestLuckyWheelTokenRef.current = token || null;
   }, [token]);
 
-  const loadMyCoupons = useCallback(async () => {
-    if (!token) return;
-    const res = await fetch('/api/shop/my-coupons', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
-    const data = await res.json();
-    if (res.ok) setMyCoupons(Array.isArray(data?.coupons) ? data.coupons : []);
-  }, [token]);
-
   const loadMyReferral = useCallback(async () => {
     if (!token) return;
     const res = await fetch('/api/shop/my-referral-code', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
@@ -591,38 +583,12 @@ export default function ShopPage() {
     if (res.ok) setMyReferralCode(String(data?.referralCode || ''));
   }, [token]);
 
-  const loadReferralStatus = useCallback(async () => {
-    if (!token) return;
-    try {
-      const res = await fetch('/api/shop/referral/status', {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: 'no-store'
-      });
-      if (!res.ok) {
-        console.warn('Failed to load invite status:', res.status);
-        return;
-      }
-      const data = await res.json();
-      if (data.hasApplied) {
-        setReferralApplied(true);
-        setReferralCode(String(data.referralCode || ''));
-      } else {
-        setReferralApplied(false);
-      }
-    } catch (error) {
-      console.warn('Failed to load invite status:', error);
-      // Ignore error - not critical
-    }
-  }, [token]);
-
   useEffect(() => {
     if (!token) return;
     queueMicrotask(() => {
-      void loadMyCoupons().catch(() => {});
       void loadMyReferral().catch(() => {});
-      void loadReferralStatus().catch(() => {});
     });
-  }, [token, loadMyCoupons, loadMyReferral, loadReferralStatus]);
+  }, [token, loadMyReferral]);
 
   useEffect(() => {
     if (!token) return;
@@ -1114,6 +1080,7 @@ export default function ShopPage() {
         },
         body: JSON.stringify({
           couponCode: normalizedCode,
+          referralCode: referralApplied ? referralCode.trim() : "",
           cartItems: items.map((i) => ({ product: i._id, name: i.name, quantity: i.quantity, price: i.price })),
         }),
       });
@@ -1210,7 +1177,7 @@ export default function ShopPage() {
         },
         body: JSON.stringify({
           couponCode: codeForCheckout,
-          // Do NOT send referralCode - backend will get it from database
+          referralCode: referralApplied ? referralCode.trim() : "",
           cartItems: cart.map((i) => ({ product: i._id, name: i.name, quantity: i.quantity, price: i.price })),
         }),
       });
@@ -1524,82 +1491,47 @@ export default function ShopPage() {
             </div>
             {cart.length > 0 && (
               <div className="border-t border-[#1E1E1E] px-4 py-4 space-y-3 bg-[#111111]">
-                <div className="rounded-[16px] border border-[#1E1E1E] bg-[#050505] p-3">
-                  <button type="button" onClick={() => setCartToolsOpen((v) => !v)} className="flex w-full items-center justify-between rounded-[12px] border border-[#1E1E1E] bg-[#0A0A0A] px-3 py-2 text-sm font-semibold">
+                <div className="rounded-[12px] border border-[#1E1E1E] bg-[#050505] p-2">
+                  <button type="button" onClick={() => setCartToolsOpen((v) => !v)} className="flex w-full items-center justify-between rounded-[10px] border border-[#1E1E1E] bg-[#0A0A0A] px-3 py-2 text-sm font-semibold">
                     <span>Codes</span>
                     <span className="text-xs text-[#B5B5B5]">{cartToolsOpen ? 'Hide' : 'Show'}</span>
                   </button>
-                  <div className={"mt-3 space-y-3 " + (cartToolsOpen ? '' : 'hidden sm:block')}>
-                  <div className="rounded-[12px] border border-[#2F9BE6]/40 bg-[#0A0E1A] p-3">
-                    <div className="mb-2 flex items-center gap-2">
-                      <span className="text-xs font-bold uppercase tracking-widest text-[#49B6FF]">Referral (one code per account)</span>
-                    </div>
-                    <input
-                      id="cart-referral"
-                      value={referralCode}
-                      onChange={(event) => setReferralCode(event.target.value)}
-                      onBlur={() => { try { window.localStorage.setItem('pendingReferralCode', referralCode.trim()); } catch {} }}
-                      placeholder="Enter referral code (e.g. REF-123456)"
-                      className="w-full rounded-[10px] border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm text-white outline-none focus:border-[#49B6FF]"
-                    />
-                    <div className="mt-2 flex gap-2">
+                  <div className={"mt-2 space-y-2 " + (cartToolsOpen ? '' : 'hidden sm:block')}>
+                    <div className="grid grid-cols-[76px_minmax(0,1fr)_auto] items-center gap-2">
+                      <label htmlFor="cart-referral" className="text-[10px] font-bold uppercase tracking-wider text-[#49B6FF]">Referral</label>
+                      <input
+                        id="cart-referral"
+                        value={referralCode}
+                        onChange={(event) => {
+                          setReferralCode(event.target.value);
+                          setReferralApplied(false);
+                        }}
+                        onBlur={() => { try { window.localStorage.setItem('pendingReferralCode', referralCode.trim()); } catch {} }}
+                        placeholder="REF-123456"
+                        className="min-w-0 rounded-[10px] border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm text-white outline-none focus:border-[#49B6FF]"
+                      />
                       <button
                         type="button"
                         onClick={() => void previewReferralCode().catch((e) => setError(e instanceof Error ? e.message : 'Referral apply failed'))}
                         disabled={!token || !referralCode.trim() || referralApplying || referralApplied}
-                        className="rounded-[8px] bg-[#1E1E1E] px-3 py-2 text-xs font-bold text-[#49B6FF] disabled:opacity-50"
+                        className="rounded-[9px] bg-[#1E1E1E] px-3 py-2 text-xs font-bold text-[#49B6FF] disabled:opacity-50"
                       >
-                        {referralApplying ? 'Applying...' : (referralApplied ? 'Applied' : 'Apply Referral')}
+                        {referralApplying ? '...' : (referralApplied ? 'Applied' : 'Apply')}
                       </button>
                     </div>
-                    {referralPreviewOwner && <p className="mt-1 text-[11px] text-[#B5B5B5]">Owner: {referralPreviewOwner}</p>}
-                    <p className="mt-1 text-[11px] text-[#B5B5B5]">You get 5% after applying. Referrer gets 20% after your first completed order. New linked users get 50% after first completed order.</p>
-
-                    {token && myReferralCode && (
-                      <div className="mt-2 flex items-center justify-between gap-2">
-                        <div>
-                          <div className="text-[10px] font-medium uppercase tracking-wider text-[#B5B5B5]">Your code</div>
-                          <div className="font-mono text-sm font-semibold text-[#49B6FF]">{myReferralCode}</div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => void navigator.clipboard.writeText(myReferralCode)}
-                          className="rounded-[8px] bg-[#1E1E1E] p-2 text-white"
-                          title="Copy"
-                        >
-                          <Copy className="h-4 w-4" />
-                        </button>
+                    {(referralPreviewOwner || myReferralCode) && (
+                      <div className="flex items-center justify-between gap-2 pl-[84px] text-[11px] text-[#B5B5B5]">
+                        <span className="min-w-0 truncate">{referralPreviewOwner ? `Owner: ${referralPreviewOwner}` : `Your code: ${myReferralCode}`}</span>
+                        {myReferralCode && (
+                          <button type="button" onClick={() => void navigator.clipboard.writeText(myReferralCode)} className="rounded-[8px] bg-[#1E1E1E] p-1.5 text-white" title="Copy">
+                            <Copy className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                       </div>
                     )}
-                  </div>
 
-                  {token && myCoupons.length > 0 && (
-                    <div className="rounded-[12px] border border-[#3DDC84]/40 bg-[#0A1A0E] p-3">
-                      <div className="mb-2 flex items-center gap-2">
-                        <span className="text-xs font-bold uppercase tracking-widest text-[#3DDC84]">Your coupons</span>
-                      </div>
-                      {myCoupons.slice(0, 3).map((c) => (
-                        <div key={c.couponCode} className="mb-2 flex items-center justify-between last:mb-0">
-                          <div className="min-w-0">
-                            <div className="truncate font-mono text-sm font-semibold text-white">{c.couponCode}</div>
-                            <div className="text-xs font-bold text-[#3DDC84]">{Number(c.discountPercent || 0)}% off</div>
-                          </div>
-                          <div className="flex gap-1">
-                            <button type="button" onClick={() => setCouponCode(c.couponCode)} className="rounded-[8px] bg-[#1E1E1E] px-2 py-1 text-xs font-bold text-[#3DDC84]">USE</button>
-                            <button type="button" onClick={() => void navigator.clipboard.writeText(c.couponCode)} className="rounded-[8px] bg-[#1E1E1E] p-1.5 text-white" title="Copy">
-                              <Copy className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="rounded-[12px] border border-[#9A9A9A]/30 bg-[#0A0A0A] p-3">
-                    <div className="mb-2 flex items-center gap-2">
-                      <span className="text-xs font-bold uppercase tracking-widest text-[#9A9A9A]">Discount code</span>
-                    </div>
-                    <div className="flex gap-2">
+                    <div className="grid grid-cols-[76px_minmax(0,1fr)_auto] items-center gap-2">
+                      <label htmlFor="cart-coupon" className="text-[10px] font-bold uppercase tracking-wider text-[#9A9A9A]">Discount</label>
                       <input
                         id="cart-coupon"
                         value={couponCode}
@@ -1609,23 +1541,22 @@ export default function ShopPage() {
                           setCouponPreviewKey('');
                           setCouponMessage('');
                         }}
-                        placeholder="Enter code"
-                        className="min-w-0 flex-1 rounded-[12px] border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm text-white outline-none focus:border-[#2F9BE6]"
+                        placeholder="Code"
+                        className="min-w-0 rounded-[10px] border border-[#1E1E1E] bg-[#111111] px-3 py-2 text-sm text-white outline-none focus:border-[#2F9BE6]"
                       />
                       <button
                         type="button"
                         onClick={() => void previewCoupon()}
                         disabled={couponLoading || !couponCode.trim()}
-                        className="rounded-[10px] bg-[#1E1E1E] px-3 py-2 text-sm font-bold text-white disabled:opacity-50"
+                        className="rounded-[9px] bg-[#1E1E1E] px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
                       >
                         {couponLoading ? '...' : 'Apply'}
                       </button>
                     </div>
                     {couponMessage && (
-                      <p className={'text-xs ' + (activeCouponPreview ? 'text-[#3DDC84]' : 'text-[#FFB3B3]')}>{couponMessage}</p>
+                      <p className={'pl-[84px] text-xs ' + (activeCouponPreview ? 'text-[#3DDC84]' : 'text-[#FFB3B3]')}>{couponMessage}</p>
                     )}
                   </div>
-                </div>
                 </div>
 
                 <div className="space-y-1 text-sm">

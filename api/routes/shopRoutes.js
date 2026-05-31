@@ -930,6 +930,17 @@ const validateCouponCode = async (couponCodeRaw, discordId = null) => {
             };
         }
 
+        // Check device fingerprint for suspicious activity
+        const fp = await DeviceFingerprint.findOne({ discordId }).sort({ updatedAt: -1 }).lean();
+        if (fp && Array.isArray(fp.flags) && fp.flags.includes('suspicious_device')) {
+            return {
+                couponCode: '',
+                discountPercent: 0,
+                discountAmount: 0,
+                error: 'This device has been used with another account. Welcome coupon is not available.'
+            };
+        }
+
         // Check if user has ever created a ticket (completed order)
         const hasCompletedOrder = await Order.findOne({
             discordId,

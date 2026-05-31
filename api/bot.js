@@ -1549,7 +1549,7 @@ const buildCouponTicketFields = (order) => {
 const buildReferralTicketFields = (order) => {
     const referralCode = String(order?.referralAppliedCode || '').trim();
     if (!referralCode) return [];
-    return [{ name: 'Referral Bonus', value: '✅ **Referrer gets 20% coupon** after your first completed order', inline: false }];
+    return [{ name: 'Referral Bonus', value: '✅ **Referrer gets 50% coupon** after your first completed order', inline: false }];
 };
 
 const buildFirstOrderRewardFields = (order) => {
@@ -2230,12 +2230,6 @@ const maybeGrantReferralReward = async (order) => {
     const refereeId = String(order?.discordId || '').trim();
     if (!referrerId || !refereeId) return;
 
-    const orderTotal = Number(order?.totalAmount || 0);
-    if (orderTotal < 5) {
-        console.log('[REWARD] Referral reward skipped: order total', orderTotal, '< $5');
-        return;
-    }
-
     const referral = await Referral.findOne({ referrerDiscordId: referrerId, refereeDiscordId: refereeId }).lean();
     if (!referral) return;
 
@@ -2250,7 +2244,7 @@ const maybeGrantReferralReward = async (order) => {
 
     let rewardCode = String(referral.rewardCouponCode || '').trim().toUpperCase();
     if (!rewardCode) {
-        const coupon = await createRewardCoupon({ discountPercent: 20, discordId: referrerId, source: 'referral' });
+        const coupon = await createRewardCoupon({ discountPercent: 50, discordId: referrerId, source: 'referral' });
         rewardCode = coupon.couponCode;
         await Referral.updateOne(
             { referrerDiscordId: referrerId, refereeDiscordId: refereeId },
@@ -2264,7 +2258,7 @@ const maybeGrantReferralReward = async (order) => {
     ).catch(() => {});
 
     const fence = String.fromCharCode(96).repeat(3);
-    await sendDmToUser(referrerId, 'Your referral reward (20%):\n' + fence + rewardCode + fence);
+    await sendDmToUser(referrerId, 'Your referral reward (50%):\n' + fence + rewardCode + fence);
 };
 
 module.exports = {

@@ -956,6 +956,16 @@ const validateCouponCode = async (couponCodeRaw, discordId = null, subtotalAmoun
             };
         }
 
+        // Check minimum order amount
+        if (subtotalAmount < 5) {
+            return {
+                couponCode: '',
+                discountPercent: 0,
+                discountAmount: 0,
+                error: 'Minimum order amount is $5.00 for this coupon.'
+            };
+        }
+
         return {
             couponCode,
             discountPercent: 20,
@@ -975,16 +985,8 @@ const validateCouponCode = async (couponCodeRaw, discordId = null, subtotalAmoun
             };
         }
 
-        // Check minimum order amount for generated coupons
-        const minOrderAmount = Number(generatedCoupon?.minOrderAmount || 0);
-        if (minOrderAmount > 0 && subtotalAmount < minOrderAmount) {
-            return {
-                couponCode: '',
-                discountPercent: 0,
-                discountAmount: 0,
-                error: `Minimum order amount is $${minOrderAmount.toFixed(2)} for this coupon.`
-            };
-        }
+        // No minimum order check for generated coupons (first order reward, referral reward, lucky wheel)
+        // All generated coupons can be used on any order amount
 
         const existingGeneratedCouponOrder = await Order.findOne({
             couponCode,
@@ -2796,26 +2798,33 @@ router.post('/referral/apply', authRequired, async (req, res) => {
 
     const referralCodeRaw = String(req.body?.referralCode || '').trim();
     const validatedRefCode = normalizeReferralCode(referralCodeRaw);
-    if (!validatedRefCode) return res.status(400).json({ error: 'Referral code is required.' });
+    if (!validatedRefCode) return res.status(400).json({ error: 'Invite code is required.' });
 
-    const existingConsumed = await Referral.findOne({
-      refereeDiscordId: discordId,
-      status: { $in: ['consumed', 'rewarded'] }
-    }).lean();
-    if (existingConsumed) return res.status(409).json({ error: 'This account has already used a referral code.' });
-
+    // Check if user already applied a referral code (only once per account)
     const me = await User.findOne({ discordId }).lean();
     if (!me) return res.status(404).json({ error: 'User not found.' });
 
+    if (me.referralAppliedCode) {
+      return res.status(409).json({ error: 'You have already applied an invite code. Each account can only use one invite code.' });
+    }
+
+    const existingConsumed = await Referral.findOne({
+      refereeDiscordId: discordId,
+      status: { $in: ['consumed', 'rewarded', 'pending'] }
+    }).lean();
+    if (existingConsumed) {
+      return res.status(409).json({ error: 'You have already applied an invite code. Each account can only use one invite code.' });
+    }
+
     const fp = await DeviceFingerprint.findOne({ discordId }).sort({ updatedAt: -1 }).lean();
     if (fp && Array.isArray(fp.flags) && fp.flags.length > 0) {
-      return res.status(409).json({ error: 'Referral apply blocked on this device.' });
+      return res.status(409).json({ error: 'Invite code blocked on this device.' });
     }
 
     const suffix = validatedRefCode.replace(/^REF-/, '');
     const match = await findUserByReferralCodeForUser(validatedRefCode, discordId);
     if (!match?.discordId) {
-      return res.status(400).json({ error: 'Invalid or expired referral code.' });
+      return res.status(400).json({ error: 'Invalid or expired invite code.' });
     }
 
     // Only save to User.referralAppliedCode for preview, don't create Referral record yet
@@ -2876,7 +2885,7 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
 
         if (referralCodeFromBody && referralCodeFromBody !== referralCodeApplied) {
             log.warn('[CHECKOUT] Referral code not applied', { requestId: req.requestId, discordId });
-            return res.status(400).json({ error: 'Please click Apply button for the referral code before checkout.' });
+            return res.status(400).json({ error: 'Please click Apply button for the invite code before checkout.' });
         }
 
         // Only use referral code if user has clicked Apply (saved in database)
@@ -2889,7 +2898,17 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
             if (match?.discordId) {
                 referredByDiscordId = String(match.discordId);
                 referralDiscountPercent = 5;
+            } else {
+                // Invalid referral code - clear it
+                validatedRefCode = '';
+                await User.updateOne({ discordId }, { $unset: { referralAppliedCode: 1, referralAppliedAt: 1 } }).catch(() => {});
             }
+        }
+
+        // Double check: only apply referral discount if we have valid referral code
+        if (!validatedRefCode) {
+            referralDiscountPercent = 0;
+            referredByDiscordId = '';
         }
 
         checkoutStep = 'calculate_summary';

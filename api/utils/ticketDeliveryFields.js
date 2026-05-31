@@ -21,14 +21,15 @@ const formatDeliveryWindow = (startAt, endAt, timezone) => {
 const buildDeliveryWindowFields = (order = {}) => {
     const fields = [];
 
-    // Only show customer's selected time and its conversion to Vietnam timezone
+    // Show customer's selected time
     const customerWindow = formatDeliveryWindow(
         order.deliveryCustomerStartAt,
         order.deliveryCustomerEndAt,
         order.deliveryCustomerTimezone
     );
 
-    const vnWindow = formatDeliveryWindow(
+    // Show converted time (Asia/Ho_Chi_Minh) without mentioning "Vietnam"
+    const convertedWindow = formatDeliveryWindow(
         order.deliveryCustomerStartAt,
         order.deliveryCustomerEndAt,
         'Asia/Ho_Chi_Minh'
@@ -42,11 +43,11 @@ const buildDeliveryWindowFields = (order = {}) => {
         });
     }
 
-    // Only show VN time if it's different from customer time
-    if (vnWindow && vnWindow !== customerWindow) {
+    // Only show converted time if it's different from customer time
+    if (convertedWindow && convertedWindow !== customerWindow) {
         fields.push({
-            name: 'Converted to Vietnam Time',
-            value: vnWindow,
+            name: 'Converted Time',
+            value: convertedWindow,
             inline: false
         });
     }

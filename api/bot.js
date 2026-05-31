@@ -1549,14 +1549,12 @@ const buildCouponTicketFields = (order) => {
 const buildReferralTicketFields = (order) => {
     const referralCode = String(order?.referralAppliedCode || '').trim();
     if (!referralCode) return [];
-    return [{ name: 'Referral Bonus', value: '✅ **Referrer gets 50% coupon** after your first completed order', inline: false }];
+    return [{ name: 'Invite Bonus', value: '✅ **Inviter gets 50% coupon** after your first completed order', inline: false }];
 };
 
 const buildFirstOrderRewardFields = (order) => {
-    // Check if this is potentially a first order (will be verified by bot after !done)
-    const totalAmount = Number(order?.totalAmount || 0);
-    if (totalAmount < 5) return [];
-    return [{ name: '🎁 First Order Reward', value: '**Complete this order and get 20% OFF coupon** (for orders $5+)\nBot will DM you after admin confirms with **!done**', inline: false }];
+    // Show first order reward for all orders (no minimum)
+    return [{ name: '🎁 First Order Reward', value: '**Complete this order and get 20% OFF coupon**\nBot will DM you after admin confirms with **!done**', inline: false }];
 };
 
 const buildDeliveryTicketFields = (order) => {
@@ -2258,7 +2256,7 @@ const maybeGrantReferralReward = async (order) => {
     ).catch(() => {});
 
     const fence = String.fromCharCode(96).repeat(3);
-    await sendDmToUser(referrerId, 'Your referral reward (50%):\n' + fence + rewardCode + fence);
+    await sendDmToUser(referrerId, 'Your invite reward (50%):\n' + fence + rewardCode + fence);
 };
 
 module.exports = {

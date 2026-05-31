@@ -2871,6 +2871,24 @@ router.post('/referral/clear', authRequired, async (req, res) => {
   }
 });
 
+router.get('/referral/status', authRequired, async (req, res) => {
+  try {
+    const discordId = String(req.user?.discordId || '').trim();
+    if (!discordId) return res.status(401).json({ error: 'Authentication required' });
+
+    const user = await User.findOne({ discordId }).select('referralAppliedCode').lean();
+    const hasApplied = Boolean(normalizeReferralCode(user?.referralAppliedCode || ''));
+
+    return res.json({
+      hasApplied,
+      referralCode: hasApplied ? String(user.referralAppliedCode) : ''
+    });
+  } catch (error) {
+    console.error('Referral status error:', error);
+    return res.status(500).json({ error: 'Could not get invite status.' });
+  }
+});
+
 router.post('/checkout', checkoutLimiter, async (req, res) => {
     const startTime = Date.now();
     log.info('[CHECKOUT] Incoming checkout request', {
@@ -2897,17 +2915,9 @@ router.post('/checkout', checkoutLimiter, async (req, res) => {
         checkoutStep = 'load_user';
         const dbUser = discordId ? await User.findOne({ discordId }).lean() : null;
 
-        // Check if user typed invite code but didn't click Apply
-        const referralCodeFromBody = normalizeReferralCode(req.body?.referralCode || '');
-        const referralCodeApplied = normalizeReferralCode(dbUser?.referralAppliedCode || '');
-
-        // If user typed something in the invite code field but it's not applied, reject
-        if (referralCodeFromBody && referralCodeFromBody !== referralCodeApplied) {
-            log.warn('[CHECKOUT] Invite code not applied', { requestId: req.requestId, discordId, referralCodeFromBody, referralCodeApplied });
-            return res.status(400).json({ error: 'Please click Apply button for the invite code before checkout.' });
-        }
-
         // Only use invite code if user has clicked Apply (saved in database)
+        // Frontend does NOT send referralCode in body anymore
+        const referralCodeApplied = normalizeReferralCode(dbUser?.referralAppliedCode || '');
         let validatedRefCode = referralCodeApplied;
 
         let referredByDiscordId = '';

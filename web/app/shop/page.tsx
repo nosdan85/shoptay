@@ -591,13 +591,33 @@ export default function ShopPage() {
     if (res.ok) setMyReferralCode(String(data?.referralCode || ''));
   }, [token]);
 
+  const loadReferralStatus = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await fetch('/api/shop/referral/status', {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store'
+      });
+      const data = await res.json();
+      if (res.ok && data.hasApplied) {
+        setReferralApplied(true);
+        setReferralCode(String(data.referralCode || ''));
+      } else {
+        setReferralApplied(false);
+      }
+    } catch (error) {
+      console.error('Failed to load invite status:', error);
+    }
+  }, [token]);
+
   useEffect(() => {
     if (!token) return;
     queueMicrotask(() => {
       void loadMyCoupons().catch(() => {});
       void loadMyReferral().catch(() => {});
+      void loadReferralStatus().catch(() => {});
     });
-  }, [token, loadMyCoupons, loadMyReferral]);
+  }, [token, loadMyCoupons, loadMyReferral, loadReferralStatus]);
 
   useEffect(() => {
     if (!token) return;
@@ -1168,6 +1188,12 @@ export default function ShopPage() {
       if (codeForCheckout && (!couponPreview || couponPreviewKey !== cartCouponKey)) {
         await previewCouponFor(codeForCheckout, cart);
       }
+
+      // Check if user typed invite code but didn't apply
+      if (referralCode.trim() && !referralApplied) {
+        throw new Error('Please click Apply button for the invite code before checkout.');
+      }
+
       const res = await fetch("/api/shop/checkout", {
         method: "POST",
         headers: {
@@ -1176,7 +1202,7 @@ export default function ShopPage() {
         },
         body: JSON.stringify({
           couponCode: codeForCheckout,
-          referralCode: referralCode.trim(),
+          // Do NOT send referralCode - backend will get it from database
           cartItems: cart.map((i) => ({ product: i._id, name: i.name, quantity: i.quantity, price: i.price })),
         }),
       });
